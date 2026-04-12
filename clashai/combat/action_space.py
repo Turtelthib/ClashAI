@@ -22,6 +22,7 @@ import numpy as np
 DEPLOY_ROLES = ['tank', 'ranged', 'melee', 'hero', 'siege']
 NUM_ROLES = len(DEPLOY_ROLES)  # 5
 
+# Mapping rôle → liste ordonnée de noms de troupes (priorité de deploy)
 ROLE_TO_TROOPS = {
     'tank':   ['golem'],
     'ranged': ['sorcier', 'sorciere', 'archere'],
@@ -38,6 +39,8 @@ ROLE_TO_TROOPS = {
 DEPLOY_SECTORS = ['far_left', 'left', 'center', 'right', 'far_right']
 NUM_SECTORS = len(DEPLOY_SECTORS)  # 5
 
+# Mapping secteur → offset relatif par rapport au centre d'attaque
+# (en nombre de positions sur les 20 du périmètre)
 SECTOR_OFFSETS = {
     'far_left':  -4,
     'left':      -2,

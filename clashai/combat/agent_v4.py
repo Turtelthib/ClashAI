@@ -31,7 +31,7 @@ from clashai.combat.combat_observer import COMBAT_FEATURES_SIZE
 
 GRID_CHANNELS = 12
 GRID_SIZE = 40
-VILLAGE_FEATURES = 20
+VILLAGE_FEATURES = 20       # identique V3
 
 # V4 : vecteur compacté
 ROLE_FEATURES = NUM_ROLES           # 5 (tank, ranged, melee, hero, siege)
@@ -77,6 +77,7 @@ class ActorCriticV4(nn.Module):
     def __init__(self):
         super().__init__()
 
+        # CNN pour la grille du village
         self.grid_cnn = nn.Sequential(
             nn.Conv2d(GRID_CHANNELS, 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
@@ -100,6 +101,7 @@ class ActorCriticV4(nn.Module):
             nn.ReLU(),
         )
 
+        # MLP pour le vecteur
         self.vector_fc = nn.Sequential(
             nn.Linear(VECTOR_SIZE, 96),
             nn.ReLU(),
@@ -107,6 +109,8 @@ class ActorCriticV4(nn.Module):
             nn.ReLU(),
         )
 
+        # Fusion → backbone partagé
+        # 192 (grid) + 64 (vector) = 256
         self.shared = nn.Sequential(
             nn.Linear(256, 192),
             nn.ReLU(),
@@ -114,12 +118,14 @@ class ActorCriticV4(nn.Module):
             nn.ReLU(),
         )
 
+        # Actor head
         self.actor = nn.Sequential(
             nn.Linear(192, 128),
             nn.ReLU(),
-            nn.Linear(128, TOTAL_ACTIONS),
+            nn.Linear(128, TOTAL_ACTIONS),  # 37
         )
 
+        # Critic head
         self.critic = nn.Sequential(
             nn.Linear(192, 96),
             nn.ReLU(),
