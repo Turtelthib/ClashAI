@@ -142,7 +142,6 @@ def _detect_target_numbers(screenshot_pil):
     """
     try:
         from clashai.social.clan_chat_monitor import _init_ocr
-
     except ImportError:
         return {}
 
@@ -698,27 +697,28 @@ class GdCOrchestrator:
 
     def _run_attack(self):
         """
-        Lance l'agent V3 pour une attaque depuis phase_attaque.
+        Lance l'agent V4 pour une attaque depuis phase_attaque.
         """
         if self.verbose:
-            print("\n   🤖 Lancement de l'attaque V3...")
+            print("\n   🤖 Lancement de l'attaque V4...")
 
         try:
-            from clashai.combat.environment import ClashEnvV3
-            from clashai.combat.agent import PPOAgentV3
+            from clashai.combat.environment_v4 import ClashEnvV4
+            from clashai.combat.agent_v4 import PPOAgentV4
+            from clashai.combat.action_space import MAX_STEPS_PER_EPISODE
 
-            env = ClashEnvV3(models=self.models, verbose=self.verbose)
+            env = ClashEnvV4(models=self.models, verbose=self.verbose)
 
             # L'agent : charger le meilleur checkpoint
-            agent = PPOAgentV3()
+            agent = PPOAgentV4()
             weights_dir = os.path.join(
                 os.path.dirname(os.path.dirname(
                     os.path.dirname(os.path.abspath(__file__))
                 )),
                 'weights', 'rl'
             )
-            best_path = os.path.join(weights_dir, 'agent_v3_best.pth')
-            checkpoint_path = os.path.join(weights_dir, 'agent_v3_checkpoint.pth')
+            best_path = os.path.join(weights_dir, 'agent_v4_best.pth')
+            checkpoint_path = os.path.join(weights_dir, 'agent_v4_checkpoint.pth')
 
             if os.path.exists(best_path):
                 agent.load(best_path)
@@ -742,7 +742,6 @@ class GdCOrchestrator:
                     if done:
                         break
             else:
-                from clashai.combat.agent import MAX_STEPS_PER_EPISODE
                 for step in range(MAX_STEPS_PER_EPISODE):
                     action, _, _ = agent.select_action(grid, vector, mask)
                     obs, mask, reward, done, info = env.step(action)

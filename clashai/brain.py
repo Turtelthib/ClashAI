@@ -138,22 +138,22 @@ class ClashBrain:
         from clashai.navigation import game_loop
         self._models = game_loop.load_models()
 
-        # Agent V3
-        from clashai.combat.agent import PPOAgentV3
-        self._agent = PPOAgentV3()
+        # Agent V4
+        from clashai.combat.agent_v4 import PPOAgentV4
+        self._agent = PPOAgentV4()
 
         # Charger le meilleur checkpoint si disponible
         weights_dir = RL_WEIGHTS_DIR
-        best_path = os.path.join(weights_dir, 'agent_v3_best.pth')
-        checkpoint_path = os.path.join(weights_dir, 'agent_v3_checkpoint.pth')
+        best_path = os.path.join(weights_dir, 'agent_v4_best.pth')
+        checkpoint_path = os.path.join(weights_dir, 'agent_v4_checkpoint.pth')
         self._use_heuristic = True
 
         if os.path.exists(best_path):
-            if self._agent.load(best_path):
-                self._use_heuristic = False
+            self._agent.load(best_path)
+            self._use_heuristic = False
         elif os.path.exists(checkpoint_path):
-            if self._agent.load(checkpoint_path):
-                self._use_heuristic = False
+            self._agent.load(checkpoint_path)
+            self._use_heuristic = False
 
         if self._use_heuristic:
             print("   🧠 Mode heuristique (pas de checkpoint RL)")
@@ -375,17 +375,17 @@ class ClashBrain:
 
     def _run_attack_episode(self):
         """
-        Exécute un épisode d'attaque complet avec l'agent V3.
+        Exécute un épisode d'attaque complet avec l'agent V4.
         Utilisé pour le farm ET la GdC.
         
         Returns:
             info: dict avec les résultats, ou None si échec
         """
-        from clashai.combat.environment import ClashEnvV3
-        from clashai.combat.agent import MAX_STEPS_PER_EPISODE
+        from clashai.combat.environment_v4 import ClashEnvV4
+        from clashai.combat.action_space import MAX_STEPS_PER_EPISODE
 
         try:
-            env = ClashEnvV3(models=self._models, verbose=self.verbose)
+            env = ClashEnvV4(models=self._models, verbose=self.verbose)
             obs, mask = env.reset()
             grid, vector = obs
 
