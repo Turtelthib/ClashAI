@@ -1,0 +1,82 @@
+{
+  "chat_open": [
+    78,
+    508
+  ],
+  "chat_close_tap": [
+    657,
+    493
+  ],
+  "attack_button": [
+    100,
+    970
+  ],
+  "find_match": [
+    270,
+    745
+  ],
+  "start_attack": [
+    1594,
+    924
+  ],
+  "return_home": [
+    957,
+    916
+  ],
+  "gdc_open": [
+    78,
+    723
+  ],
+  "gdc_war_ended_see_map": [
+    970,
+    961
+  ],
+  "gdc_enemy_map": [
+    1809,
+    552
+  ],
+  "gdc_ally_map": [
+    1810,
+    535
+  ],
+  "gdc_return_home": [
+    96,
+    988
+  ],
+  "open_profil": [
+    61,
+    52
+  ],
+  "close_profil": [
+    1683,
+    90
+  ],
+  "gdc_attack_target": [
+    1062,
+    876
+  ],
+  "gdc_village_next": [
+    1348,
+    891
+  ],
+  "gdc_village_prev": [
+    574,
+    894
+  ],
+  "chat_input": [
+    174,
+    1036
+  ],
+  "chat_send": [
+    1882,
+    1056
+  ],
+  "ff_button": [
+    114,
+    885
+  ],
+  "confirm_ff": [
+    1140,
+    663
+  ]
+}

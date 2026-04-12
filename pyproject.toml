@@ -1,0 +1,32 @@
+[project]
+name = "clashai"
+version = "4.0.0"
+description = "IA autonome qui joue à Clash of Clans via ADB"
+requires-python = ">=3.12"
+dependencies = [
+    "torch>=2.0",
+    "torchvision",
+    "ultralytics>=8.0",
+    "opencv-python-headless",
+    "numpy",
+    "pillow",
+    "easyocr",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["ruff", "pytest"]
+
+[project.scripts]
+clashai-brain = "clashai.brain:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]

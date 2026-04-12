@@ -1,0 +1,72 @@
+# Chemin vers le dossier racine du dataset
+# path: /home/thibaut/Windows/Users/turte/Documents/Linux/COCProj/dataset
+# train: images/train
+# val: images/val
+
+path: ./dataset
+train: images/train
+val: images/val
+
+
+names:
+  0: hdv
+  1: chateau_clan
+  2: tour_enfer_mono
+  3: tour_enfer_multiple
+  4: aigle_artilleur
+  5: catapulte_erratique
+  6: arcX_sol
+  7: arcX_sol_air
+  8: monolithe
+  9: tour_archere
+  10: canon
+  11: mortier
+  12: multi_mortier
+  13: tour_sorcier
+  14: defense_antiaerienne
+  15: prop_air
+  16: tesla
+  17: cabane_ouvrier_arme
+  18: canon_ricochet
+  19: cracheur_feu
+  20: tour_runique_rage
+  21: tour_runique_poison
+  22: tour_runique_invisible
+  23: tour_multi_equipe_rapide
+  24: tour_bombe
+  25: tour_archere_multiple
+  26: tour_multi_equipe_lente
+  27: tour_archere_rapide
+  28: double_canon
+  29: tour_vengeuse
+  30: super_tour_sorcier
+  31: reserve_or
+  32: reserve_elixir
+  33: reserve_noire
+  34: hall_heros
+  35: laboratoire
+  36: sort
+  37: ressources
+  38: gigabombe
+  39: tour_runique_seisme
+  40: atelier
+  41: animalerie
+  42: caserne
+  43: camps_militaires
+  44: forgeron
+  45: cabane_assistants
+  46: cabane_bob
+
+hsv_h: 0.015  # Change un peu les teintes
+hsv_s: 0.7    # Change beaucoup la saturation (couleurs)
+hsv_v: 0.4    # Change la luminosité (simule le mode nuit ?)
+degrees: 0.0  # Pas de rotation (les bâtiments sont fixes)
+translate: 0.1 # Décale un peu l'image
+scale: 0.5    # Zoome et dézoome (TRÈS IMPORTANT pour tes petits bâtiments)
+fliplr: 0.5   # Retourne l'image horizontalement (Miroir)
+mosaic: 1.0          # Très puissant pour les petits objets comme tes bâtiments
+mixup: 0.1           # Légère mixup pour la généralisation
+copy_paste: 0.1      # Copie des objets d'une image à l'autre — parfait pour CoC
+perspective: 0.0005  # Légère déformation de perspective
+shear: 0.0           # Laisser à 0 (bâtiments toujours droits)
+flipud: 0.0          # Laisser à 0 (pas de retournement vertical dans CoC)

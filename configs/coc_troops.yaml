@@ -1,0 +1,38 @@
+# Dataset troupes en combat — ClashAI V4
+# Détection des troupes alliées + héros pendant les combats
+
+path: /home/thibaut/Windows/Users/turte/Documents/Linux/COCProj/dataset_troops
+train: images/train
+val: images/val
+
+names:
+  0: golem
+  1: sorcier
+  2: sorciere
+  3: pekka
+  4: archere
+  5: lance_buche
+  6: roi
+  7: reine
+  8: grand_gardien
+  9: championne
+  10: demolisseur
+  11: bouliste
+  12: prince_gargouille
+
+# === Augmentations ===
+# Les troupes BOUGENT contrairement aux bâtiments, donc on adapte :
+
+hsv_h: 0.02    # Légère variation de teinte (troupes changent peu de couleur)
+hsv_s: 0.5     # Variation de saturation (simule différents éclairages/terrains)
+hsv_v: 0.4     # Variation de luminosité (villages sombres, jour/nuit)
+degrees: 0.0   # Pas de rotation (les troupes ont une orientation dans CoC)
+translate: 0.15 # Décalage un peu plus que bâtiments (troupes pas toujours centrées)
+scale: 0.4     # Zoom/dézoom (troupes vues à différentes distances)
+fliplr: 0.5    # Miroir horizontal (les attaques viennent de n'importe quel côté)
+mosaic: 1.0    # Très utile pour les petits objets (sorciers, archères)
+mixup: 0.15    # Un peu plus que bâtiments (troupes sur fonds variés)
+copy_paste: 0.15 # Copie de troupes entre images (augmente la diversité)
+perspective: 0.0  # Pas de perspective (vue isométrique fixe)
+shear: 0.0     # Pas de cisaillement
+flipud: 0.0    # Pas de retournement vertical
