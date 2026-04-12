@@ -437,13 +437,13 @@ class ClashEnvV4(ClashEnvV3):
 
     def get_heuristic_sequence(self):
         """
-        Séquence heuristique V4 — rôle × secteur.
+        Séquence heuristique V4 — 1 action par unité.
 
-        Même stratégie que V3 mais avec les actions V4.
+        Chaque troupe = 1 action deploy(rôle, secteur).
+        Les secteurs cyclent pour répartir les troupes.
         """
         from clashai.combat.action_space import encode_action as enc
 
-        # Secteurs relatifs
         FAR_LEFT, LEFT, CENTER, RIGHT, FAR_RIGHT = 0, 1, 2, 3, 4
         TANK, RANGED, MELEE, HERO, SIEGE = 0, 1, 2, 3, 4
 
@@ -454,50 +454,71 @@ class ClashEnvV4(ClashEnvV3):
         if self.verbose:
             print(f"   📋 Inventaire V4 : {dict(role_inv)} | sorts: {dict(spell_inv)}")
 
-        # DEPLOY : tanks → wait → funnel → ranged → melee → siege → heroes → done
-        for _ in range(role_inv.get('tank', 0)):
-            for sec in [FAR_LEFT, FAR_RIGHT, CENTER]:
-                if role_inv['tank'] > 0:
-                    actions.append(enc('deploy', TANK, sec))
+        # 1. TANKS — spread aux extrémités puis centre
+        tank_sectors = [FAR_LEFT, FAR_RIGHT, CENTER, LEFT, RIGHT]
+        for i in range(role_inv.get('tank', 0)):
+            actions.append(enc('deploy', TANK, tank_sectors[i % len(tank_sectors)]))
 
         actions.append(enc('wait_long'))
 
-        for sec in [FAR_LEFT, FAR_RIGHT]:
-            if role_inv.get('ranged', 0) > 0:
-                actions.append(enc('deploy', RANGED, sec))
+        # 2. FUNNEL — 2 ranged aux extrémités
+        funnel = min(role_inv.get('ranged', 0), 2)
+        funnel_secs = [FAR_LEFT, FAR_RIGHT]
+        for i in range(funnel):
+            actions.append(enc('deploy', RANGED, funnel_secs[i]))
 
         actions.append(enc('wait_short'))
 
-        for _ in range(role_inv.get('ranged', 0)):
-            for sec in [LEFT, CENTER, RIGHT]:
-                actions.append(enc('deploy', RANGED, sec))
+        # 3. RANGED — le reste en ligne (left, center, right)
+        ranged_remaining = max(0, role_inv.get('ranged', 0) - funnel)
+        ranged_sectors = [LEFT, CENTER, RIGHT]
+        for i in range(ranged_remaining):
+            actions.append(enc('deploy', RANGED, ranged_sectors[i % len(ranged_sectors)]))
 
         actions.append(enc('wait_long'))
 
-        for sec in [CENTER, LEFT, RIGHT]:
-            if role_inv.get('melee', 0) > 0:
-                actions.append(enc('deploy', MELEE, sec))
+        # 4. MELEE — au centre
+        melee_sectors = [CENTER, LEFT, RIGHT]
+        for i in range(role_inv.get('melee', 0)):
+            actions.append(enc('deploy', MELEE, melee_sectors[i % len(melee_sectors)]))
 
+        # 5. SIEGE — centre
         for _ in range(role_inv.get('siege', 0)):
             actions.append(enc('deploy', SIEGE, CENTER))
 
+        # 6. HEROES — centre
         for _ in range(role_inv.get('hero', 0)):
             actions.append(enc('deploy', HERO, CENTER))
 
+        # → DONE
         actions.append(enc('done'))
 
-        # COMBAT : sorts + abilities + observe
+        # COMBAT : observe → sorts entrelacés avec abilities
+        actions.append(enc('observe'))
+
+        # Sorts et abilities entrelacés (pas tout d'un coup)
+        spell_actions = []
         for spell_name, count in spell_inv.items():
             for _ in range(count):
-                actions.append(enc('spell', spell_name))
+                spell_actions.append(enc('spell', spell_name))
 
-        for i, hero in enumerate(HERO_NAMES):
-            if hero in TROOP_NAME_TO_IDX:
-                idx = TROOP_NAME_TO_IDX[hero]
-                if self._remaining_troops[idx] > 0 or True:
-                    actions.append(enc('ability', i))
+        ability_actions = []
+        for i in range(len(HERO_NAMES)):
+            ability_actions.append(enc('ability', i))
 
-        for _ in range(5):
-            actions.append(enc('observe'))
+        # Alterner : observe → rage → observe → ability → observe → soin → ...
+        combat_pool = []
+        si, ai = 0, 0
+        while si < len(spell_actions) or ai < len(ability_actions):
+            combat_pool.append(enc('observe'))
+            if si < len(spell_actions):
+                combat_pool.append(spell_actions[si])
+                si += 1
+            if ai < len(ability_actions):
+                combat_pool.append(ability_actions[ai])
+                ai += 1
+
+        actions.extend(combat_pool)
+        actions.append(enc('observe'))
 
         return actions
