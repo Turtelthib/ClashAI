@@ -33,6 +33,7 @@ REWARD_ABILITY_BAD_TIMING = -2.0
 REWARD_GG_CLUTCH = 5.0
 REWARD_SPELL_IN_COMBAT = 1.0
 REWARD_OVER_OBSERVE = -0.5
+REWARD_LEFTOVER_SPELLS = -5.0   # Malus par sort non utilisé en fin de combat
 
 
 # =============================================================================
@@ -153,6 +154,16 @@ def compute_leftover_penalty(remaining_troops, troop_types):
         if t['role'] != 'spell'
     )
     return REWARD_LEFTOVER_TROOPS * count if count > 0 else 0.0
+
+
+def compute_spell_leftover_penalty(remaining_troops, troop_types):
+    """Malus pour les sorts non utilisés en fin de combat."""
+    count = sum(
+        int(remaining_troops[i])
+        for i, t in enumerate(troop_types)
+        if t['role'] == 'spell'
+    )
+    return REWARD_LEFTOVER_SPELLS * count if count > 0 else 0.0
 
 
 # =============================================================================

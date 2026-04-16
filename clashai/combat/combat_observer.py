@@ -355,7 +355,8 @@ class CombatObserver:
             'yolo_detections': all_dets,
             'yolo_grouped': grouped,
             'hero_positions_named': hero_positions,
-            'troop_counts': self._troop_detector.count_by_class(screenshot_pil) if all_dets else {},
+            # V4.1: comptage depuis les détections existantes (évite un 2e appel YOLO)
+            'troop_counts': self._count_from_detections(all_dets),
         }
         
         if self.verbose:
@@ -379,6 +380,16 @@ class CombatObserver:
                     count += 1
                     break
         return count
+
+    def _count_from_detections(self, detections):
+        """
+        Compte les détections par classe sans re-lancer YOLO.
+        V4.1: remplace count_by_class() qui faisait une 2e inférence.
+        """
+        counts = {}
+        for d in detections:
+            counts[d.class_name] = counts.get(d.class_name, 0) + 1
+        return counts
 
     # -----------------------------------------------------------------
     #  V3 fallback : observation via barres de vie HSV

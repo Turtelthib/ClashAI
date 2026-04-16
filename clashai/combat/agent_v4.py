@@ -51,7 +51,7 @@ VECTOR_SIZE = (VILLAGE_FEATURES + ROLE_FEATURES + SPELL_FEATURES
 GAMMA = 0.99
 GAE_LAMBDA = 0.95
 CLIP_EPSILON = 0.2
-ENTROPY_COEF = 0.04          # Plus élevé (moins d'actions → plus d'exploration)
+ENTROPY_COEF = 0.02          # V4.1: réduit de 0.04 (trop d'exploration)
 VALUE_COEF = 0.5
 MAX_GRAD_NORM = 0.5
 LEARNING_RATE = 3e-4          # Légèrement plus élevé (réseau plus petit)
@@ -393,6 +393,109 @@ class PPOAgentV4:
 
         self.buffer.clear()
         return stats
+
+    # -----------------------------------------------------------------
+    #  Behavioral Cloning (V4.1 — imitation learning)
+    # -----------------------------------------------------------------
+
+    def pretrain_bc(self, demonstrations, epochs=10, lr=1e-3,
+                    mini_batch_size=64):
+        """
+        Pré-entraîne l'actor par behavioral cloning sur des
+        démonstrations heuristiques.
+
+        L'agent apprend à imiter les actions de l'heuristique avant
+        de commencer l'exploration PPO. Ça donne un bien meilleur
+        point de départ que de partir de zéro.
+
+        Args:
+            demonstrations: list of (grid, vector, action, mask) tuples
+            epochs: nombre de passes sur le dataset
+            lr: learning rate (plus élevé que PPO car supervisé)
+            mini_batch_size: taille des mini-batches
+
+        Returns:
+            final_accuracy: float
+        """
+        n = len(demonstrations)
+        if n == 0:
+            print("   ⚠️ Aucune démonstration, BC ignoré")
+            return 0.0
+
+        print(f"\n{'='*60}")
+        print(f"  🎓 Behavioral Cloning — {n} démonstrations")
+        print(f"  Epochs: {epochs} | LR: {lr} | Batch: {mini_batch_size}")
+        print(f"{'='*60}")
+
+        grids = torch.FloatTensor(
+            np.array([d[0] for d in demonstrations])
+        ).to(self.device)
+        vectors = torch.FloatTensor(
+            np.array([d[1] for d in demonstrations])
+        ).to(self.device)
+        actions = torch.LongTensor(
+            [d[2] for d in demonstrations]
+        ).to(self.device)
+        masks = torch.FloatTensor(
+            np.array([d[3] for d in demonstrations])
+        ).to(self.device)
+
+        # Optimizer séparé pour le BC (lr plus élevé)
+        bc_optimizer = optim.Adam(
+            self.network.parameters(), lr=lr, eps=1e-5
+        )
+
+        best_accuracy = 0.0
+
+        for epoch in range(epochs):
+            indices = torch.randperm(n, device=self.device)
+            total_loss = 0.0
+            num_batches = 0
+
+            self.network.train()
+
+            for start in range(0, n, mini_batch_size):
+                batch_idx = indices[start:start + mini_batch_size]
+
+                logits, _ = self.network(
+                    grids[batch_idx],
+                    vectors[batch_idx],
+                    masks[batch_idx],
+                )
+
+                loss = nn.CrossEntropyLoss()(logits, actions[batch_idx])
+
+                bc_optimizer.zero_grad()
+                loss.backward()
+                nn.utils.clip_grad_norm_(
+                    self.network.parameters(), MAX_GRAD_NORM
+                )
+                bc_optimizer.step()
+
+                total_loss += loss.item()
+                num_batches += 1
+
+            # Accuracy sur tout le dataset
+            self.network.eval()
+            with torch.no_grad():
+                logits, _ = self.network(grids, vectors, masks)
+                preds = logits.argmax(dim=1)
+                accuracy = (preds == actions).float().mean().item()
+
+            avg_loss = total_loss / max(num_batches, 1)
+            best_accuracy = max(best_accuracy, accuracy)
+
+            print(f"   Epoch {epoch+1:2d}/{epochs}: "
+                  f"loss={avg_loss:.4f} accuracy={accuracy:.1%}")
+
+        # Réinitialiser l'optimizer PPO après le BC
+        # (les moments Adam du BC ne sont pas pertinents pour PPO)
+        self.optimizer = optim.Adam(
+            self.network.parameters(), lr=LEARNING_RATE, eps=1e-5
+        )
+
+        print(f"\n   ✅ BC terminé — accuracy finale: {best_accuracy:.1%}")
+        return best_accuracy
 
     def save(self, path):
         torch.save({

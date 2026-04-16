@@ -92,6 +92,7 @@ class ClashBrain:
         self._agent = None
         self._chat_monitor = None
         self._gdc_navigator = None
+        self._cc_manager = None
 
         # File d'attente des tâches
         self._task_queue = []
@@ -173,6 +174,14 @@ class ClashBrain:
             self._gdc_navigator = GdCNavigator(
                 self._models, verbose=self.verbose
             )
+
+        # Clan Castle Manager (V4.1 — demande de troupes)
+        from clashai.social.clan_castle import ClanCastleManager
+        building_detector = self._models.get('building_detector')
+        self._cc_manager = ClanCastleManager(
+            building_detector=building_detector,
+            verbose=self.verbose,
+        )
 
         # Fonctions de navigation de base
         from clashai.navigation import game_loop as gl
@@ -321,6 +330,9 @@ class ClashBrain:
             print(f"  {datetime.now().strftime('%H:%M:%S')}")
             print(f"{'='*60}")
 
+        # V4.1: demander des troupes CC avant l'attaque
+        self._request_cc_troops()
+
         info = self._run_attack_episode()
 
         if info:
@@ -351,6 +363,9 @@ class ClashBrain:
             print(f"  {datetime.now().strftime('%H:%M:%S')}")
             print(f"{'='*60}")
 
+        # V4.1: demander des troupes CC avant l'attaque
+        self._request_cc_troops()
+
         if self._gdc_navigator is None:
             print("   ❌ GdC navigator non initialisé")
             return None
@@ -372,6 +387,26 @@ class ClashBrain:
                 print(f"\n   📊 GdC #{target_number}: {stars}⭐ {pct}%")
 
         return info
+
+    def _request_cc_troops(self):
+        """
+        Demande des troupes de château de clan si le cooldown est passé.
+        V4.1: appelé automatiquement avant chaque attaque.
+        """
+        if self._cc_manager is None:
+            return
+
+        try:
+            if self._cc_manager._cooldown_ready():
+                # S'assurer qu'on est au village
+                if not self._ensure_at_village():
+                    return
+                self._cc_manager.request_if_needed(
+                    self._adb_screenshot, self._adb_tap
+                )
+        except Exception as e:
+            if self.verbose:
+                print(f"   ⚠️ Erreur demande CC: {e}")
 
     def _run_attack_episode(self):
         """

@@ -29,7 +29,7 @@ from clashai.combat.agent_v4 import (
 from clashai.combat.troop_manager import TroopManager
 from clashai.combat.reward_shaping import (
     compute_deploy_reward, compute_combat_reward,
-    compute_leftover_penalty,
+    compute_leftover_penalty, compute_spell_leftover_penalty,
 )
 
 # Imports V3 pour accéder aux constantes
@@ -316,8 +316,14 @@ class ClashEnvV4(ClashEnvV3):
                 )
 
         elif self._phase == 'combat':
+            # Fix V4.1: idx1 contient spell_name OU hero_idx selon l'action
+            # decode_action retourne ('spell', spell_name, None)
+            #                    ou ('ability', hero_idx, None)
+            # Il faut mapper correctement vers les bons paramètres
+            spell_name = idx1 if action_type == 'spell' else None
+            hero_idx = idx1 if action_type == 'ability' else None
             reward = compute_combat_reward(
-                action_type, idx1, idx2,
+                action_type, spell_name, hero_idx,
                 self._combat_features,
                 self._combat_step_count,
                 HERO_NAMES,
@@ -385,8 +391,17 @@ class ClashEnvV4(ClashEnvV3):
 
             if is_done:
                 reward, info = self._finish_episode()
+                info['step'] = self._step_count
                 info['combat_steps'] = self._combat_step_count
                 info['abilities_used'] = self._hero_manager.num_activated()
+                # V4.1: malus sorts non utilisés en fin de combat
+                spell_penalty = compute_spell_leftover_penalty(
+                    self._remaining_troops, TROOP_TYPES
+                )
+                if spell_penalty != 0:
+                    reward += spell_penalty
+                    if self.verbose:
+                        print(f"   🧪 Malus sorts non utilisés: {spell_penalty:.0f}")
                 return self._get_obs(), self._get_mask(), reward, True, info
 
             return self._get_obs(), self._get_mask(), shaping, False, {
@@ -399,6 +414,7 @@ class ClashEnvV4(ClashEnvV3):
         is_done = self._step_count >= MAX_STEPS_PER_EPISODE
         if is_done:
             reward, info = self._finish_episode()
+            info['step'] = self._step_count
             return self._get_obs(), self._get_mask(), reward, True, info
 
         return self._get_obs(), self._get_mask(), shaping, False, {
@@ -482,7 +498,7 @@ class ClashEnvV4(ClashEnvV3):
         for i in range(role_inv.get('melee', 0)):
             actions.append(enc('deploy', MELEE, melee_sectors[i % len(melee_sectors)]))
 
-        # 5. SIEGE — centre
+        # 5. SIEGE — centre (V4.1: siège AVANT héros)
         for _ in range(role_inv.get('siege', 0)):
             actions.append(enc('deploy', SIEGE, CENTER))
 

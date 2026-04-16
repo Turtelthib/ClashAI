@@ -85,8 +85,8 @@ ACTION_DONE = ACTION_OBSERVE + 3                       # 36
 TOTAL_ACTIONS = ACTION_DONE + 1                        # 37
 
 # Limits
-MAX_STEPS_PER_EPISODE = 50
-MAX_COMBAT_STEPS = 20
+MAX_STEPS_PER_EPISODE = 80   # V4.1: augmenté de 50 à 65
+MAX_COMBAT_STEPS = 40
 NUM_POSITIONS = 20  # positions sur le périmètre (hérité V3)
 
 
