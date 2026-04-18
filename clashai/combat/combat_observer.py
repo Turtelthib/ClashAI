@@ -221,7 +221,7 @@ class CombatObserver:
     un vecteur de features compactes pour l'agent PPO.
     
     Features (15 dims) — compatibles V3 :
-        0  : phase (0.0 = deploy, 1.0 = combat)
+        0  : buildings_remaining_ratio (1.0=aucun détruit, 0.0=tout détruit)
         1  : combat_progress (0.0-1.0, temps écoulé / temps max)
         2  : num_troops_alive (normalisé /50)
         3  : num_troops_hurt (normalisé /20)
@@ -244,45 +244,56 @@ class CombatObserver:
         self._combat_start_time = None
         self._max_combat_time = 180.0  # 3 minutes
         self._troop_detector = troop_detector  # TroopDetector ou None
+        self._initial_building_count = 0
+        self._current_building_count = 0
     
     @property
     def has_yolo(self) -> bool:
         return self._troop_detector is not None
     
-    def start_combat(self):
-        """Appelé quand le combat commence (transition deploy → combat)."""
+    def start_combat(self, initial_building_count=None):
+        """Appelé au reset — démarre le timer et initialise le compteur de bâtiments."""
         import time
         self._combat_start_time = time.time()
+        self._initial_building_count = initial_building_count or 0
+        self._current_building_count = initial_building_count or 0
     
     def observe(self, screenshot_pil, village_center_adb=None,
-                spells_remaining=None, phase='combat'):
+                spells_remaining=None, phase='combat', buildings_count=None):  # phase gardé pour compat V3
         """
         Analyse un screenshot mid-combat.
-        
+
         Args:
             screenshot_pil: PIL Image
             village_center_adb: (x, y) centre du village
             spells_remaining: dict {'soin': n, 'rage': n, 'gel': n}
-            phase: 'deploy' ou 'combat'
-        
+            phase: 'deploy' ou 'combat' (gardé pour compatibilité V3, non utilisé pour feature[0])
+            buildings_count: nombre de bâtiments encore debout (optionnel)
+
         Returns:
             combat_features: np.array (COMBAT_FEATURES_SIZE,)
             raw_data: dict avec les données brutes pour le SpellCaster
         """
         import time
-        
+
+        if buildings_count is not None:
+            self._current_building_count = buildings_count
+
         features = np.zeros(COMBAT_FEATURES_SIZE, dtype=np.float32)
-        
+
         img_cv = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
         img_h, img_w = img_cv.shape[:2]
         scale_x = ADB_WIDTH / img_w
         scale_y = ADB_HEIGHT / img_h
-        
-        # Feature 0: Phase
-        features[0] = 1.0 if phase == 'combat' else 0.0
-        
+
+        # Feature 0: ratio bâtiments restants (0=tout détruit, 1=aucun détruit)
+        if self._initial_building_count > 0:
+            features[0] = self._current_building_count / self._initial_building_count
+        else:
+            features[0] = 1.0
+
         # Feature 1: Combat progress
-        if self._combat_start_time and phase == 'combat':
+        if self._combat_start_time:
             elapsed = time.time() - self._combat_start_time
             features[1] = min(elapsed / self._max_combat_time, 1.0)
         

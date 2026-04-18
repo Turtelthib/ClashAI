@@ -18,7 +18,8 @@
 import cv2
 import numpy as np
 from PIL import Image
-
+import os
+from datetime import datetime
 
 # =============================================================================
 #                         CONFIGURATION
@@ -31,9 +32,14 @@ ADB_HEIGHT = 1080
 # Zones d'exclusion UI (en coordonnées ADB 1920×1080)
 # Les taps dans ces zones déclenchent des boutons au lieu de poser des troupes
 UI_EXCLUSION_ZONES = [
-    (0, 640, 1920, 1080),      # Tout le bas : boutons + barre de troupes
-    (0, 0, 280, 230),          # Info joueur haut-gauche
-    (1450, 0, 1920, 160),      # Ressources haut-droite
+    # Haut : info joueur + ressources
+    (0, 0, 280, 230),           # Pseudo joueur + butin disponible
+    (1450, 0, 1920, 160),       # Compteurs ressources haut-droite
+    # Bas : barre de troupes uniquement (vraie UI, pas le village)
+    (0, 735, 1920, 1080),             # Barre de troupes + timer bas
+    # Boutons latéraux (plus petits que l'ancien grand rectangle)
+    (0, 590, 210, 730),         # Bouton "Terminer la bataille"
+    (1220, 560, 1510, 730),     # Bouton "Suivant 1200"
 ]
 
 # Marge minimale depuis les bords de l'écran
@@ -41,6 +47,25 @@ SCREEN_MARGIN = 60
 
 # Distance (en pixels ADB) entre le hull et les positions de déploiement
 DEPLOY_OFFSET = 35
+
+# V4.2 — Paramètres pour get_perimeter_from_buildings (YOLO-only, sans HSV)
+# Expansion artificielle de chaque bbox pour simuler la zone de collision CoC
+# (~1.5 tile au zoom moyen). Le hull des bboxes expansées englobe la vraie zone rouge.
+BUILDING_PADDING = 40
+
+# Distance minimale entre une position finale et n'importe quel centre de bâtiment.
+# Doit être > demi-taille max d'un bâtiment + marge. La plupart des bâtiments font
+# 60-80px de côté → 70px garantit qu'on ne tape jamais sur un sprite.
+MIN_BUILDING_DIST = 40
+
+# Offset final depuis le hull, adaptatif au zoom.
+# Plus petit que DEPLOY_OFFSET car le padding fait déjà le gros du travail.
+OFFSET_BY_ZOOM = {'dezoome': 30, 'moyen': 20, 'zoome': 10}
+
+# Plafond de push radial APRÈS sortie du hull pour éviter d'atterrir dans
+# l'eau/rochers quand un bâtiment excentré force à pousser plus loin.
+# 40px ≈ 1 tile CoC : si aucun emplacement valide à ≤ 40px du hull → abandon rayon.
+MAX_RADIAL_PUSH = 40
 
 # Directions (index → label)
 DIRECTION_LABELS = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO']
@@ -58,10 +83,38 @@ DIRECTION_ANGLES = {
     7: 3 * np.pi / 4,   # NO
 }
 
+# V4.2 — Validation HSV locale en complément de YOLO :
+# quand un bâtiment n'est pas détecté par YOLO (cabanes d'ouvriers,
+# remparts isolés…), on check la couleur du pixel candidat.
+# L'overlay rouge CoC décale le Hue de l'herbe (~33 vert) vers ~15 (orangé).
+HSV_CHECK_RADIUS = 4              # demi-taille du patch échantillonné (px)
+HSV_RED_H_MAX = 28                # Hue max pour être "rouge overlay"
+HSV_RED_SAT_MIN = 50              # saturation min (filtre les zones sombres)
+HSV_RED_RATIO_THRESHOLD = 0.5     # ≥50% de pixels rouges → zone interdite
 
 # =============================================================================
 #                    DÉTECTION DE LA ZONE
 # =============================================================================
+
+def _is_in_red_overlay(img_bgr, x, y, radius=HSV_CHECK_RADIUS):
+    """
+    True si le petit patch autour de (x, y) est dans l'overlay rouge CoC.
+    Échoue silencieusement (False) sur villages sombres → pas de régression.
+    """
+    h, w = img_bgr.shape[:2]
+    x1 = max(0, int(x) - radius)
+    y1 = max(0, int(y) - radius)
+    x2 = min(w, int(x) + radius + 1)
+    y2 = min(h, int(y) + radius + 1)
+
+    patch = img_bgr[y1:y2, x1:x2]
+    if patch.size == 0:
+        return False
+
+    hsv = cv2.cvtColor(patch, cv2.COLOR_BGR2HSV)
+    red_mask = (hsv[:, :, 0] < HSV_RED_H_MAX) & (hsv[:, :, 1] > HSV_RED_SAT_MIN)
+    red_ratio = float(red_mask.sum()) / float(red_mask.size)
+    return red_ratio >= HSV_RED_RATIO_THRESHOLD
 
 def detect_village_boundary(img_cv):
     """
@@ -546,6 +599,335 @@ def get_full_perimeter_positions(screenshot_pil, num_points=20, offset_px=None):
 
     return positions, center_adb, True
 
+
+# =============================================================================
+#          ZONE DE DÉPLOIEMENT DEPUIS BOUNDING BOXES YOLO (V4.2)
+# =============================================================================
+
+def get_perimeter_from_buildings(buildings, num_points=20, offset_px=None,
+                                  return_debug=False, screenshot_pil=None):
+    """
+    V4.2 — Positions de déploiement par raycasting angulaire, 100% YOLO.
+
+    Algorithme :
+      1. Expand les bboxes de BUILDING_PADDING (simule zone de collision CoC).
+      2. Convex hull des bboxes expansées → contour village + zone rouge.
+      3. Trace num_points rayons à angles égaux depuis le centroïde.
+      4. Phase A : avancer jusqu'à sortir du hull (abandon si UI/bord écran).
+      5. Phase B : placer la position avec offset + push borné (MAX_RADIAL_PUSH).
+      6. Dédup + tri par angle + sous-échantillonnage.
+
+    Args:
+        buildings: list of {'bbox': (x1,y1,x2,y2), 'center': (cx,cy), ...}
+        num_points: nombre de positions cibles (défaut 20)
+        offset_px: override offset (défaut: adaptatif au zoom)
+        return_debug: si True, retourne aussi un dict de debug
+
+    Returns:
+        Sans debug :  (positions, center_adb, success)
+        Avec debug :  (positions, center_adb, success, debug_dict)
+    """
+    def _empty_result(reason='no_buildings'):
+        fallback_center = (ADB_WIDTH // 2, ADB_HEIGHT // 2 - 50)
+        if return_debug:
+            return None, fallback_center, False, {
+                'rejected_rays': [], 'reason': reason,
+            }
+        return None, fallback_center, False
+
+    if not buildings or len(buildings) < 3:
+        return _empty_result('no_buildings')
+
+    img_bgr = None
+    if screenshot_pil is not None:
+        img_bgr = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
+
+    # --- 1. Bboxes expansées + centres ---
+    pts = []
+    bboxes_list = []
+    for b in buildings:
+        x1, y1, x2, y2 = b['bbox']
+        pts.extend([
+            (x1 - BUILDING_PADDING, y1 - BUILDING_PADDING),
+            (x2 + BUILDING_PADDING, y1 - BUILDING_PADDING),
+            (x1 - BUILDING_PADDING, y2 + BUILDING_PADDING),
+            (x2 + BUILDING_PADDING, y2 + BUILDING_PADDING),
+        ])
+        bboxes_list.append((x1, y1, x2, y2))
+
+    pts_arr = np.array(pts, dtype=np.int32).reshape(-1, 1, 2)
+    hull = cv2.convexHull(pts_arr)
+    # bboxes brutes (non-expansées) pour distance point-à-rectangle
+    bboxes_np = np.array(bboxes_list, dtype=np.float32)  # (N, 4)
+
+    # --- 2. Centroïde ---
+    M = cv2.moments(hull)
+    if M['m00'] > 0:
+        center = np.array([M['m10'] / M['m00'], M['m01'] / M['m00']])
+    else:
+        center = np.mean(hull.reshape(-1, 2).astype(float), axis=0)
+    center_adb = (int(center[0]), int(center[1]))
+
+    # --- 3. Rayon moyen + plafond distance ---
+    hull_pts = hull.reshape(-1, 2).astype(float)
+    radii = np.linalg.norm(hull_pts - center, axis=1)
+    mean_radius = float(np.mean(radii))
+    max_radius = mean_radius * 1.3 
+
+    # --- Offset adaptatif au zoom ---
+    if offset_px is None:
+        hull_area = cv2.contourArea(hull)
+        zoom_ratio = hull_area / (ADB_WIDTH * ADB_HEIGHT * 0.55)
+        if zoom_ratio < 0.40:
+            offset_px = OFFSET_BY_ZOOM['dezoome']
+            zoom_label = 'dezoome'
+        elif zoom_ratio < 0.55:
+            offset_px = OFFSET_BY_ZOOM['moyen']
+            zoom_label = 'moyen'
+        else:
+            offset_px = OFFSET_BY_ZOOM['zoome']
+            zoom_label = 'zoome'
+    else:
+        zoom_label = 'custom'
+
+    # --- 4. Raycasting angulaire ---
+    positions = []
+    rejected_rays = []
+    rejected = 0
+    step = 10
+
+    for i in range(num_points):
+        angle = 2 * np.pi * i / num_points
+        direction = np.array([np.cos(angle), -np.sin(angle)])
+
+        # Phase A : trouver la sortie du hull
+        exit_point = None
+        dist = 0.0
+        aborted = False
+        abort_reason = None
+        last_px, last_py = int(center[0]), int(center[1])
+
+        while dist < max_radius:
+            dist += step
+            pos = center + direction * dist
+            px, py = float(pos[0]), float(pos[1])
+            last_px, last_py = int(px), int(py)
+
+            if (px < SCREEN_MARGIN or px > ADB_WIDTH - SCREEN_MARGIN or
+                py < SCREEN_MARGIN or py > ADB_HEIGHT - SCREEN_MARGIN):
+                aborted = True
+                abort_reason = 'hors_ecran'
+                break
+
+            if _is_in_exclusion_zone(int(px), int(py), ADB_HEIGHT, ADB_WIDTH):
+                aborted = True
+                abort_reason = 'ui_avant_hull'
+                break
+
+            if cv2.pointPolygonTest(hull, (px, py), False) >= 0:
+                continue
+
+            exit_point = pos
+            break
+
+        if exit_point is None or aborted:
+            rejected += 1
+            if return_debug:
+                reason = abort_reason or 'max_radius_atteint'
+                rejected_rays.append((int(np.degrees(angle)), reason,
+                                      (last_px, last_py)))
+            continue
+
+        # Phase B : placer avec push borné
+        found = None
+        last_candidate = None
+        for push in range(0, MAX_RADIAL_PUSH + 1, step):
+            candidate = exit_point + direction * (offset_px + push)
+            cx_, cy_ = float(candidate[0]), float(candidate[1])
+            last_candidate = (int(cx_), int(cy_))
+
+            if (cx_ < SCREEN_MARGIN or cx_ > ADB_WIDTH - SCREEN_MARGIN or
+                cy_ < SCREEN_MARGIN or cy_ > ADB_HEIGHT - SCREEN_MARGIN):
+                break
+            if _is_in_exclusion_zone(int(cx_), int(cy_), ADB_HEIGHT, ADB_WIDTH):
+                break
+
+            dx = np.maximum.reduce([
+                bboxes_np[:, 0] - cx_,
+                cx_ - bboxes_np[:, 2],
+                np.zeros(len(bboxes_np), dtype=np.float32),
+            ])
+            dy = np.maximum.reduce([
+                bboxes_np[:, 1] - cy_,
+                cy_ - bboxes_np[:, 3],
+                np.zeros(len(bboxes_np), dtype=np.float32),
+            ])
+            dists = np.sqrt(dx * dx + dy * dy)
+            if dists.min() >= MIN_BUILDING_DIST:
+                if img_bgr is not None and _is_in_red_overlay(img_bgr, cx_, cy_):
+                    continue
+                found = (int(cx_), int(cy_))
+                break
+
+        if found is not None:
+            positions.append(found)
+        else:
+            rejected += 1
+            if return_debug:
+                rejected_rays.append((int(np.degrees(angle)), 'push_epuise',
+                                      last_candidate or (last_px, last_py)))
+
+    # --- 5. Dédup + tri par angle + sous-échantillonnage ---
+    if len(positions) < 3:
+        print(f"   ⚠️ Raycasting : seulement {len(positions)} positions "
+              f"({rejected} rayons rejetés)")
+        if return_debug:
+            return None, center_adb, False, {
+                'rejected_rays': rejected_rays,
+                'mean_radius': mean_radius,
+                'max_radius': max_radius,
+                'reason': 'insufficient_positions',
+            }
+        return None, center_adb, False
+
+    # Dédup : éliminer positions trop proches (< 20px l'une de l'autre)
+    unique = [positions[0]]
+    for px, py in positions[1:]:
+        if not any((px - ux) ** 2 + (py - uy) ** 2 < 400 for ux, uy in unique):
+            unique.append((px, py))
+
+    # Tri par angle depuis le centre (0 = Est, sens trigo)
+    unique.sort(
+        key=lambda p: np.arctan2(-(p[1] - center[1]), p[0] - center[0]),
+        reverse=True,
+    )
+
+    # Sous-échantillonner si trop de positions
+    if len(unique) > num_points:
+        step_s = len(unique) / num_points
+        unique = [unique[int(i * step_s)] for i in range(num_points)]
+
+    print(f"   ✅ Zone YOLO raycast : {len(buildings)} bats, "
+          f"r̄={mean_radius:.0f}px, offset={offset_px}px ({zoom_label}), "
+          f"{len(unique)}/{num_points} pos, {rejected} rejetés")
+
+    if return_debug:
+        return unique, center_adb, True, {
+            'rejected_rays': rejected_rays,
+            'mean_radius': mean_radius,
+            'max_radius': max_radius,
+        }
+    return unique, center_adb, True
+
+# =============================================================================
+#              DEBUG : LOG VISUEL DE LA ZONE DE DÉPLOIEMENT
+# =============================================================================
+
+DEBUG_DEPLOY_SAVE = True
+
+
+def save_deploy_debug_image(screenshot_pil, buildings, positions, center,
+                             output_dir='logs/deploy_zone',
+                             episode=None, extra_info=None,
+                             rejected_rays=None):
+    """
+    Enregistre une image annotée de la zone de déploiement pour debug.
+
+    Utile pour diagnostiquer les épisodes où l'agent tape mal :
+      - Position sur un bâtiment → bbox mal détectée ou MIN_BUILDING_DIST trop bas
+      - Position dans l'eau → MAX_RADIAL_PUSH trop grand
+      - Trop peu de positions → MAX_RADIAL_PUSH trop petit, ou village excentré
+
+    Contenu de l'image :
+      - Bboxes YOLO en vert
+      - Positions de déploiement en rouge (numérotées 0 à N-1)
+      - Centre du village en bleu
+      - Overlay texte : épisode, nb de bâtiments, nb de positions
+
+    Args:
+        screenshot_pil: PIL Image du village (coords ADB 1920×1080)
+        buildings: list of dicts avec 'bbox' (x1,y1,x2,y2)
+        positions: list of (x, y) ADB
+        center: (cx, cy) ADB
+        output_dir: dossier de sortie, créé si inexistant
+        episode: numéro d'épisode (optionnel, pour le nom de fichier)
+        extra_info: str optionnel à afficher en overlay
+
+    Returns:
+        path: chemin du fichier enregistré, ou None si désactivé
+    """
+    if not DEBUG_DEPLOY_SAVE:
+        return None
+
+    try:
+        os.makedirs(output_dir, exist_ok=True)
+
+        img_cv = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
+
+        # Bboxes YOLO en vert
+        for b in buildings:
+            x1, y1, x2, y2 = b['bbox']
+            cv2.rectangle(img_cv, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+        if rejected_rays:
+            for angle_deg, reason, last_pos in rejected_rays:
+                # Ligne pointillée du centre vers le dernier point testé
+                cv2.line(img_cv, center, last_pos, (128, 128, 128), 1, cv2.LINE_AA)
+                # Petit X gris à la position
+                px, py = last_pos
+                cv2.line(img_cv, (px-6, py-6), (px+6, py+6), (100, 100, 100), 2)
+                cv2.line(img_cv, (px-6, py+6), (px+6, py-6), (100, 100, 100), 2)
+                # Label avec l'angle
+                cv2.putText(img_cv, f'{angle_deg}° {reason[:3]}', (px+8, py+4),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.35, (150, 150, 150), 1)
+
+        # Centre du village en bleu
+        cv2.circle(img_cv, center, 12, (255, 0, 0), -1)
+        cv2.circle(img_cv, center, 14, (255, 255, 255), 2)
+
+        # Positions en rouge, numérotées
+        for i, (x, y) in enumerate(positions):
+            cv2.circle(img_cv, (x, y), 16, (0, 0, 255), -1)
+            cv2.circle(img_cv, (x, y), 16, (255, 255, 255), 2)
+            # Numéro en blanc au centre
+            txt = str(i)
+            (tw, th), _ = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
+            cv2.putText(img_cv, txt, (x - tw // 2, y + th // 2),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+
+        # Overlay info en haut (sous la zone UI joueur)
+        info_lines = []
+        if episode is not None:
+            info_lines.append(f'Episode {episode}')
+        info_lines.append(f'Buildings: {len(buildings)}')
+        info_lines.append(f'Positions: {len(positions)}')
+        info_lines.append(f'Center: {center}')
+        if extra_info:
+            info_lines.append(extra_info)
+
+        y_off = 260
+        for line in info_lines:
+            # Contour noir puis texte blanc pour lisibilité
+            cv2.putText(img_cv, line, (12, y_off),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 5)
+            cv2.putText(img_cv, line, (12, y_off),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            y_off += 32
+
+        # Nom : ep_XXX_YYYYMMDD_HHMMSS.png (trie chrono dans l'explorer)
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        if episode is not None:
+            filename = f'ep{episode:04d}_{ts}.png'
+        else:
+            filename = f'{ts}.png'
+        path = os.path.join(output_dir, filename)
+
+        cv2.imwrite(path, img_cv, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        return path
+
+    except Exception as e:
+        print(f"   ⚠️ Log deploy zone échoué : {e}")
+        return None
 
 # =============================================================================
 #                    FONCTION PRINCIPALE

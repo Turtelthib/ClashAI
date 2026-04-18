@@ -200,7 +200,7 @@ class ClashEnvV3:
         self._last_deploy_pos = None
         self._step_rewards = []
 
-        if self.verbose:
+        if self.verbose and type(self).__name__ == 'ClashEnvV3':
             print("\n🎮 ClashEnv V3 initialisé")
             print(f"   Actions     : {TOTAL_ACTIONS} "
                   f"(280 deploy + 3 ctrl + 5 abilities + 1 wait_combat)")
@@ -355,7 +355,6 @@ class ClashEnvV3:
                 continue
 
             if confidence < 0.55 and state != target_state:
-                self._adb_tap(960, 400)
                 time.sleep(1.0)
                 continue
 
@@ -391,14 +390,11 @@ class ClashEnvV3:
                 time.sleep(WAIT_NAVIGATION)
             elif state == 'chat_clan':
                 self._adb_tap(*self._ui['chat_close'])
-                time.sleep(0.5)
-                self._adb_tap(960, 400)
                 time.sleep(WAIT_NAVIGATION)
             elif state == 'menu_boutique':
                 self._adb_tap(*self._ui['close_menu'])
                 time.sleep(WAIT_NAVIGATION)
             else:
-                self._adb_tap(960, 400)
                 time.sleep(WAIT_NAVIGATION)
 
         return False, None
@@ -407,8 +403,8 @@ class ClashEnvV3:
         if self.verbose:
             print("   🚑 Séquence de récupération...")
         for x, y, wait in [
-            (960, 400, 0.5), (1340, 95, 0.5), (1800, 500, 0.5),
-            (960, 400, 0.5), (1270, 90, 0.5), (960, 400, 1.0),
+            (30, 540, 0.5), (1340, 95, 0.5), (1800, 500, 0.5),
+            (30, 540, 0.5), (1270, 90, 0.5), (30, 540, 1.0),
         ]:
             self._adb_tap(x, y)
             time.sleep(wait)
@@ -486,7 +482,7 @@ class ClashEnvV3:
             elif state == 'chat_clan':
                 self._adb_tap(*self._ui['chat_close'])
                 time.sleep(0.5)
-                self._adb_tap(960, 400)
+                self._adb_tap(30, 540)
                 time.sleep(WAIT_NAVIGATION)
             elif state == 'menu_boutique':
                 self._adb_tap(*self._ui['close_menu'])
@@ -495,7 +491,7 @@ class ClashEnvV3:
                 self._adb_tap(*self._ui['close_popup'])
                 time.sleep(WAIT_NAVIGATION)
             else:
-                self._adb_tap(960, 400)
+                self._adb_tap(30, 540) 
                 time.sleep(WAIT_NAVIGATION)
         return False
 
@@ -1010,8 +1006,6 @@ class ClashEnvV3:
         # Comportement humain entre épisodes
         if self._episode_count > 1:
             self._human_idle()
-            self._adb_tap(960, 400)
-            time.sleep(1.0)
 
         # 1. Naviguer vers le village ennemi
         success, img_pil = self._navigate_to('phase_attaque')

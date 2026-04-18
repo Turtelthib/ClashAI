@@ -399,6 +399,9 @@ class HeroAbilityManager:
     def num_deployed(self):
         return sum(1 for v in self._deployed.values() if v)
 
+    def is_deployed(self, hero_name):
+        return self._deployed.get(hero_name, False)
+
     def num_activated(self):
         return sum(1 for v in self._activated.values() if v)
 

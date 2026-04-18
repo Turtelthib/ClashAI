@@ -8,7 +8,7 @@ import shutil
 from clashai.paths import PROJECT_ROOT as project_root
 
 # On définit les chemins absolus
-yaml_path = os.path.join(project_root, 'coc.yaml')
+yaml_path = os.path.join(project_root, 'configs', 'coc.yaml')
 weights_dir = os.path.join(project_root, 'weights')
 
 # --- 2. ENTRAÎNEMENT ---

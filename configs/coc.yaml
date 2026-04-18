@@ -8,6 +8,7 @@ train: images/train
 val: images/val
 
 
+nc: 48
 names:
   0: hdv
   1: chateau_clan
@@ -56,6 +57,7 @@ names:
   44: forgeron
   45: cabane_assistants
   46: cabane_bob
+  47: rempart
 
 hsv_h: 0.015  # Change un peu les teintes
 hsv_s: 0.7    # Change beaucoup la saturation (couleurs)

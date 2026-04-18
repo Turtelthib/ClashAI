@@ -705,7 +705,7 @@ class GdCOrchestrator:
         try:
             from clashai.combat.environment_v4 import ClashEnvV4
             from clashai.combat.agent_v4 import PPOAgentV4
-            from clashai.combat.action_space import MAX_STEPS_PER_EPISODE
+            from clashai.combat.action_space import MAX_STEPS_SAFETY
 
             env = ClashEnvV4(models=self.models, verbose=self.verbose)
 
@@ -720,13 +720,16 @@ class GdCOrchestrator:
             best_path = os.path.join(weights_dir, 'agent_v4_best.pth')
             checkpoint_path = os.path.join(weights_dir, 'agent_v4_checkpoint.pth')
 
-            if os.path.exists(best_path):
-                agent.load(best_path)
-            elif os.path.exists(checkpoint_path):
-                agent.load(checkpoint_path)
-            else:
-                if self.verbose:
-                    print("   ⚠️  Pas de checkpoint, mode heuristique")
+            heuristic_mode = True
+            for ckpt_path in [best_path, checkpoint_path]:
+                if os.path.exists(ckpt_path):
+                    try:
+                        agent.load(ckpt_path)
+                        heuristic_mode = False
+                        break
+                    except RuntimeError:
+                        if self.verbose:
+                            print(f"   ⚠️  Checkpoint incompatible, mode heuristique")
 
             # Reset (reprend depuis phase_attaque)
             obs, mask = env.reset()
@@ -742,7 +745,7 @@ class GdCOrchestrator:
                     if done:
                         break
             else:
-                for step in range(MAX_STEPS_PER_EPISODE):
+                for step in range(MAX_STEPS_SAFETY):
                     action, _, _ = agent.select_action(grid, vector, mask)
                     obs, mask, reward, done, info = env.step(action)
                     grid, vector = obs

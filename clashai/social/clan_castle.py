@@ -160,14 +160,14 @@ class ClanCastleManager:
     """
     Gère les demandes de troupes du château de clan.
 
-    - YOLO bâtiments → localise le CC dans le village
+    - analyze_village (YOLO + CNN) → localise le CC dans le village
     - Template matching → trouve le bouton "Demande" (barre instable)
     - calibrate_ui → bouton "Envoyer" (popup stable)
     - Cooldown 15 min entre chaque demande
     """
 
-    def __init__(self, building_detector=None, verbose=True):
-        self._building_detector = building_detector
+    def __init__(self, models=None, verbose=True):
+        self._models = models
         self.verbose = verbose
         self._last_request_time = 0
         self._total_requests = 0
@@ -177,7 +177,8 @@ class ClanCastleManager:
 
         if verbose:
             status = "ok" if self._tmpl_request is not None else "MANQUANT"
-            print(f"   🏰 CC Manager — template request: {status}")
+            models_ok = "ok" if models is not None else "MANQUANT"
+            print(f"   🏰 CC Manager — models: {models_ok} | template request: {status}")
             if self._tmpl_request is None:
                 print(f"      → uv run python -m clashai.social.clan_castle --capture")
 
@@ -233,14 +234,20 @@ class ClanCastleManager:
     # -----------------------------------------------------------------
 
     def _find_clan_castle(self, screenshot_pil):
-        if self._building_detector is None:
+        if self._models is None:
             return None
-        detections = self._building_detector.detect(screenshot_pil)
-        for d in detections:
-            if d.class_name == 'clan_castle':
-                if self.verbose:
-                    print(f"   🏰 CC à ({d.x}, {d.y}) conf={d.conf:.2f}")
-                return (d.x, d.y)
+        try:
+            from clashai.navigation.game_loop import analyze_village
+            buildings = analyze_village(screenshot_pil, self._models)
+            for b in buildings:
+                if b['class'] == 'clan_castle':
+                    cx, cy = b['center']
+                    if self.verbose:
+                        print(f"   🏰 CC à ({cx}, {cy}) conf={b['confidence']:.2f}")
+                    return (cx, cy)
+        except Exception as e:
+            if self.verbose:
+                print(f"   ⚠️ Erreur détection CC: {e}")
         return None
 
     # -----------------------------------------------------------------
@@ -254,7 +261,7 @@ class ClanCastleManager:
         """
         try:
             img_cv = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
-            h, w = img_cv.shape[:2]
+            _, w = img_cv.shape[:2]
             cx, cy = cc_pos
             x1 = max(0, cx - FULL_TEXT_ZONE_W // 2)
             x2 = min(w, cx + FULL_TEXT_ZONE_W // 2)
@@ -264,8 +271,10 @@ class ClanCastleManager:
                 return False
             zone = img_cv[y1:y2, x1:x2]
             gray = cv2.cvtColor(zone, cv2.COLOR_BGR2GRAY)
-            ratio = np.sum(gray > FULL_TEXT_WHITE_THRESHOLD) / max(gray.size, 1)
-            if ratio > 0.15:
+            # Seuil élevé (230) pour cibler uniquement le texte blanc "PLEIN"
+            # ratio > 0.30 pour éviter les faux positifs (reflets, UI)
+            ratio = np.sum(gray > 230) / max(gray.size, 1)
+            if ratio > 0.30:
                 if self.verbose:
                     print(f"   🔍 'PLEIN' détecté (ratio: {ratio:.1%})")
                 return True
@@ -335,7 +344,7 @@ class ClanCastleManager:
         return True
 
     def _close_menu(self, tap_fn):
-        tap_fn(960, 400)
+        tap_fn(30, 540)  # bord gauche — évite d'ouvrir un bâtiment
         time.sleep(DELAY_CLOSE)
 
 

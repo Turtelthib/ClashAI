@@ -1,6 +1,6 @@
 # ClashAI — Roadmap & Backlog
 
-> Dernière mise à jour : 15 avril 2026 (Session 7)  
+> Dernière mise à jour : 18 avril 2026 (Session 8 — V4.2 fusion phases environment_v4.py)  
 > Ce document centralise **toutes** les modifications, features et idées prévues.  
 > On pioche ici pour construire chaque version. Rien ne se perd.
 
@@ -9,6 +9,7 @@
 ## V4.1 — Quick wins & Analyse post-training
 
 > **Objectif** : corriger les irritants, analyser les premiers résultats PPO, petites améliorations sans casser l'architecture.
+> **Status** : ✅ Terminé (Session 7 + run validation 192 épisodes)
 
 ### Analyse (333 épisodes)
 
@@ -34,9 +35,9 @@
 ### Imitation learning
 
 - [x] Pré-entraîner le PPO sur les épisodes heuristiques (behavioral cloning) — `agent_v4.py` + `train_rl_v4.py`
-- [ ] Relancer 5 épisodes heuristiques avec les fixes V4.1 pour une nouvelle baseline
-- [ ] **Run V4.1 de validation** : 200 épisodes (pas besoin de convergence, juste valider que les fixes marchent)
-- [ ] Commande : `uv run python tools/train_rl_v4.py --pretrain 15 --episodes 200`
+- [x] Relancer 5 épisodes heuristiques avec les fixes V4.1 pour une nouvelle baseline
+- [x] **Run V4.1 de validation** : 192 épisodes PPO + 15 BC — ⭐ moy 1.34 (vs 1.16), 2+⭐ rate 42.7% (vs 29.3%), 0⭐ rate 19.3% (vs 25%). BC fonctionne (1.76⭐ sur ep 1-25), PPO plafonne ensuite → phases rigides sont le limitant → passer à V4.2
+- [x] Commande : `uv run python tools/train_rl_v4.py --pretrain 15 --episodes 200`
 
 ### Stratégie d'entraînement (décidée Session 7)
 
@@ -62,62 +63,64 @@
 
 > **Objectif** : supprimer les phases rigides, rendre l'agent vraiment réactif comme un joueur humain. C'est le plus gros changement architectural depuis V3→V4.
 
-⚠️ check demande de chateau de clan, ne marche pas dans la version actuelle..
-
 ### ⚠️ CRITIQUE : Amélioration heuristique sorts (apprentissages Session 7)
 
-- [ ] Sorts en priorité dans `get_heuristic_sequence()` (malus -5 si non utilisés → l'heuristique en laisse souvent)
-- [ ] Skip des abilities des héros non déployés (championne, prince_gargouille parfois absents)
-- [ ] Burst initial de sorts avant les abilities pour garantir leur utilisation même si combat court
-- [ ] Augmenter `MAX_COMBAT_STEPS` de 20 à 35 (temps de placer tous les sorts)
-- [ ] Augmenter `MAX_STEPS_PER_EPISODE` de 65 à 80 (couvrir le wind-down)
+- [x] Sorts en priorité dans `get_heuristic_sequence()` — burst rage/gel/soin avant les abilities
+- [x] Skip des abilities des héros non déployés — `is_deployed()` ajouté dans `hero_ability.py`
+- [x] Burst initial de sorts avant les abilities pour garantir leur utilisation même si combat court
+- [x] Augmenter `MAX_STEPS_PER_EPISODE` de 65 à 80 (couvrir le wind-down)
+- `MAX_COMBAT_STEPS` déjà à 40 dans le code (> 35 requis)
 
 ### ⚠️ CRITIQUE : Bug clic centre écran avant attaque
 
-- [ ] L'agent clique au centre de l'écran avant de cliquer sur le bouton attaquer (navigation V3 héritée)
-- [ ] Parfois ça ouvre un menu inconnu → boucle infinie → épisode perdu
-- [ ] Investiguer dans `environment.py` (V3 parent) le flow `reset()` / navigation vers `phase_attaque`
-- [ ] Fix : soit supprimer le clic parasite, soit ajouter une détection des menus inconnus + fermeture
+- [x] Supprimé les 3 taps `(960, 400)` parasites dans `_navigate_to()` et entre épisodes
+- [x] Remplacé les 3 taps `(960, 400)` dans `_recovery_sequence()` par `(30, 540)` (bord gauche sûr)
+
+### ✅ Fix château de clan
+
+- [x] `ClanCastleManager` utilisait `building_detector` inexistant dans `models` — remplacé par `models` dict + `analyze_village()`
+- [x] Seuil `_is_castle_full` : pixels 200→230, ratio 0.15→0.30 (moins de faux positifs)
+- [x] `_close_menu` : `tap(960,400)` → `tap(30,540)` (évite d'ouvrir un bâtiment)
 
 ### Fusion des phases deploy/combat
 
-- [ ] Supprimer le `phase_indicator` binaire (0=deploy, 1=combat)
-- [ ] Toutes les 37 actions disponibles à chaque step (deploy, sorts, abilities, observe)
-- [ ] L'agent peut faire : golem → attendre 3s → sorcières → rage → observer → gel → ability roi, le tout en continu
-- [ ] Modifier `action_space.py` : le masking ne dépend plus de la phase mais des ressources restantes
-- [ ] Modifier `environment_v4.py` : supprimer la logique de transition deploy→combat
-- [ ] Modifier `state_encoder.py` : retirer phase_indicator du vecteur obs (55→54 dims, ou remplacer par autre chose)
+- [x] Supprimer le `phase_indicator` binaire (0=deploy, 1=combat) — `PHASE_SIZE = 0` dans `agent_v4.py`
+- [x] Toutes les 37 actions disponibles à chaque step (deploy, sorts, abilities, observe)
+- [x] L'agent peut faire : golem → attendre 3s → sorcières → rage → observer → gel → ability roi, le tout en continu
+- [x] Modifier `action_space.py` : le masking ne dépend plus de la phase mais des ressources restantes — `compute_action_mask` signature simplifiée, phase supprimée
+- [x] Modifier `agent_v4.py` : `VECTOR_SIZE` 55→54 dims, checkpoints V4.1 incompatibles
+- [x] Modifier `environment_v4.py` : supprimer la logique de transition deploy→combat — phases fusionnées, `_get_obs()` 54 dims, `step()` unifié V4.2, `reset()` force `_phase='combat'`, heuristique sans `done` intermédiaire
+- `state_encoder.py` : phase_indicator déjà absent du vecteur (54 dims confirmé)
 
 ### Suppression limite de steps
 
-- [ ] Remplacer `MAX_STEPS = 50` par une condition de fin naturelle
-- [ ] Conditions de fin : plus de troupes ET plus de sorts ET plus d'abilities ET (troupes mortes OU timer 3min)
-- [ ] Garder un plafond de sécurité très haut (~200 steps) pour éviter les boucles infinies
-- [ ] Adapter le `step_norm` dans le vecteur d'observation (normaliser par rapport au temps réel plutôt qu'au nombre de steps)
+- [x] `MAX_STEPS_PER_EPISODE=80` → `MAX_STEPS_SAFETY=200` (filet de sécurité uniquement) dans `action_space.py`
+- [x] Fin naturelle via `_all_resources_exhausted()` : plus de troupes + sorts + abilities dans `environment_v4.py`
+- [x] `step_norm` (step/80) → `time_norm` (elapsed/180s) dans `_get_obs()` — timer COC réel, VECTOR_SIZE reste 54
 
 ### YOLO continu (bâtiments + troupes à chaque step)
 
-- [ ] Faire tourner YOLO bâtiments à chaque step d'observation (pas seulement au scan initial)
-- [ ] Faire tourner YOLO troupes du début à la fin de l'attaque (pas seulement en phase combat)
-- [ ] Benchmarker le temps d'inférence sur RTX 5070 (objectif : <100ms pour les deux modèles)
-- [ ] Fusionner `CombatObserver` et `BuildingDetector` en un pipeline de perception unifié
-- [ ] Produire un état riche à chaque step : positions troupes, positions bâtiments restants, défenses proches
-- [ ] Détection de destruction par diff entre deux scans YOLO bâtiments successifs
-- [ ] Le vecteur d'observation grossit mais les features sont bien plus riches pour le PPO
+- [x] Faire tourner YOLO bâtiments à chaque step d'observation — `_update_combat_observation()` override dans `environment_v4.py`
+- [x] Faire tourner YOLO troupes du début à la fin de l'attaque — `_combat_observer.observe()` appelé à chaque `observe`
+- [x] Benchmarker le temps d'inférence — logs `⏱️ YOLO buildings: Xms | troops: Xms` à chaque observe
+- [x] Fusionner `CombatObserver` et `BuildingDetector` en pipeline unifié — `_update_combat_observation()` orchestre les deux en un seul appel
+- [x] Produire un état riche à chaque step — grid + features village mis à jour + combat features YOLO troupes
+- [x] Détection de destruction par diff entre deux scans YOLO bâtiments successifs — `_prev_building_count` → `_buildings_destroyed_total`, +2.0 reward/bâtiment
+- [x] `feature[0]` du `CombatObserver` = `buildings_remaining_ratio` (était `phase` toujours 1.0) — VECTOR_SIZE reste 54
 
 ### Amélioration zone de déploiement
 
-- [ ] Calculer le contour de la base à partir des bounding boxes YOLO bâtiments
-- [ ] Placer les troupes juste en dehors de ce contour (plus de taps en zone rouge)
-- [ ] Compléter ou remplacer `deploy_zone.py` actuel
-- [ ] Bonus : identifier les côtés faibles (moins de défenses) pour orienter l'attaque
+- [x] Calculer le contour de la base à partir des bounding boxes YOLO bâtiments — `get_perimeter_from_buildings()` dans `deploy_zone.py`
+- [x] Placer les troupes juste en dehors de ce contour — hull convexe + offset 35px, filtre UI zones
+- [x] Compléter `deploy_zone.py` — nouvelle fonction ajoutée, HSV conservé en fallback V3
+- [x] Côté faible déjà géré par `find_best_attack_side()` dans `state_encoder.py`, branché sur `_center_pos` dans `reset()`
 
 ### Reward shaping avancé
 
-- [ ] Destruction seconde par seconde (diff YOLO bâtiments entre screenshots)
-- [ ] Survie des héros (YOLO héros visible en fin de combat = bonus)
-- [ ] Efficacité des sorts (troupes détectées dans le rayon du sort = bonus, sort dans le vide = malus)
-- [ ] Reward pour combos intelligentes (gel sur tour inferno, soin quand HP bas)
+- [x] Destruction seconde par seconde — diff YOLO bâtiments sur chaque `observe` (+2.0/bâtiment)
+- [x] Survie des héros — `compute_hero_survival_bonus()` en fin d'épisode (+5.0/héros vivant via `combat_features[4]`)
+- [x] Efficacité des sorts — rage contextuelle (+2.0 si troupes > 30%), soin contextuel (+3.0 si blessés, +5.0 clutch, +0.5 si gaspillé), gel (+1.5)
+- [x] Combo clutch — soin quand `hurt_ratio > 0.5` → +2.0 bonus supplémentaire
 
 
 ---
@@ -125,6 +128,8 @@
 ## V4.3 — Perception améliorée (barre de troupes)
 
 > **Objectif** : remplacer le template matching + OCR actuel par des CNN plus fiables pour lire la barre de troupes.
+
+CRITIQUE: les remparts fausse les resultats de deploy_zone donc faut les labéliser via labelme. Et les rajouter au cnn batiment
 
 ### CNN classification icônes troupes
 
@@ -141,11 +146,6 @@
 - [ ] Capturer des crops de chaque compteur et annoter les chiffres
 - [ ] Remplacer l'OCR dans `troop_counter.py`
 - [ ] Tester la fiabilité sur tous les cas (x1 pas affiché, x10+, etc.)
-
-### Détection Prince Gargouille fiable
-
-- [ ] Le Prince Gargouille n'est pas toujours détecté par template matching
-- [ ] Le CNN icônes devrait régler ce problème (c'est une classe comme une autre)
 
 ---
 
@@ -213,8 +213,8 @@
 | V2 | ✅ Terminé | Améliorations intermédiaires |
 | V3 | ✅ Terminé | Déploiement séquentiel + combat réactif (289 actions, 1.2M params) |
 | V4.0 | ✅ Terminé | Action space simplifié 37 actions + YOLO troupes (Session 6) |
-| V4.1 | 🔧 En cours | Fix bug critique reward combat + analyse 333 épisodes (Session 7) |
-| V4.2 | 📋 Planifié | Refonte combat (fusion phases, YOLO continu, zone deploy) |
+| V4.1 | ✅ Terminé | Fix bugs critiques + BC + run validation 192 ep — CC troops non fonctionnel (Session 7) |
+| V4.2 | 🔄 En cours | Refonte combat (fusion phases ✅, YOLO continu ✅, zone deploy) |
 | V4.3 | 📋 Planifié | CNN barre de troupes (remplace template matching + OCR) |
 | V5 | 💡 Vision | Caméra, multi-compo, équipements, self-play |
 | V END | 🎯 Objectif | Jouer comme un humain

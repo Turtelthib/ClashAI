@@ -21,7 +21,7 @@ from clashai.combat.agent_v4 import (
     PPOAgentV4, BATCH_SIZE, VECTOR_SIZE,
 )
 from clashai.combat.action_space import (
-    MAX_STEPS_PER_EPISODE, TOTAL_ACTIONS,
+    MAX_STEPS_SAFETY, TOTAL_ACTIONS,
 )
 
 
@@ -62,7 +62,7 @@ def main():
     # Clan Castle Manager (V4.1 — demande de troupes pendant le training)
     from clashai.social.clan_castle import ClanCastleManager
     cc_manager = ClanCastleManager(
-        building_detector=models.get('building_detector'),
+        models=models,
         verbose=False,  # Moins de logs pendant le training
     )
 
@@ -223,7 +223,7 @@ def main():
                         break
         else:
             # Mode PPO
-            for step in range(MAX_STEPS_PER_EPISODE):
+            for step in range(MAX_STEPS_SAFETY):
                 action, log_prob, value = agent.select_action(grid, vector, mask)
                 agent.store_step(grid, vector, action, log_prob, value, mask)
 

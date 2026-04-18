@@ -85,8 +85,8 @@ ACTION_DONE = ACTION_OBSERVE + 3                       # 36
 TOTAL_ACTIONS = ACTION_DONE + 1                        # 37
 
 # Limits
-MAX_STEPS_PER_EPISODE = 80   # V4.1: augmenté de 50 à 65
-MAX_COMBAT_STEPS = 40
+MAX_STEPS_SAFETY = 200   # V4.2: filet de sécurité contre les boucles infinies
+                         # La vraie fin d'épisode est naturelle (_all_resources_exhausted)
 NUM_POSITIONS = 20  # positions sur le périmètre (hérité V3)
 
 
@@ -198,15 +198,16 @@ def build_spell_inventory(remaining_troops, troop_types):
 #                     ACTION MASK
 # =============================================================================
 
-def compute_action_mask(remaining_troops, troop_types, phase='deploy',
-                        hero_ability_mask=None):
+def compute_action_mask(remaining_troops, troop_types, hero_ability_mask=None):
     """
-    Calcule le masque d'actions valides V4.
+    Calcule le masque d'actions valides V4.2.
+
+    V4.2 : phases fusionnées — plus de phase binaire deploy/combat.
+    Le masking est basé uniquement sur les ressources disponibles.
 
     Args:
         remaining_troops: array (N,) — compteur par type
         troop_types: list[dict] — TROOP_TYPES
-        phase: 'deploy' ou 'combat'
         hero_ability_mask: array (5,) — 1.0 si ability dispo
 
     Returns:
@@ -216,34 +217,28 @@ def compute_action_mask(remaining_troops, troop_types, phase='deploy',
     role_counts, _ = build_role_inventory(remaining_troops, troop_types)
     spell_counts = build_spell_inventory(remaining_troops, troop_types)
 
-    if phase == 'deploy':
-        # Deploy : chaque rôle avec des troupes restantes × tous les secteurs
-        for role_idx, role_name in enumerate(DEPLOY_ROLES):
-            if role_counts[role_name] > 0:
-                start = role_idx * NUM_SECTORS
-                mask[start:start + NUM_SECTORS] = 1.0
+    # Deploy actions (0-24) : disponibles si le rôle a des troupes restantes
+    for role_idx, role_name in enumerate(DEPLOY_ROLES):
+        if role_counts[role_name] > 0:
+            start = role_idx * NUM_SECTORS
+            mask[start:start + NUM_SECTORS] = 1.0
 
-        # Control
-        mask[ACTION_WAIT_SHORT] = 1.0
-        mask[ACTION_WAIT_LONG] = 1.0
-        mask[ACTION_DONE] = 1.0
+    # Spell actions (25-27) : disponibles si le sort est encore disponible
+    for spell_idx, spell_name in enumerate(SPELL_NAMES):
+        if spell_counts[spell_name] > 0:
+            mask[ACTION_SPELL_START + spell_idx] = 1.0
 
-    elif phase == 'combat':
-        # Sorts restants
-        for spell_idx, spell_name in enumerate(SPELL_NAMES):
-            if spell_counts[spell_name] > 0:
-                mask[ACTION_SPELL_START + spell_idx] = 1.0
+    # Abilities (28-32) : disponibles si l'ability héros est prête
+    if hero_ability_mask is not None:
+        for i in range(NUM_HEROES):
+            if hero_ability_mask[i] > 0:
+                mask[ACTION_ABILITY_START + i] = 1.0
 
-        # Abilities héros
-        if hero_ability_mask is not None:
-            for i in range(NUM_HEROES):
-                if hero_ability_mask[i] > 0:
-                    mask[ACTION_ABILITY_START + i] = 1.0
-
-        # Observe + control
-        mask[ACTION_OBSERVE] = 1.0
-        mask[ACTION_WAIT_SHORT] = 1.0
-        mask[ACTION_WAIT_LONG] = 1.0
+    # observe (33), wait_short (34), wait_long (35), done (36) : toujours disponibles
+    mask[ACTION_OBSERVE] = 1.0
+    mask[ACTION_WAIT_SHORT] = 1.0
+    mask[ACTION_WAIT_LONG] = 1.0
+    mask[ACTION_DONE] = 1.0
 
     return mask
 

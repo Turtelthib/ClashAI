@@ -35,6 +35,15 @@ REWARD_SPELL_IN_COMBAT = 1.0
 REWARD_OVER_OBSERVE = -0.5
 REWARD_LEFTOVER_SPELLS = -5.0   # Malus par sort non utilisé en fin de combat
 
+# Reward shaping avancé (V4.2)
+REWARD_SPELL_RAGE_GOOD = 2.0    # rage quand troupes en vie
+REWARD_SPELL_RAGE_BAD = 0.0     # rage quand plus personne
+REWARD_SPELL_SOIN_GOOD = 3.0    # soin quand blessés
+REWARD_SPELL_SOIN_WASTED = 0.5  # soin alors que tout le monde est sain
+REWARD_SPELL_GEL = 1.5          # gel (SpellCaster cible bien, toujours utile)
+REWARD_COMBO_CLUTCH_HEAL = 2.0  # soin clutch quand hurt_ratio > 0.5
+REWARD_HERO_SURVIVAL = 5.0      # par héros encore en vie en fin de combat
+
 
 # =============================================================================
 #                     STEP REWARD (pendant l'épisode)
@@ -136,14 +145,50 @@ def compute_combat_reward(action_type, spell_name, hero_idx,
             if progress > 0.2:
                 reward += 1.0
 
-    elif action_type == 'spell':
-        reward += REWARD_SPELL_IN_COMBAT
+    elif action_type == 'spell' and spell_name is not None:
+        troops_alive = combat_features[2] if combat_features is not None else 0.5
+        hurt_ratio = combat_features[10] if combat_features is not None else 0.0
+
+        if spell_name == 'rage':
+            reward += REWARD_SPELL_RAGE_GOOD if troops_alive > 0.3 else REWARD_SPELL_RAGE_BAD
+
+        elif spell_name == 'soin':
+            if hurt_ratio > 0.5:
+                # Combo clutch : soin d'urgence
+                reward += REWARD_SPELL_SOIN_GOOD + REWARD_COMBO_CLUTCH_HEAL
+            elif hurt_ratio > 0.3:
+                reward += REWARD_SPELL_SOIN_GOOD
+            else:
+                reward += REWARD_SPELL_SOIN_WASTED
+
+        elif spell_name == 'gel':
+            reward += REWARD_SPELL_GEL
+
+        else:
+            reward += REWARD_SPELL_IN_COMBAT
 
     elif action_type == 'observe':
         if combat_step_count > 10:
             reward += REWARD_OVER_OBSERVE
 
     return reward
+
+
+def compute_hero_survival_bonus(combat_features):
+    """
+    Bonus de fin d'épisode basé sur les héros encore en vie.
+
+    Args:
+        combat_features: array (15,) du dernier observe, ou None
+
+    Returns:
+        reward: float (0.0 si pas d'observation disponible)
+    """
+    if combat_features is None:
+        return 0.0
+    heroes_alive_ratio = combat_features[4]  # num_heroes_alive / 5.0
+    num_alive = round(heroes_alive_ratio * 5)
+    return REWARD_HERO_SURVIVAL * num_alive
 
 
 def compute_leftover_penalty(remaining_troops, troop_types):

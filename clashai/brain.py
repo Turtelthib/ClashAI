@@ -149,15 +149,18 @@ class ClashBrain:
         checkpoint_path = os.path.join(weights_dir, 'agent_v4_checkpoint.pth')
         self._use_heuristic = True
 
-        if os.path.exists(best_path):
-            self._agent.load(best_path)
-            self._use_heuristic = False
-        elif os.path.exists(checkpoint_path):
-            self._agent.load(checkpoint_path)
-            self._use_heuristic = False
+        for ckpt_path in [best_path, checkpoint_path]:
+            if os.path.exists(ckpt_path):
+                try:
+                    self._agent.load(ckpt_path)
+                    self._use_heuristic = False
+                    break
+                except RuntimeError as e:
+                    print(f"   ⚠️  Checkpoint incompatible ({os.path.basename(ckpt_path)}) : {e}")
+                    print("   🧠 Fallback mode heuristique")
 
         if self._use_heuristic:
-            print("   🧠 Mode heuristique (pas de checkpoint RL)")
+            print("   🧠 Mode heuristique (pas de checkpoint compatible)")
         else:
             print("   🤖 Mode RL (checkpoint chargé)")
 
@@ -177,9 +180,8 @@ class ClashBrain:
 
         # Clan Castle Manager (V4.1 — demande de troupes)
         from clashai.social.clan_castle import ClanCastleManager
-        building_detector = self._models.get('building_detector')
         self._cc_manager = ClanCastleManager(
-            building_detector=building_detector,
+            models=self._models,
             verbose=self.verbose,
         )
 
@@ -417,7 +419,7 @@ class ClashBrain:
             info: dict avec les résultats, ou None si échec
         """
         from clashai.combat.environment_v4 import ClashEnvV4
-        from clashai.combat.action_space import MAX_STEPS_PER_EPISODE
+        from clashai.combat.action_space import MAX_STEPS_SAFETY
 
         try:
             env = ClashEnvV4(models=self._models, verbose=self.verbose)
@@ -434,7 +436,7 @@ class ClashBrain:
                         break
             else:
                 # Mode RL
-                for step in range(MAX_STEPS_PER_EPISODE):
+                for step in range(MAX_STEPS_SAFETY):
                     action, _, _ = self._agent.select_action(grid, vector, mask)
                     obs, mask, reward, done, info = env.step(action)
                     grid, vector = obs

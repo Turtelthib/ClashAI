@@ -39,13 +39,14 @@ SPELL_FEATURES = len(SPELL_NAMES)   # 3 (soin, rage, gel)
 SECTOR_MAP_SIZE = NUM_SECTORS       # 5 (deploy density par secteur)
 STEP_FEATURES = 1
 HERO_STATUS_SIZE = NUM_HEROES       # 5
-PHASE_SIZE = 1                      # 0=deploy, 1=combat
+PHASE_SIZE = 0                      # V4.2: phases fusionnées, plus d'indicateur binaire
 
 VECTOR_SIZE = (VILLAGE_FEATURES + ROLE_FEATURES + SPELL_FEATURES
                + SECTOR_MAP_SIZE + STEP_FEATURES
-               + COMBAT_FEATURES_SIZE + HERO_STATUS_SIZE
-               + PHASE_SIZE)
-# 20 + 5 + 3 + 5 + 1 + 15 + 5 + 1 = 55
+               + COMBAT_FEATURES_SIZE + HERO_STATUS_SIZE)
+# 20 + 5 + 3 + 5 + 1 + 15 + 5 = 54
+# Note: checkpoints V4.1 incompatibles (nn.Linear(55→54)).
+# Les anciens checkpoints dans weights/rl/ seront inutilisables.
 
 # PPO Hyperparamètres
 GAMMA = 0.99
@@ -68,7 +69,7 @@ class ActorCriticV4(nn.Module):
     Réseau Actor-Critic V4.
 
     Plus compact que V3 :
-        - Vecteur 55 dims (vs 76)
+        - Vecteur 54 dims (vs 76) — V4.2: 55→54, phase fusionnée
         - Actor output 37 actions (vs 289)
         - Backbone partagé 192 dims (vs 256)
         - ~400K paramètres (vs 1.2M)
@@ -147,7 +148,7 @@ class ActorCriticV4(nn.Module):
         """
         Args:
             grid: (batch, 12, 40, 40)
-            vector: (batch, 55)
+            vector: (batch, 54)
             action_mask: (batch, 37) — 1.0 = valide
         """
         g = self.grid_cnn(grid)
