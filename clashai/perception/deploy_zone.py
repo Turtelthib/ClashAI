@@ -1,19 +1,19 @@
 # scripts/rl/deploy_zone.py
-# Détection dynamique de la zone de déploiement sur un village ennemi.
+# Dynamic detection of the deployment zone on an enemy village.
 #
-# Dans Clash of Clans, la zone de déploiement est délimitée par une ligne
-# rouge semi-transparente autour du village. Les troupes ne peuvent être
-# posées qu'EN DEHORS de cette ligne (sur l'herbe verte extérieure).
+# In Clash of Clans, the deployment zone is delimited by a semi-transparent
+# red line around the village. Troops can only be placed OUTSIDE this line
+# (on the outer green grass).
 #
-# Méthode :
-#   1. L'overlay rouge décale la teinte (HSV) de l'herbe de H≈33 vers H≈20
-#   2. On détecte cette herbe "chaude" (H=14-28) = zone intérieure du village
-#   3. On calcule le convex hull = frontière approximative
-#   4. Les positions de déploiement sont placées JUSTE EN DEHORS du hull
+# Method :
+# 1. The red overlay shifts the grass hue (HSV) from H≈33 to H≈20
+# 2. We detect this "warm" grass (H=14-28) = inner village zone
+# 3. We compute the convex hull = approximate boundary
+# 4. Deployment positions are placed JUST OUTSIDE the hull
 #
 # Usage :
-#   from clashai.perception.deploy_zone import get_smart_deploy_positions
-#   positions = get_smart_deploy_positions(screenshot_pil, direction_idx, spread)
+# from clashai.perception.deploy_zone import get_smart_deploy_positions
+# positions = get_smart_deploy_positions(screenshot_pil, direction_idx, spread)
 
 import cv2
 import numpy as np
@@ -22,84 +22,84 @@ import os
 from datetime import datetime
 
 # =============================================================================
-#                         CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
-# Résolution ADB (coordonnées de tap)
+# ADB resolution (tap coordinates)
 ADB_WIDTH = 1920
 ADB_HEIGHT = 1080
 
-# Zones d'exclusion UI (en coordonnées ADB 1920×1080)
-# Les taps dans ces zones déclenchent des boutons au lieu de poser des troupes
+# UI exclusion zones (in ADB coordinates 1920×1080)
+# Taps in these zones trigger buttons instead of deploying troops
 UI_EXCLUSION_ZONES = [
-    # Haut : info joueur + ressources
-    (0, 0, 280, 230),           # Pseudo joueur + butin disponible
-    (1450, 0, 1920, 160),       # Compteurs ressources haut-droite
-    # Bas : barre de troupes uniquement (vraie UI, pas le village)
-    (0, 735, 1920, 1080),             # Barre de troupes + timer bas
-    # Boutons latéraux (plus petits que l'ancien grand rectangle)
-    (0, 590, 210, 730),         # Bouton "Terminer la bataille"
-    (1220, 560, 1510, 730),     # Bouton "Suivant 1200"
+    # Top: player info + resources
+    (0, 0, 280, 230),
+    (1450, 0, 1920, 160),
+    # Bottom: troop bar only (real UI, not the village)
+    (0, 735, 1920, 1080),
+    # Side buttons (smaller than the old large rectangle)
+    (0, 590, 210, 730),
+    (1220, 560, 1510, 730),
 ]
 
-# Marge minimale depuis les bords de l'écran
+# Minimum margin from screen edges
 SCREEN_MARGIN = 60
 
-# Distance (en pixels ADB) entre le hull et les positions de déploiement
+# Distance (in ADB pixels) between the hull and the deployment positions
 DEPLOY_OFFSET = 35
 
-# V4.2 — Paramètres pour get_perimeter_from_buildings (YOLO-only, sans HSV)
-# Expansion artificielle de chaque bbox pour simuler la zone de collision CoC
-# (~1.5 tile au zoom moyen). Le hull des bboxes expansées englobe la vraie zone rouge.
+# V4.2 — Parameters for get_perimeter_from_buildings (YOLO-only, no HSV)
+# Artificial expansion of each bbox to simulate the CoC collision zone
+# (~1.5 tile at medium zoom). The hull of expanded bboxes covers the real red zone.
 BUILDING_PADDING = 40
 
-# Distance minimale entre une position finale et n'importe quel centre de bâtiment.
-# Doit être > demi-taille max d'un bâtiment + marge. La plupart des bâtiments font
-# 60-80px de côté → 70px garantit qu'on ne tape jamais sur un sprite.
+# Minimum distance between a final position and any building center.
+# Must be > half max building size + margin. Most buildings are
+# 60-80px wide → 70px guarantees we never tap on a sprite.
 MIN_BUILDING_DIST = 40
 
-# Offset final depuis le hull, adaptatif au zoom.
-# Plus petit que DEPLOY_OFFSET car le padding fait déjà le gros du travail.
+# Final offset from the hull, adaptive to zoom level.
+# Smaller than DEPLOY_OFFSET because padding already does most of the work.
 OFFSET_BY_ZOOM = {'dezoome': 30, 'moyen': 20, 'zoome': 10}
 
-# Plafond de push radial APRÈS sortie du hull pour éviter d'atterrir dans
-# l'eau/rochers quand un bâtiment excentré force à pousser plus loin.
-# 40px ≈ 1 tile CoC : si aucun emplacement valide à ≤ 40px du hull → abandon rayon.
+# Radial push cap AFTER exiting the hull to avoid landing in
+# water/rocks when an off-center building forces a longer push.
+# 40px ≈ 1 CoC tile : if no valid spot at ≤ 40px from hull → discard ray.
 MAX_RADIAL_PUSH = 40
 
 # Directions (index → label)
 DIRECTION_LABELS = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO']
 
-# Angles correspondants (en radians, 0 = droite, anti-horaire)
-# N=haut, E=droite, S=bas, O=gauche
+# Corresponding angles (in radians, 0 = right, counter-clockwise)
+# N=up, E=right, S=down, O=left
 DIRECTION_ANGLES = {
-    0: np.pi / 2,       # N  (haut)
-    1: np.pi / 4,       # NE
-    2: 0,               # E  (droite)
-    3: -np.pi / 4,      # SE
-    4: -np.pi / 2,      # S  (bas)
-    5: -3 * np.pi / 4,  # SO
-    6: np.pi,           # O  (gauche)
-    7: 3 * np.pi / 4,   # NO
+    0: np.pi / 2,
+    1: np.pi / 4,
+    2: 0,
+    3: -np.pi / 4,
+    4: -np.pi / 2,
+    5: -3 * np.pi / 4,
+    6: np.pi,
+    7: 3 * np.pi / 4,
 }
 
-# V4.2 — Validation HSV locale en complément de YOLO :
-# quand un bâtiment n'est pas détecté par YOLO (cabanes d'ouvriers,
-# remparts isolés…), on check la couleur du pixel candidat.
-# L'overlay rouge CoC décale le Hue de l'herbe (~33 vert) vers ~15 (orangé).
-HSV_CHECK_RADIUS = 4              # demi-taille du patch échantillonné (px)
-HSV_RED_H_MAX = 28                # Hue max pour être "rouge overlay"
-HSV_RED_SAT_MIN = 50              # saturation min (filtre les zones sombres)
-HSV_RED_RATIO_THRESHOLD = 0.5     # ≥50% de pixels rouges → zone interdite
+# V4.2 — Local HSV validation as a complement to YOLO:
+# when a building is not detected by YOLO (worker huts,
+# isolated walls…), we check the color of the candidate pixel.
+# The CoC red overlay shifts the grass Hue (~33 green) toward ~15 (orange).
+HSV_CHECK_RADIUS = 4
+HSV_RED_H_MAX = 28
+HSV_RED_SAT_MIN = 50
+HSV_RED_RATIO_THRESHOLD = 0.5
 
 # =============================================================================
-#                    DÉTECTION DE LA ZONE
+# ZONE DETECTION
 # =============================================================================
 
 def _is_in_red_overlay(img_bgr, x, y, radius=HSV_CHECK_RADIUS):
     """
-    True si le petit patch autour de (x, y) est dans l'overlay rouge CoC.
-    Échoue silencieusement (False) sur villages sombres → pas de régression.
+    True if the small patch around (x, y) is within the CoC red overlay.
+    Fails silently (False) on dark villages → no regression.
     """
     h, w = img_bgr.shape[:2]
     x1 = max(0, int(x) - radius)
@@ -118,25 +118,25 @@ def _is_in_red_overlay(img_bgr, x, y, radius=HSV_CHECK_RADIUS):
 
 def detect_village_boundary(img_cv):
     """
-    Détecte la frontière du village à partir d'un screenshot BGR.
+    Detects the village boundary from a BGR screenshot.
 
-    L'overlay rouge de CoC décale la teinte HSV de l'herbe : H≈33 (vert)
-    devient H≈20 (jaune-vert chaud). On détecte cette zone chaude pour
-    trouver l'intérieur du village.
+    CoC's red overlay shifts the HSV hue of the grass: H≈33 (green)
+    becomes H≈20 (warm yellow-green). We detect this warm zone to
+    find the interior of the village.
 
     Args:
-        img_cv: image BGR (numpy array) du screenshot
+        img_cv: BGR image (numpy array) of the screenshot
 
     Returns:
-        hull: convex hull du village (numpy array Nx1x2) ou None
-        center: centre du village (x, y) en pixels image ou None
+        hull: convex hull of the village (numpy array Nx1x2) or None
+        center: village center (x, y) in image pixels or None
     """
     hsv = cv2.cvtColor(img_cv, cv2.COLOR_BGR2HSV)
     h, w = img_cv.shape[:2]
 
-    # --- Masque UI ---
-    # Exclure les zones d'interface (en coordonnées image)
-    # On calcule le ratio image→ADB pour convertir
+    # --- UI Mask ---
+    # Exclude UI zones (in image coordinates)
+    # Compute the image→ADB ratio for conversion
     scale_x = w / ADB_WIDTH
     scale_y = h / ADB_HEIGHT
 
@@ -148,62 +148,62 @@ def detect_village_boundary(img_cv):
         iy2 = int(ay2 * scale_y)
         ui_mask[iy1:iy2, ix1:ix2] = 0
 
-    # Exclure aussi les bords extrêmes
+    # Also exclude extreme edges
     margin = int(SCREEN_MARGIN * min(scale_x, scale_y))
     ui_mask[:margin, :] = 0
     ui_mask[h - margin:, :] = 0
     ui_mask[:, :margin] = 0
     ui_mask[:, w - margin:] = 0
 
-    # --- Détection herbe chaude (zone rouge du village) ---
-    # H=14-28 : herbe teintée par l'overlay rouge
-    # S>80 : saturée (pas gris)
-    # V>100 : lumineuse (pas ombre de forêt)
+    # --- Warm grass detection (village red zone) ---
+    # H=14-28 : grass tinted by the red overlay
+    # S>80 : saturated (not grey)
+    # V>100 : bright (not forest shadow)
     mask_warm = cv2.inRange(hsv, (14, 80, 100), (28, 255, 255))
     mask_warm = cv2.bitwise_and(mask_warm, ui_mask)
 
-    # --- Nettoyage morphologique ---
-    # Close : combler les trous (bâtiments, murs, décorations)
+    # --- Morphological cleanup ---
+    # Close : fill holes (buildings, walls, decorations)
     kernel_close = np.ones((30, 30), np.uint8)
-    # Open : retirer le bruit (petits pixels chauds dans la forêt)
+    # Open : remove noise (small warm pixels in the forest)
     kernel_open = np.ones((15, 15), np.uint8)
 
     min_contour_area = h * w * 0.05
 
-    # --- Stratégie en cascade : essayer du plus précis au plus large ---
+    # --- Cascade strategy: try from most precise to broadest ---
     strategies = [
         ("warm", mask_warm),
     ]
 
-    # Préparer les fallbacks
-    # Fallback 1 : herbe claire (fonctionne quand l'overlay rouge est faible)
+    # Prepare fallbacks
+    # Fallback 1 : light grass (works when the red overlay is faint)
     mask_grass = cv2.inRange(hsv, (18, 70, 130), (38, 255, 255))
     mask_grass = cv2.bitwise_and(mask_grass, ui_mask)
     strategies.append(("herbe claire", mask_grass))
 
-    # Fallback 2 : herbe large (très permissif)
+    # Fallback 2 : wide grass (very permissive)
     mask_wide = cv2.inRange(hsv, (15, 60, 110), (40, 255, 255))
     mask_wide = cv2.bitwise_and(mask_wide, ui_mask)
     strategies.append(("herbe large", mask_wide))
 
-    # Fallback 3 : VILLAGES SOMBRES (thème sous-marin, nuit, etc.)
-    # Le sol est bleu-vert (H=75-120) au lieu de vert (H=33).
-    # L'intérieur du village est plus lumineux (V>90) que l'extérieur sombre (V<70).
-    # On utilise la luminosité + saturation pour isoler la zone de jeu.
-    mask_bright = cv2.inRange(hsv, (0, 20, 90), (180, 255, 255))  # Tout ce qui est lumineux
-    # Exclure les zones UI et le blanc pur (texte, nuages)
-    mask_not_white = cv2.inRange(hsv, (0, 15, 0), (180, 255, 240))  # Pas surexposé
+    # Fallback 3 : DARK VILLAGES (underwater theme, night, etc.)
+    # The ground is blue-green (H=75-120) instead of green (H=33).
+    # The village interior is brighter (V>90) than the dark exterior (V<70).
+    # We use brightness + saturation to isolate the game zone.
+    mask_bright = cv2.inRange(hsv, (0, 20, 90), (180, 255, 255))
+    # Exclude UI zones and pure white (text, clouds)
+    mask_not_white = cv2.inRange(hsv, (0, 15, 0), (180, 255, 240))
     mask_dark_village = cv2.bitwise_and(mask_bright, mask_not_white)
     mask_dark_village = cv2.bitwise_and(mask_dark_village, ui_mask)
     strategies.append(("village sombre (luminosité)", mask_dark_village))
 
-    # Fallback 4 : Bordure rouge directe (certains villages dark ont une ligne rouge visible)
-    # H<10 ou H>170 (rouge), S>80, V>60
+    # Fallback 4 : Direct red border (some dark villages have a visible red line)
+    # H<10 or H>170 (red), S>80, V>60
     mask_red_low = cv2.inRange(hsv, (0, 80, 60), (10, 255, 255))
     mask_red_high = cv2.inRange(hsv, (170, 80, 60), (180, 255, 255))
     mask_red_border = cv2.bitwise_or(mask_red_low, mask_red_high)
     mask_red_border = cv2.bitwise_and(mask_red_border, ui_mask)
-    # Dilater la bordure pour remplir l'intérieur
+    # Dilate the border to fill the interior
     kernel_dilate = np.ones((50, 50), np.uint8)
     mask_red_filled = cv2.dilate(mask_red_border, kernel_dilate, iterations=3)
     mask_red_filled = cv2.morphologyEx(mask_red_filled, cv2.MORPH_CLOSE,
@@ -230,9 +230,9 @@ def detect_village_boundary(img_cv):
         if area < min_contour_area:
             continue
 
-        # Succès — on utilise ce contour
+        # Success — use this contour
         if strategy_name != "warm":
-            print(f"   ⚠️  Overlay rouge faible, fallback {strategy_name}")
+            print(f" WARNING: Overlay rouge faible, fallback {strategy_name}")
 
         hull = cv2.convexHull(largest)
 
@@ -242,7 +242,7 @@ def detect_village_boundary(img_cv):
         else:
             center = np.mean(hull.reshape(-1, 2).astype(float), axis=0)
 
-        break  # On a trouvé, on arrête
+        break
 
     if hull is None:
         return None, None
@@ -251,11 +251,11 @@ def detect_village_boundary(img_cv):
 
 
 # =============================================================================
-#                CALCUL DES POSITIONS DE DÉPLOIEMENT
+# DEPLOYMENT POSITION COMPUTATION
 # =============================================================================
 
 def _sample_hull_point(hull_pts, frac):
-    """Interpole un point le long du périmètre du hull à la fraction donnée."""
+    """Interpolates a point along the hull perimeter at the given fraction."""
     n = len(hull_pts)
     idx_float = frac * n
     i1 = int(idx_float) % n
@@ -265,14 +265,14 @@ def _sample_hull_point(hull_pts, frac):
 
 
 def _angle_from_center(pt, center):
-    """Calcule l'angle d'un point par rapport au centre (0=droite, anti-horaire)."""
+    """Computes the angle of a point relative to the center (0=right, counter-clockwise)."""
     dx = pt[0] - center[0]
-    dy = -(pt[1] - center[1])  # Y inversé (écran)
+    dy = -(pt[1] - center[1])
     return np.arctan2(dy, dx)
 
 
 def _angle_diff(a, b):
-    """Différence angulaire signée entre a et b, normalisée dans [-π, π]."""
+    """Signed angular difference between a and b, normalized to [-π, π]."""
     diff = a - b
     while diff > np.pi:
         diff -= 2 * np.pi
@@ -282,7 +282,7 @@ def _angle_diff(a, b):
 
 
 def _is_in_exclusion_zone(x, y, img_h, img_w):
-    """Vérifie si un point (en coordonnées ADB) est dans une zone UI."""
+    """Checks whether a point (in ADB coordinates) is inside a UI zone."""
     for ax1, ay1, ax2, ay2 in UI_EXCLUSION_ZONES:
         if ax1 <= x <= ax2 and ay1 <= y <= ay2:
             return True
@@ -292,23 +292,23 @@ def _is_in_exclusion_zone(x, y, img_h, img_w):
 def compute_deploy_positions(hull, center, img_shape, direction_idx,
                              spread=0.5, num_points=12, offset_px=None):
     """
-    Calcule les positions de déploiement le long du bord du village.
+    Computes deployment positions along the edge of the village.
 
-    S'adapte automatiquement au niveau de zoom :
-    - Dézoomé : positions offset en dehors du hull
-    - Zoomé : positions sur le bord du hull ou le bord de l'écran
+    Automatically adapts to zoom level:
+    - Zoomed out : positions offset outside the hull
+    - Zoomed in : positions on the hull edge or screen edge
 
     Args:
-        hull: convex hull (Nx1x2 array en coordonnées image)
-        center: centre du village (x, y) en coordonnées image
-        img_shape: (height, width) de l'image source
+        hull: convex hull (Nx1x2 array in image coordinates)
+        center: village center (x, y) in image coordinates
+        img_shape: (height, width) of the source image
         direction_idx: 0-7 (N, NE, E, SE, S, SO, O, NO)
-        spread: 0.0 (groupé au centre de la direction) à 1.0 (étalé sur tout le côté)
-        num_points: nombre de positions à générer
-        offset_px: distance en pixels ADB depuis le hull (défaut: auto)
+        spread: 0.0 (grouped at direction center) to 1.0 (spread over the full side)
+        num_points: number of positions to generate
+        offset_px: distance in ADB pixels from the hull (default: auto)
 
     Returns:
-        positions: liste de (x, y) en coordonnées ADB
+        positions: list of (x, y) in ADB coordinates
     """
     img_h, img_w = img_shape[:2]
     scale_x = ADB_WIDTH / img_w
@@ -317,27 +317,27 @@ def compute_deploy_positions(hull, center, img_shape, direction_idx,
     hull_pts = hull.reshape(-1, 2).astype(float)
     target_angle = DIRECTION_ANGLES[direction_idx]
 
-    # --- Détection du zoom ---
+    # --- Zoom detection ---
     hull_area = cv2.contourArea(hull)
     game_area = img_h * img_w * 0.55
-    zoom_ratio = hull_area / game_area  # 0.3 = dézoomé, 0.6+ = zoomé
+    zoom_ratio = hull_area / game_area
 
-    # Adapter les paramètres au zoom
+    # Adapt parameters to zoom level
     if offset_px is None:
         if zoom_ratio < 0.40:
-            offset_px = DEPLOY_OFFSET        # 35px — normal
+            offset_px = DEPLOY_OFFSET
         elif zoom_ratio < 0.55:
-            offset_px = 20                    # Moyen
+            offset_px = 20
         else:
-            offset_px = 8                     # Très zoomé — quasi sur le hull
+            offset_px = 8
 
     margin = SCREEN_MARGIN
     if zoom_ratio > 0.50:
-        margin = 30  # Réduire la marge écran quand zoomé
+        margin = 30
 
-    dedup_dist_sq = 400 if zoom_ratio < 0.50 else 200  # 20px ou 14px
+    dedup_dist_sq = 400 if zoom_ratio < 0.50 else 200
 
-    # --- Échantillonner beaucoup de points le long du hull ---
+    # --- Sample many points along the hull ---
     n_samples = 200
     hull_samples = []
     for i in range(n_samples):
@@ -346,18 +346,18 @@ def compute_deploy_positions(hull, center, img_shape, direction_idx,
         angle = _angle_from_center(pt, center)
         hull_samples.append((pt, angle, frac))
 
-    # --- Trier par proximité angulaire à la direction cible ---
+    # --- Sort by angular proximity to target direction ---
     hull_samples.sort(key=lambda x: abs(_angle_diff(x[1], target_angle)))
 
-    # --- Sélectionner les points selon le spread ---
-    # Quand zoomé, élargir le spread pour compenser les positions perdues
+    # --- Select points according to spread ---
+    # When zoomed in, widen the spread to compensate for lost positions
     effective_spread = spread
     if zoom_ratio > 0.50:
         effective_spread = min(1.0, spread + 0.3)
 
     max_angle_range = np.pi * (0.15 + 0.85 * effective_spread)
 
-    # Filtrer les points dans l'arc angulaire
+    # Filter points within the angular arc
     candidates = []
     for pt, angle, frac in hull_samples:
         if abs(_angle_diff(angle, target_angle)) <= max_angle_range:
@@ -366,11 +366,11 @@ def compute_deploy_positions(hull, center, img_shape, direction_idx,
     if not candidates:
         candidates = [(pt, angle) for pt, angle, frac in hull_samples[:num_points * 3]]
 
-    # --- Trier par angle pour un déploiement ordonné ---
+    # --- Sort by angle for ordered deployment ---
     candidates.sort(key=lambda x: x[1])
 
-    # --- Sous-échantillonner pour obtenir num_points positions ---
-    # Demander plus que nécessaire car certains seront filtrés
+    # --- Subsample to obtain num_points positions ---
+    # Request more than needed since some will be filtered out
     target_count = int(num_points * 1.5)
     if len(candidates) > target_count:
         step = len(candidates) / target_count
@@ -378,36 +378,36 @@ def compute_deploy_positions(hull, center, img_shape, direction_idx,
     else:
         selected = candidates
 
-    # --- Convertir en coordonnées ADB avec offset vers l'extérieur ---
+    # --- Convert to ADB coordinates with outward offset ---
     positions = []
     offset_img = offset_px / max(scale_x, scale_y)
 
     for pt, angle in selected:
-        # Direction vers l'extérieur (depuis le centre)
+        # Outward direction (from center)
         direction = pt - center
         norm = np.linalg.norm(direction)
         if norm < 1:
             continue
         direction = direction / norm
 
-        # Point décalé vers l'extérieur
+        # Point shifted outward
         deploy_pt = pt + direction * offset_img
 
-        # Convertir en coordonnées ADB
+        # Convert to ADB coordinates
         adb_x = int(deploy_pt[0] * scale_x)
         adb_y = int(deploy_pt[1] * scale_y)
 
-        # Clamp aux limites de l'écran
+        # Clamp to screen bounds
         adb_x = max(margin, min(ADB_WIDTH - margin, adb_x))
         adb_y = max(margin, min(ADB_HEIGHT - margin, adb_y))
 
-        # Vérifier les zones d'exclusion UI
+        # Check UI exclusion zones
         if _is_in_exclusion_zone(adb_x, adb_y, ADB_HEIGHT, ADB_WIDTH):
             continue
 
         positions.append((adb_x, adb_y))
 
-    # Dédupliquer les positions trop proches
+    # Deduplicate positions that are too close
     if positions:
         unique = [positions[0]]
         for px, py in positions[1:]:
@@ -420,9 +420,9 @@ def compute_deploy_positions(hull, center, img_shape, direction_idx,
                 unique.append((px, py))
         positions = unique
 
-    # --- Garantir un minimum de positions ---
-    # Si pas assez de positions (zoom extrême), ajouter des points
-    # le long du bord de l'écran dans la direction demandée
+    # --- Guarantee a minimum number of positions ---
+    # If not enough positions (extreme zoom), add points
+    # along the screen edge in the requested direction
     if len(positions) < 6:
         positions = _add_screen_edge_positions(
             positions, direction_idx, margin, num_points
@@ -433,33 +433,33 @@ def compute_deploy_positions(hull, center, img_shape, direction_idx,
 
 def _add_screen_edge_positions(existing, direction_idx, margin, target_count):
     """
-    Ajoute des positions le long du bord de l'écran quand le hull
-    sort de l'écran (zoom fort). Ces positions sont valides car
-    dans CoC, le bord visible de la carte est toujours déployable.
+    Adds positions along the screen edge when the hull
+    extends beyond the screen (strong zoom). These positions are valid because
+    in CoC, the visible edge of the map is always deployable.
     """
-    # Quel bord de l'écran est dans la direction demandée ?
+    # Which screen edge is in the requested direction?
     edge_positions = {
-        0: [(x, margin) for x in range(200, 1720, 120)],           # N → haut
-        1: [(x, margin + (1920 - x) // 3)                          # NE → coin haut-droit
+        0: [(x, margin) for x in range(200, 1720, 120)],
+        1: [(x, margin + (1920 - x) // 3)
             for x in range(800, 1860, 100)],
-        2: [(1920 - margin, y) for y in range(100, 880, 80)],      # E → droite
-        3: [(x, 880 - (1920 - x) // 3)                             # SE → coin bas-droit
+        2: [(1920 - margin, y) for y in range(100, 880, 80)],
+        3: [(x, 880 - (1920 - x) // 3)
             for x in range(800, 1860, 100)],
-        4: [(x, 880) for x in range(200, 1720, 120)],              # S → bas
-        5: [(x, 880 - x // 3)                                      # SO → coin bas-gauche
+        4: [(x, 880) for x in range(200, 1720, 120)],
+        5: [(x, 880 - x // 3)
             for x in range(100, 1100, 100)],
-        6: [(margin, y) for y in range(100, 880, 80)],             # O → gauche
-        7: [(x, margin + x // 3)                                    # NO → coin haut-gauche
+        6: [(margin, y) for y in range(100, 880, 80)],
+        7: [(x, margin + x // 3)
             for x in range(100, 1100, 100)],
     }
 
     edge_pts = edge_positions.get(direction_idx, [])
 
-    # Filtrer les points UI
+    # Filter UI points
     edge_pts = [(x, y) for x, y in edge_pts
                 if not _is_in_exclusion_zone(x, y, ADB_HEIGHT, ADB_WIDTH)]
 
-    # Fusionner avec les positions existantes (éviter les doublons)
+    # Merge with existing positions (avoid duplicates)
     combined = list(existing)
     for px, py in edge_pts:
         if len(combined) >= target_count:
@@ -477,7 +477,7 @@ def _add_screen_edge_positions(existing, direction_idx, margin, target_count):
 
 def get_village_center_adb(center, img_shape):
     """
-    Convertit le centre du village en coordonnées ADB.
+    Converts the village center to ADB coordinates.
     """
     img_h, img_w = img_shape[:2]
     adb_x = int(center[0] * ADB_WIDTH / img_w)
@@ -487,21 +487,21 @@ def get_village_center_adb(center, img_shape):
 
 def get_full_perimeter_positions(screenshot_pil, num_points=20, offset_px=None):
     """
-    Génère des positions de déploiement réparties sur TOUT le périmètre
-    du village (360°), pas juste un côté.
+    Generates deployment positions spread over the FULL perimeter
+    of the village (360°), not just one side.
 
-    C'est la fonction à utiliser pour la V2 où l'agent choisit librement
-    parmi toutes les positions autour du village.
+    This is the function to use for V2 where the agent freely chooses
+    from all positions around the village.
 
     Args:
-        screenshot_pil: image PIL du screenshot
-        num_points: nombre de positions à générer (réparties uniformément)
-        offset_px: distance depuis la bordure (auto-adapté au zoom)
+        screenshot_pil: PIL Image of the screenshot
+        num_points: number of positions to generate (evenly distributed)
+        offset_px: distance from the border (auto-adapted to zoom)
 
     Returns:
-        positions: liste de (x, y) en coordonnées ADB, réparties sur 360°
-        center_adb: (x, y) centre du village
-        success: True si la détection a fonctionné
+        positions: list of (x, y) in ADB coordinates, spread over 360°
+        center_adb: (x, y) village center
+        success: True if detection succeeded
     """
     img_cv = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
     img_h, img_w = img_cv.shape[:2]
@@ -514,7 +514,7 @@ def get_full_perimeter_positions(screenshot_pil, num_points=20, offset_px=None):
     scale_x = ADB_WIDTH / img_w
     scale_y = ADB_HEIGHT / img_h
 
-    # Adapter l'offset au zoom
+    # Adapt offset to zoom level
     hull_area = cv2.contourArea(hull)
     game_area = img_h * img_w * 0.55
     zoom_ratio = hull_area / game_area
@@ -531,29 +531,29 @@ def get_full_perimeter_positions(screenshot_pil, num_points=20, offset_px=None):
 
     zoom_label = "dézoomé" if zoom_ratio < 0.40 else \
                  "moyen" if zoom_ratio < 0.55 else "zoomé"
-    print(f"   ✅ Zone détectée : hull={len(hull)} pts, "
+    print(f" Zone détectée : hull={len(hull)} pts, "
           f"zoom={zoom_ratio:.0%} ({zoom_label})")
 
-    # Échantillonner uniformément sur tout le périmètre du hull
+    # Sample uniformly over the full hull perimeter
     hull_pts = hull.reshape(-1, 2).astype(float)
     offset_img = offset_px / max(scale_x, scale_y)
 
     positions = []
-    for i in range(num_points * 3):  # Sur-échantillonner puis filtrer
+    for i in range(num_points * 3):
         frac = i / (num_points * 3)
         pt = _sample_hull_point(hull_pts, frac)
 
-        # Direction vers l'extérieur
+        # Outward direction
         direction = pt - center
         norm = np.linalg.norm(direction)
         if norm < 1:
             continue
         direction = direction / norm
 
-        # Offset vers l'extérieur
+        # Outward offset
         deploy_pt = pt + direction * offset_img
 
-        # Convertir en coordonnées ADB
+        # Convert to ADB coordinates
         adb_x = int(deploy_pt[0] * scale_x)
         adb_y = int(deploy_pt[1] * scale_y)
 
@@ -561,13 +561,13 @@ def get_full_perimeter_positions(screenshot_pil, num_points=20, offset_px=None):
         adb_x = max(margin, min(ADB_WIDTH - margin, adb_x))
         adb_y = max(margin, min(ADB_HEIGHT - margin, adb_y))
 
-        # Exclure les zones UI
+        # Exclude UI zones
         if _is_in_exclusion_zone(adb_x, adb_y, ADB_HEIGHT, ADB_WIDTH):
             continue
 
         positions.append((adb_x, adb_y))
 
-    # Dédupliquer
+    # Deduplicate
     dedup_dist = 200 if zoom_ratio < 0.50 else 100
     if positions:
         unique = [positions[0]]
@@ -580,7 +580,7 @@ def get_full_perimeter_positions(screenshot_pil, num_points=20, offset_px=None):
                 unique.append((px, py))
         positions = unique
 
-    # Trier par angle (pour que pos 0 = Nord, pos 5 = Est, etc.)
+    # Sort by angle (so pos 0 = North, pos 5 = East, etc.)
     def angle_from_center(p):
         dx = p[0] - ADB_WIDTH / 2
         dy = -(p[1] - ADB_HEIGHT / 2)
@@ -588,44 +588,44 @@ def get_full_perimeter_positions(screenshot_pil, num_points=20, offset_px=None):
 
     positions.sort(key=angle_from_center, reverse=True)
 
-    # Sous-échantillonner au nombre demandé
+    # Subsample to the requested count
     if len(positions) > num_points:
         step = len(positions) / num_points
         positions = [positions[int(i * step)] for i in range(num_points)]
 
     center_adb = get_village_center_adb(center, img_cv.shape)
 
-    print(f"   📍 {len(positions)} positions (360° périmètre)")
+    print(f" {len(positions)} positions (360° périmètre)")
 
     return positions, center_adb, True
 
 
 # =============================================================================
-#          ZONE DE DÉPLOIEMENT DEPUIS BOUNDING BOXES YOLO (V4.2)
+# DEPLOYMENT ZONE FROM YOLO BOUNDING BOXES (V4.2)
 # =============================================================================
 
 def get_perimeter_from_buildings(buildings, num_points=20, offset_px=None,
                                   return_debug=False, screenshot_pil=None):
     """
-    V4.2 — Positions de déploiement par raycasting angulaire, 100% YOLO.
+    V4.2 — Deployment positions via angular raycasting, 100% YOLO.
 
-    Algorithme :
-      1. Expand les bboxes de BUILDING_PADDING (simule zone de collision CoC).
-      2. Convex hull des bboxes expansées → contour village + zone rouge.
-      3. Trace num_points rayons à angles égaux depuis le centroïde.
-      4. Phase A : avancer jusqu'à sortir du hull (abandon si UI/bord écran).
-      5. Phase B : placer la position avec offset + push borné (MAX_RADIAL_PUSH).
-      6. Dédup + tri par angle + sous-échantillonnage.
+    Algorithm:
+      1. Expand bboxes by BUILDING_PADDING (simulates CoC collision zone).
+      2. Convex hull of expanded bboxes → village contour + red zone.
+      3. Cast num_points rays at equal angles from the centroid.
+      4. Phase A: advance until exiting the hull (abort if UI/screen edge).
+      5. Phase B: place position with offset + bounded push (MAX_RADIAL_PUSH).
+      6. Dedup + sort by angle + subsample.
 
     Args:
         buildings: list of {'bbox': (x1,y1,x2,y2), 'center': (cx,cy), ...}
-        num_points: nombre de positions cibles (défaut 20)
-        offset_px: override offset (défaut: adaptatif au zoom)
-        return_debug: si True, retourne aussi un dict de debug
+        num_points: target number of positions (default 20)
+        offset_px: override offset (default: adaptive to zoom)
+        return_debug: if True, also returns a debug dict
 
     Returns:
-        Sans debug :  (positions, center_adb, success)
-        Avec debug :  (positions, center_adb, success, debug_dict)
+        Without debug: (positions, center_adb, success)
+        With debug: (positions, center_adb, success, debug_dict)
     """
     def _empty_result(reason='no_buildings'):
         fallback_center = (ADB_WIDTH // 2, ADB_HEIGHT // 2 - 50)
@@ -642,7 +642,7 @@ def get_perimeter_from_buildings(buildings, num_points=20, offset_px=None,
     if screenshot_pil is not None:
         img_bgr = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
 
-    # --- 1. Bboxes expansées + centres ---
+    # --- 1. Expanded bboxes + centers ---
     pts = []
     bboxes_list = []
     for b in buildings:
@@ -657,10 +657,10 @@ def get_perimeter_from_buildings(buildings, num_points=20, offset_px=None,
 
     pts_arr = np.array(pts, dtype=np.int32).reshape(-1, 1, 2)
     hull = cv2.convexHull(pts_arr)
-    # bboxes brutes (non-expansées) pour distance point-à-rectangle
-    bboxes_np = np.array(bboxes_list, dtype=np.float32)  # (N, 4)
+    # raw bboxes (non-expanded) for point-to-rectangle distance
+    bboxes_np = np.array(bboxes_list, dtype=np.float32)
 
-    # --- 2. Centroïde ---
+    # --- 2. Centroid ---
     M = cv2.moments(hull)
     if M['m00'] > 0:
         center = np.array([M['m10'] / M['m00'], M['m01'] / M['m00']])
@@ -668,13 +668,13 @@ def get_perimeter_from_buildings(buildings, num_points=20, offset_px=None,
         center = np.mean(hull.reshape(-1, 2).astype(float), axis=0)
     center_adb = (int(center[0]), int(center[1]))
 
-    # --- 3. Rayon moyen + plafond distance ---
+    # --- 3. Mean radius + distance cap ---
     hull_pts = hull.reshape(-1, 2).astype(float)
     radii = np.linalg.norm(hull_pts - center, axis=1)
     mean_radius = float(np.mean(radii))
     max_radius = mean_radius * 1.3 
 
-    # --- Offset adaptatif au zoom ---
+    # --- Zoom-adaptive offset ---
     if offset_px is None:
         hull_area = cv2.contourArea(hull)
         zoom_ratio = hull_area / (ADB_WIDTH * ADB_HEIGHT * 0.55)
@@ -690,7 +690,7 @@ def get_perimeter_from_buildings(buildings, num_points=20, offset_px=None,
     else:
         zoom_label = 'custom'
 
-    # --- 4. Raycasting angulaire ---
+    # --- 4. Angular raycasting ---
     positions = []
     rejected_rays = []
     rejected = 0
@@ -700,7 +700,7 @@ def get_perimeter_from_buildings(buildings, num_points=20, offset_px=None,
         angle = 2 * np.pi * i / num_points
         direction = np.array([np.cos(angle), -np.sin(angle)])
 
-        # Phase A : trouver la sortie du hull
+        # Phase A: find the hull exit point
         exit_point = None
         dist = 0.0
         aborted = False
@@ -738,7 +738,7 @@ def get_perimeter_from_buildings(buildings, num_points=20, offset_px=None,
                                       (last_px, last_py)))
             continue
 
-        # Phase B : placer avec push borné
+        # Phase B: place with bounded push
         found = None
         last_candidate = None
         for push in range(0, MAX_RADIAL_PUSH + 1, step):
@@ -777,9 +777,9 @@ def get_perimeter_from_buildings(buildings, num_points=20, offset_px=None,
                 rejected_rays.append((int(np.degrees(angle)), 'push_epuise',
                                       last_candidate or (last_px, last_py)))
 
-    # --- 5. Dédup + tri par angle + sous-échantillonnage ---
+    # --- 5. Dedup + sort by angle + subsample ---
     if len(positions) < 3:
-        print(f"   ⚠️ Raycasting : seulement {len(positions)} positions "
+        print(f" WARNING: Raycasting : seulement {len(positions)} positions "
               f"({rejected} rayons rejetés)")
         if return_debug:
             return None, center_adb, False, {
@@ -790,24 +790,24 @@ def get_perimeter_from_buildings(buildings, num_points=20, offset_px=None,
             }
         return None, center_adb, False
 
-    # Dédup : éliminer positions trop proches (< 20px l'une de l'autre)
+    # Dedup: remove positions too close to each other (< 20px apart)
     unique = [positions[0]]
     for px, py in positions[1:]:
         if not any((px - ux) ** 2 + (py - uy) ** 2 < 400 for ux, uy in unique):
             unique.append((px, py))
 
-    # Tri par angle depuis le centre (0 = Est, sens trigo)
+    # Sort by angle from center (0 = East, trigonometric direction)
     unique.sort(
         key=lambda p: np.arctan2(-(p[1] - center[1]), p[0] - center[0]),
         reverse=True,
     )
 
-    # Sous-échantillonner si trop de positions
+    # Subsample if too many positions
     if len(unique) > num_points:
         step_s = len(unique) / num_points
         unique = [unique[int(i * step_s)] for i in range(num_points)]
 
-    print(f"   ✅ Zone YOLO raycast : {len(buildings)} bats, "
+    print(f" Zone YOLO raycast : {len(buildings)} bats, "
           f"r̄={mean_radius:.0f}px, offset={offset_px}px ({zoom_label}), "
           f"{len(unique)}/{num_points} pos, {rejected} rejetés")
 
@@ -820,7 +820,7 @@ def get_perimeter_from_buildings(buildings, num_points=20, offset_px=None,
     return unique, center_adb, True
 
 # =============================================================================
-#              DEBUG : LOG VISUEL DE LA ZONE DE DÉPLOIEMENT
+# DEBUG: VISUAL LOG OF THE DEPLOYMENT ZONE
 # =============================================================================
 
 DEBUG_DEPLOY_SAVE = True
@@ -831,30 +831,30 @@ def save_deploy_debug_image(screenshot_pil, buildings, positions, center,
                              episode=None, extra_info=None,
                              rejected_rays=None):
     """
-    Enregistre une image annotée de la zone de déploiement pour debug.
+    Saves an annotated image of the deployment zone for debugging.
 
-    Utile pour diagnostiquer les épisodes où l'agent tape mal :
-      - Position sur un bâtiment → bbox mal détectée ou MIN_BUILDING_DIST trop bas
-      - Position dans l'eau → MAX_RADIAL_PUSH trop grand
-      - Trop peu de positions → MAX_RADIAL_PUSH trop petit, ou village excentré
+    Useful to diagnose episodes where the agent taps incorrectly:
+      - Position on a building → bbox poorly detected or MIN_BUILDING_DIST too low
+      - Position in water → MAX_RADIAL_PUSH too large
+      - Too few positions → MAX_RADIAL_PUSH too small, or off-center village
 
-    Contenu de l'image :
-      - Bboxes YOLO en vert
-      - Positions de déploiement en rouge (numérotées 0 à N-1)
-      - Centre du village en bleu
-      - Overlay texte : épisode, nb de bâtiments, nb de positions
+    Image contents:
+      - YOLO bboxes in green
+      - Deployment positions in red (numbered 0 to N-1)
+      - Village center in blue
+      - Text overlay: episode, building count, position count
 
     Args:
-        screenshot_pil: PIL Image du village (coords ADB 1920×1080)
-        buildings: list of dicts avec 'bbox' (x1,y1,x2,y2)
+        screenshot_pil: PIL Image of the village (ADB coords 1920×1080)
+        buildings: list of dicts with 'bbox' (x1,y1,x2,y2)
         positions: list of (x, y) ADB
         center: (cx, cy) ADB
-        output_dir: dossier de sortie, créé si inexistant
-        episode: numéro d'épisode (optionnel, pour le nom de fichier)
-        extra_info: str optionnel à afficher en overlay
+        output_dir: output folder, created if it does not exist
+        episode: episode number (optional, used in filename)
+        extra_info: optional str to display in overlay
 
     Returns:
-        path: chemin du fichier enregistré, ou None si désactivé
+        path: path of the saved file, or None if disabled
     """
     if not DEBUG_DEPLOY_SAVE:
         return None
@@ -864,38 +864,38 @@ def save_deploy_debug_image(screenshot_pil, buildings, positions, center,
 
         img_cv = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
 
-        # Bboxes YOLO en vert
+        # YOLO bboxes in green
         for b in buildings:
             x1, y1, x2, y2 = b['bbox']
             cv2.rectangle(img_cv, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
         if rejected_rays:
             for angle_deg, reason, last_pos in rejected_rays:
-                # Ligne pointillée du centre vers le dernier point testé
+                # Dashed line from center to last tested point
                 cv2.line(img_cv, center, last_pos, (128, 128, 128), 1, cv2.LINE_AA)
-                # Petit X gris à la position
+                # Small grey X at the position
                 px, py = last_pos
                 cv2.line(img_cv, (px-6, py-6), (px+6, py+6), (100, 100, 100), 2)
                 cv2.line(img_cv, (px-6, py+6), (px+6, py-6), (100, 100, 100), 2)
-                # Label avec l'angle
+                # Label with angle
                 cv2.putText(img_cv, f'{angle_deg}° {reason[:3]}', (px+8, py+4),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.35, (150, 150, 150), 1)
 
-        # Centre du village en bleu
+        # Village center in blue
         cv2.circle(img_cv, center, 12, (255, 0, 0), -1)
         cv2.circle(img_cv, center, 14, (255, 255, 255), 2)
 
-        # Positions en rouge, numérotées
+        # Positions in red, numbered
         for i, (x, y) in enumerate(positions):
             cv2.circle(img_cv, (x, y), 16, (0, 0, 255), -1)
             cv2.circle(img_cv, (x, y), 16, (255, 255, 255), 2)
-            # Numéro en blanc au centre
+            # Number in white at the center
             txt = str(i)
             (tw, th), _ = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
             cv2.putText(img_cv, txt, (x - tw // 2, y + th // 2),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
-        # Overlay info en haut (sous la zone UI joueur)
+        # Overlay info at top (below player UI zone)
         info_lines = []
         if episode is not None:
             info_lines.append(f'Episode {episode}')
@@ -907,14 +907,14 @@ def save_deploy_debug_image(screenshot_pil, buildings, positions, center,
 
         y_off = 260
         for line in info_lines:
-            # Contour noir puis texte blanc pour lisibilité
+            # Black outline then white text for readability
             cv2.putText(img_cv, line, (12, y_off),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 5)
             cv2.putText(img_cv, line, (12, y_off),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             y_off += 32
 
-        # Nom : ep_XXX_YYYYMMDD_HHMMSS.png (trie chrono dans l'explorer)
+        # Name: ep_XXX_YYYYMMDD_HHMMSS.png (sorts chronologically in explorer)
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         if episode is not None:
             filename = f'ep{episode:04d}_{ts}.png'
@@ -926,37 +926,37 @@ def save_deploy_debug_image(screenshot_pil, buildings, positions, center,
         return path
 
     except Exception as e:
-        print(f"   ⚠️ Log deploy zone échoué : {e}")
+        print(f" WARNING: Log deploy zone échoué : {e}")
         return None
 
 # =============================================================================
-#                    FONCTION PRINCIPALE
+# MAIN FUNCTION
 # =============================================================================
 
 def get_smart_deploy_positions(screenshot_pil, direction_idx, spread=0.5,
                                num_points=12, offset_px=None):
     """
-    Point d'entrée principal : détecte la zone de déploiement et retourne
-    les positions optimales.
+    Main entry point: detects the deployment zone and returns
+    optimal positions.
 
     Args:
-        screenshot_pil: image PIL du screenshot (phase d'attaque)
+        screenshot_pil: PIL image of the screenshot (attack phase)
         direction_idx: 0-7 (N, NE, E, SE, S, SO, O, NO)
-        spread: 0.0 (groupé) à 1.0 (étalé)
-        num_points: nombre de positions
-        offset_px: distance depuis la bordure (défaut: DEPLOY_OFFSET)
+        spread: 0.0 (grouped) to 1.0 (spread out)
+        num_points: number of positions
+        offset_px: distance from the border (default: DEPLOY_OFFSET)
 
     Returns:
-        positions: liste de (x, y) en coordonnées ADB (1920×1080)
-        center_adb: (x, y) centre du village en coordonnées ADB
-        success: True si la détection a réussi
+        positions: list of (x, y) in ADB coordinates (1920×1080)
+        center_adb: (x, y) village center in ADB coordinates
+        success: True if detection succeeded
     """
     img_cv = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
 
     hull, center = detect_village_boundary(img_cv)
 
     if hull is None or center is None:
-        print("   ❌ Détection de la zone de déploiement échouée")
+        print(" ERROR: Détection de la zone de déploiement échouée")
         return _fallback_positions(direction_idx, spread, num_points), \
                (ADB_WIDTH // 2, ADB_HEIGHT // 2 - 50), False
 
@@ -965,7 +965,7 @@ def get_smart_deploy_positions(screenshot_pil, direction_idx, spread=0.5,
     game_area = img_cv.shape[0] * img_cv.shape[1] * 0.55
     zoom_ratio = hull_area / game_area
     zoom_label = "dézoomé" if zoom_ratio < 0.40 else "moyen" if zoom_ratio < 0.55 else "zoomé"
-    print(f"   ✅ Zone détectée : hull={n_hull_pts} pts, "
+    print(f" Zone détectée : hull={n_hull_pts} pts, "
           f"zoom={zoom_ratio:.0%} ({zoom_label})")
 
     positions = compute_deploy_positions(
@@ -976,25 +976,25 @@ def get_smart_deploy_positions(screenshot_pil, direction_idx, spread=0.5,
     center_adb = get_village_center_adb(center, img_cv.shape)
 
     if len(positions) < 3:
-        print(f"   ⚠️  Seulement {len(positions)} positions, fallback")
+        print(f" WARNING: Seulement {len(positions)} positions, fallback")
         return _fallback_positions(direction_idx, spread, num_points), \
                center_adb, False
 
     direction_label = DIRECTION_LABELS[direction_idx]
-    print(f"   📍 {len(positions)} positions de déploiement ({direction_label}, "
+    print(f" {len(positions)} positions de déploiement ({direction_label}, "
           f"spread={spread:.1f})")
 
     return positions, center_adb, True
 
 
 # =============================================================================
-#                       FALLBACK
+# FALLBACK
 # =============================================================================
 
 def _fallback_positions(direction_idx, spread=0.5, num_points=12):
     """
-    Positions de déploiement par défaut (coordonnées fixes).
-    Utilisé quand la détection de zone échoue.
+    Default deployment positions (fixed coordinates).
+    Used when zone detection fails.
     """
     margin = 80
     centers = {
@@ -1032,22 +1032,22 @@ def _fallback_positions(direction_idx, spread=0.5, num_points=12):
 
 
 # =============================================================================
-#                     DEBUG / VISUALISATION
+# DEBUG / VISUALIZATION
 # =============================================================================
 
 def debug_deploy_zone(screenshot_pil, direction_idx=0, spread=0.5,
                       save_path=None):
     """
-    Génère une image de debug montrant la détection et les positions.
+    Generates a debug image showing the detection and positions.
 
     Args:
-        screenshot_pil: image PIL
-        direction_idx: direction à visualiser
+        screenshot_pil: PIL image
+        direction_idx: direction to visualize
         spread: spread
-        save_path: chemin de sauvegarde (optionnel)
+        save_path: save path (optional)
 
     Returns:
-        debug_img: image BGR avec les annotations
+        debug_img: BGR image with annotations
     """
     img_cv = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
     debug = img_cv.copy()
@@ -1061,29 +1061,29 @@ def debug_deploy_zone(screenshot_pil, direction_idx=0, spread=0.5,
             cv2.imwrite(save_path, debug)
         return debug
 
-    # Dessiner le hull
+    # Draw the hull
     cv2.drawContours(debug, [hull], -1, (0, 255, 0), 3)
 
-    # Dessiner le centre
+    # Draw the center
     cx, cy = int(center[0]), int(center[1])
     cv2.circle(debug, (cx, cy), 10, (0, 255, 255), -1)
 
-    # Calculer et dessiner les positions
+    # Compute and draw positions
     positions = compute_deploy_positions(
         hull, center, img_cv.shape,
         direction_idx, spread, num_points=16
     )
 
-    # Convertir les positions ADB en coordonnées image pour le dessin
+    # Convert ADB positions to image coordinates for drawing
     img_h, img_w = img_cv.shape[:2]
     for adb_x, adb_y in positions:
         ix = int(adb_x * img_w / ADB_WIDTH)
         iy = int(adb_y * img_h / ADB_HEIGHT)
         cv2.circle(debug, (ix, iy), 8, (255, 0, 255), -1)
 
-    # Texte d'info
+    # Info text
     direction_label = DIRECTION_LABELS[direction_idx]
-    cv2.putText(debug, f"Dir: {direction_label}  Spread: {spread:.1f}  "
+    cv2.putText(debug, f"Dir: {direction_label} Spread: {spread:.1f} "
                 f"Pts: {len(positions)}", (50, 50),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
 
@@ -1094,41 +1094,41 @@ def debug_deploy_zone(screenshot_pil, direction_idx=0, spread=0.5,
 
 
 # =============================================================================
-#                            TEST
+# TEST
 # =============================================================================
 
 if __name__ == "__main__":
     import sys
 
     if len(sys.argv) > 1:
-        # Test sur une image spécifique
+        # Test on a specific image
         img_path = sys.argv[1]
         img_pil = Image.open(img_path).convert("RGB")
 
-        print(f"🧪 Test deploy_zone sur {img_path}")
-        print(f"   Image: {img_pil.size}")
+        print(f"Test deploy_zone sur {img_path}")
+        print(f" Image: {img_pil.size}")
 
         for direction in range(8):
             positions, center_adb, success = get_smart_deploy_positions(
                 img_pil, direction, spread=0.5, num_points=12
             )
             label = DIRECTION_LABELS[direction]
-            status = "✅" if success else "❌"
-            print(f"   {status} {label}: {len(positions)} positions, "
+            status = "" if success else "ERROR:"
+            print(f" {status} {label}: {len(positions)} positions, "
                   f"center=({center_adb[0]},{center_adb[1]})")
 
-        # Générer les images de debug
+        # Generate debug images
         for d in range(8):
             out = f"debug_deploy_{DIRECTION_LABELS[d]}.png"
             debug_deploy_zone(img_pil, d, 0.5, save_path=out)
-            print(f"   💾 {out}")
+            print(f" {out}")
 
     else:
         print("deploy_zone.py — Détection de la zone de déploiement")
         print()
         print("Usage :")
-        print("  python deploy_zone.py <screenshot.png>")
+        print(" python deploy_zone.py <screenshot.png>")
         print()
         print("Dans le code :")
-        print("  from clashai.perception.deploy_zone import get_smart_deploy_positions")
-        print("  positions, center, ok = get_smart_deploy_positions(img, dir, spread)")
+        print(" from clashai.perception.deploy_zone import get_smart_deploy_positions")
+        print(" positions, center, ok = get_smart_deploy_positions(img, dir, spread)")

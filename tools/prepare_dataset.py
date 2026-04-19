@@ -93,7 +93,7 @@ def convert_labelme_to_yolo(json_path, output_dir, img_path):
 
 print("🔨 Début de la préparation du dataset...")
 
-# Chemins basés sur la racine du projet
+# Paths based on the project root
 source_dir = os.path.join(project_root, 'data_source', 'data')
 dataset_dir = os.path.join(project_root, 'dataset')
 
@@ -102,7 +102,7 @@ train_label_dir = os.path.join(dataset_dir, 'labels', 'train')
 val_img_dir = os.path.join(dataset_dir, 'images', 'val')
 val_label_dir = os.path.join(dataset_dir, 'labels', 'val')
 
-# Nettoyage et Création
+# Cleanup and Creation
 if os.path.exists(dataset_dir):
     shutil.rmtree(dataset_dir)
 os.makedirs(train_img_dir, exist_ok=True)
@@ -110,12 +110,12 @@ os.makedirs(train_label_dir, exist_ok=True)
 os.makedirs(val_img_dir, exist_ok=True)
 os.makedirs(val_label_dir, exist_ok=True)
 
-# Récupération des images
+# Retrieve images
 all_images = glob.glob(os.path.join(source_dir, '*.jpg'))
 all_images.extend(glob.glob(os.path.join(source_dir, '*.png')))
 
 if not all_images:
-    print(f"❌ ERREUR CRITIQUE : Aucune image trouvée dans {source_dir}")
+    print(f"ERROR: ERREUR CRITIQUE : Aucune image trouvée dans {source_dir}")
     print("Vérifiez que vos images sont bien dans 'COCProj/data_source/data'")
     exit(1)
 
@@ -125,7 +125,7 @@ split_index = int(len(all_images) * 0.85)
 train_images = all_images[:split_index]
 val_images = all_images[split_index:]
 
-print(f"📊 Total: {len(all_images)} | Train: {len(train_images)} | Val: {len(val_images)}")
+print(f"Total: {len(all_images)} | Train: {len(train_images)} | Val: {len(val_images)}")
 
 def process_files(image_list, img_dest, label_dest):
     for img_path in image_list:
@@ -139,4 +139,4 @@ def process_files(image_list, img_dest, label_dest):
 process_files(train_images, train_img_dir, train_label_dir)
 process_files(val_images, val_img_dir, val_label_dir)
 
-print("✅ Dataset prêt et généré dans 'COCProj/dataset' !")
+print("Dataset prêt et généré dans 'COCProj/dataset' !")

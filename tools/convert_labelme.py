@@ -1,14 +1,14 @@
 # scripts/rl/convert_labelme_troops.py
-# Convertit les annotations LabelMe (JSON) en format YOLO (txt).
+# Converts LabelMe annotations (JSON) to YOLO format (txt).
 #
-# LabelMe sauvegarde un fichier .json par image avec des polygones/rectangles.
-# YOLO attend un fichier .txt par image avec :
-#   classe x_center y_center width height (normalisé 0-1)
+# LabelMe saves one .json file per image with polygons/rectangles.
+# YOLO expects one .txt file per image with:
+# class x_center y_center width height (normalized 0-1)
 #
-# Usage :
-#   python scripts/rl/convert_labelme_troops.py
-#   python scripts/rl/convert_labelme_troops.py --input combat_captures --output dataset_troops
-#   python scripts/rl/convert_labelme_troops.py --split 0.8
+# Usage:
+# python scripts/rl/convert_labelme_troops.py
+# python scripts/rl/convert_labelme_troops.py --input combat_captures --output dataset_troops
+# python scripts/rl/convert_labelme_troops.py --split 0.8
 
 import os
 import json
@@ -21,15 +21,15 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 
 
 # =============================================================================
-#                         CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
 DEFAULT_INPUT_DIR = os.path.join(project_root, 'combat_captures')
 DEFAULT_OUTPUT_DIR = os.path.join(project_root, 'dataset_troops')
-DEFAULT_TRAIN_SPLIT = 0.8  # 80% train, 20% val
+DEFAULT_TRAIN_SPLIT = 0.8
 
-# Mapping nom de classe → ID YOLO
-# DOIT correspondre exactement au coc_troops.yaml 
+# Class name → YOLO ID mapping
+# MUST match coc_troops.yaml exactly
 CLASS_MAP = {
     'golem': 0,
     'sorcier': 1,
@@ -46,7 +46,7 @@ CLASS_MAP = {
     'prince_gargouille': 12,
 }
 
-# Aliases (pour tolérer les variations de nommage)
+# Aliases (to tolerate naming variations)
 ALIASES = {
     'Golem': 'golem',
     'GOLEM': 'golem',
@@ -84,16 +84,16 @@ ALIASES = {
 
 
 # =============================================================================
-#                         CONVERSION
+# CONVERSION
 # =============================================================================
 
 def convert_labelme_to_yolo(json_path, img_width, img_height):
     """
-    Convertit un fichier LabelMe JSON en lignes YOLO.
-    
+    Converts a LabelMe JSON file to YOLO lines.
+
     Returns:
-        lines: liste de strings au format "classe x_center y_center w h"
-        stats: dict {classe: count}
+        lines: list of strings in format "class x_center y_center w h"
+        stats: dict {class: count}
     """
     with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -104,12 +104,12 @@ def convert_labelme_to_yolo(json_path, img_width, img_height):
     for shape in data.get('shapes', []):
         label = shape['label']
 
-        # Résoudre les aliases
+        # Resolve aliases
         if label in ALIASES:
             label = ALIASES[label]
 
         if label not in CLASS_MAP:
-            print(f"   ⚠️  Classe inconnue ignorée : '{shape['label']}' "
+            print(f" WARNING: Classe inconnue ignorée : '{shape['label']}' "
                   f"dans {json_path}")
             continue
 
@@ -117,13 +117,13 @@ def convert_labelme_to_yolo(json_path, img_width, img_height):
         points = shape['points']
 
         if shape['shape_type'] == 'rectangle' or len(points) == 2:
-            # Rectangle : 2 points (coin haut-gauche, coin bas-droite)
+            # Rectangle: 2 points (top-left corner, bottom-right corner)
             x1 = min(points[0][0], points[1][0])
             y1 = min(points[0][1], points[1][1])
             x2 = max(points[0][0], points[1][0])
             y2 = max(points[0][1], points[1][1])
         elif len(points) >= 3:
-            # Polygone : prendre le bounding box englobant
+            # Polygon: take the enclosing bounding box
             xs = [p[0] for p in points]
             ys = [p[1] for p in points]
             x1, y1 = min(xs), min(ys)
@@ -131,7 +131,7 @@ def convert_labelme_to_yolo(json_path, img_width, img_height):
         else:
             continue
 
-        # Normaliser (0-1)
+        # Normalize (0-1)
         x_center = ((x1 + x2) / 2) / img_width
         y_center = ((y1 + y2) / 2) / img_height
         w = (x2 - x1) / img_width
@@ -151,34 +151,34 @@ def convert_labelme_to_yolo(json_path, img_width, img_height):
 
 def process_dataset(input_dir, output_dir, train_split=DEFAULT_TRAIN_SPLIT):
     """
-    Convertit tout le dossier LabelMe en dataset YOLO.
+    Converts the entire LabelMe folder to a YOLO dataset.
     """
     print(f"\n{'='*60}")
-    print("  🔄 Conversion LabelMe → YOLO")
+    print(" Conversion LabelMe → YOLO")
     print(f"{'='*60}")
-    print(f"  Input  : {input_dir}")
-    print(f"  Output : {output_dir}")
-    print(f"  Split  : {train_split:.0%} train / {1-train_split:.0%} val")
+    print(f" Input : {input_dir}")
+    print(f" Output : {output_dir}")
+    print(f" Split : {train_split:.0%} train / {1-train_split:.0%} val")
     print(f"{'='*60}\n")
 
     if not os.path.exists(input_dir):
-        print(f"❌ Dossier d'entrée introuvable : {input_dir}")
+        print(f"ERROR: Dossier d'entrée introuvable : {input_dir}")
         return
 
-    # Trouver tous les fichiers JSON
+    # Find all JSON files
     json_files = sorted(Path(input_dir).glob('*.json'))
     if not json_files:
-        print(f"❌ Aucun fichier .json trouvé dans {input_dir}")
+        print(f"ERROR: Aucun fichier .json trouvé dans {input_dir}")
         return
 
     print(f"📄 {len(json_files)} fichiers JSON trouvés")
 
-    # Créer la structure de sortie
+    # Create output structure
     for split in ['train', 'val']:
         os.makedirs(os.path.join(output_dir, 'images', split), exist_ok=True)
         os.makedirs(os.path.join(output_dir, 'labels', split), exist_ok=True)
 
-    # Mélanger et splitter
+    # Shuffle and split
     random.seed(42)
     indices = list(range(len(json_files)))
     random.shuffle(indices)
@@ -190,7 +190,7 @@ def process_dataset(input_dir, output_dir, train_split=DEFAULT_TRAIN_SPLIT):
     skipped = 0
 
     for i, json_path in enumerate(json_files):
-        # Trouver l'image correspondante
+        # Find the corresponding image
         stem = json_path.stem
         img_path = None
         for ext in ['.png', '.jpg', '.jpeg']:
@@ -200,11 +200,11 @@ def process_dataset(input_dir, output_dir, train_split=DEFAULT_TRAIN_SPLIT):
                 break
 
         if img_path is None:
-            print(f"   ⚠️  Image manquante pour {json_path.name}")
+            print(f" WARNING: Image manquante pour {json_path.name}")
             skipped += 1
             continue
 
-        # Lire les dimensions de l'image
+        # Read image dimensions
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         img_w = data.get('imageWidth')
@@ -215,21 +215,21 @@ def process_dataset(input_dir, output_dir, train_split=DEFAULT_TRAIN_SPLIT):
             img = Image.open(img_path)
             img_w, img_h = img.size
 
-        # Convertir
+        # Convert
         lines, stats = convert_labelme_to_yolo(json_path, img_w, img_h)
 
         if not lines:
             skipped += 1
             continue
 
-        # Déterminer train ou val
+        # Determine train or val
         split = 'train' if i in train_indices else 'val'
 
-        # Copier l'image
+        # Copy image
         dst_img = os.path.join(output_dir, 'images', split, img_path.name)
         shutil.copy2(img_path, dst_img)
 
-        # Écrire le label YOLO
+        # Write YOLO label
         label_name = stem + '.txt'
         dst_label = os.path.join(output_dir, 'labels', split, label_name)
         with open(dst_label, 'w') as f:
@@ -240,39 +240,39 @@ def process_dataset(input_dir, output_dir, train_split=DEFAULT_TRAIN_SPLIT):
             total_stats[cls] = total_stats.get(cls, 0) + count
         converted += 1
 
-    # Résumé
+    # Summary
     print(f"\n{'='*60}")
-    print("  ✅ Conversion terminée")
+    print(" Conversion terminée")
     print(f"{'='*60}")
-    print(f"  Convertis : {converted}")
-    print(f"  Ignorés   : {skipped}")
+    print(f" Convertis : {converted}")
+    print(f" Ignorés : {skipped}")
 
     train_count = len(os.listdir(os.path.join(output_dir, 'images', 'train')))
     val_count = len(os.listdir(os.path.join(output_dir, 'images', 'val')))
-    print(f"  Train     : {train_count} images")
-    print(f"  Val       : {val_count} images")
+    print(f" Train : {train_count} images")
+    print(f" Val : {val_count} images")
 
-    print("\n  📊 Annotations par classe :")
+    print("\n Annotations par classe :")
     for cls in sorted(total_stats.keys()):
         count = total_stats[cls]
         bar = '█' * min(count // 5, 40)
-        print(f"    {cls:20s} : {count:5d} {bar}")
+        print(f" {cls:20s} : {count:5d} {bar}")
 
     total_annotations = sum(total_stats.values())
-    print(f"    {'TOTAL':20s} : {total_annotations:5d}")
+    print(f" {'TOTAL':20s} : {total_annotations:5d}")
 
-    # Vérifier les classes manquantes
+    # Check for missing classes
     missing = set(CLASS_MAP.keys()) - set(total_stats.keys())
     if missing:
-        print(f"\n  ⚠️  Classes sans annotation : {sorted(missing)}")
-        print("     Assure-toi d'annoter ces troupes !")
+        print(f"\n WARNING: Classes sans annotation : {sorted(missing)}")
+        print(" Assure-toi d'annoter ces troupes !")
 
     print("\n📝 Prochaine étape :")
-    print("   python scripts/rl/train_yolo_troops.py --data coc_troops.yaml")
+    print(" python scripts/rl/train_yolo_troops.py --data coc_troops.yaml")
 
 
 # =============================================================================
-#                         MAIN
+# MAIN
 # =============================================================================
 
 if __name__ == "__main__":
@@ -284,7 +284,7 @@ if __name__ == "__main__":
     parser.add_argument('--output', type=str, default=DEFAULT_OUTPUT_DIR,
                         help="Dossier de sortie YOLO")
     parser.add_argument('--split', type=float, default=DEFAULT_TRAIN_SPLIT,
-                        help="Ratio train/total (défaut: 0.8)")
+                        help="Train/total ratio (default: 0.8)")
 
     args = parser.parse_args()
 

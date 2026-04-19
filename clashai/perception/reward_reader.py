@@ -1,20 +1,20 @@
 # scripts/rl/reward_reader.py
-# Lit les étoiles (0-3) et le pourcentage de destruction
-# sur l'écran de résultats d'attaque.
+# Reads stars (0-3) and destruction percentage
+# on the attack results screen.
 #
-# Méthode :
-#   - Étoiles : détection HSV (argenté = haute luminosité + faible saturation)
-#   - Pourcentage : template matching par chiffre (0-9), exclusion du % détecté
+# Method:
+# - Stars: HSV detection (silver = high brightness + low saturation)
+# - Percentage: digit template matching (0-9), excluding detected %
 #
-# INDÉPENDANT DE LA RÉSOLUTION : fonctionne en 1920x1080, 2000x923, etc.
-# Plus besoin de star_earned.png — les étoiles sont détectées par couleur.
+# RESOLUTION-INDEPENDENT: works at 1920x1080, 2000x923, etc.
+# No longer needs star_earned.png — stars are detected by color.
 #
-# Setup (une seule fois) :
-#   Mettre les templates 0.png à 9.png + pct.png dans reward_templates/digits/
+# Setup (once):
+# Place templates 0.png to 9.png + pct.png in reward_templates/digits/
 #
-# Usage :
-#   results = read_attack_results()
-#   print(results['stars'], results['percentage'], results['reward'])
+# Usage:
+# results = read_attack_results()
+# print(results['stars'], results['percentage'], results['reward'])
 
 import os
 import sys
@@ -27,7 +27,7 @@ from PIL import Image
 
 
 # =============================================================================
-#                         CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
 from clashai.paths import REWARD_TEMPLATES_DIR, REWARD_DIGITS_DIR, DEBUG_DIR
@@ -35,23 +35,23 @@ from clashai.paths import REWARD_TEMPLATES_DIR, REWARD_DIGITS_DIR, DEBUG_DIR
 TEMPLATES_DIR = REWARD_TEMPLATES_DIR
 DIGITS_DIR = REWARD_DIGITS_DIR
 
-# Seuils pour le digit matching
+# Thresholds for digit matching
 DIGIT_MATCH_THRESHOLD = 0.60
 PCT_MATCH_THRESHOLD = 0.50
 
-# Seuils pour les étoiles (HSV)
-STAR_MIN_AREA = 1000       # Taille min d'une étoile en pixels
-STAR_MAX_ASPECT = 2.5      # Ratio max largeur/hauteur
-STAR_SATURATION_MAX = 60   # Saturation max (argenté = pas coloré)
-STAR_VALUE_MIN = 180       # Luminosité min (argenté = lumineux)
+# Thresholds for stars (HSV)
+STAR_MIN_AREA = 1000
+STAR_MAX_ASPECT = 2.5
+STAR_SATURATION_MAX = 60
+STAR_VALUE_MIN = 180
 
 
 # =============================================================================
-#                         FONCTIONS ADB
+# ADB FUNCTIONS
 # =============================================================================
 
 def adb_screenshot():
-    """Capture l'écran et retourne une image PIL."""
+    """Captures the screen and returns a PIL image."""
     try:
         result = subprocess.run(
             ["adb", "exec-out", "screencap", "-p"],
@@ -61,18 +61,18 @@ def adb_screenshot():
             return None
         return Image.open(io.BytesIO(result.stdout)).convert("RGB")
     except Exception as e:
-        print(f"⚠️  Erreur capture : {e}")
+        print(f"WARNING: Capture error: {e}")
         return None
 
 
 # =============================================================================
-#                     ISOLATION DU VERT (Partagée)
+# GREEN ISOLATION (Shared)
 # =============================================================================
 
 def isolate_green(img_bgr, green_thresh=20, bright_thresh=70):
     """
-    Isole le texte vert de CoC dans une image BGR.
-    Retourne un masque binaire (255 = vert, 0 = fond).
+    Isolates green CoC text from a BGR image.
+    Returns a binary mask (255 = green, 0 = background).
     """
     b, g, r = cv2.split(img_bgr)
     green_diff = cv2.subtract(g, cv2.max(r, b))
@@ -85,24 +85,24 @@ def isolate_green(img_bgr, green_thresh=20, bright_thresh=70):
 
 
 # =============================================================================
-#                    LECTURE DES ÉTOILES (HSV)
+# STAR READING (HSV)
 # =============================================================================
 
 def count_stars(img_cv, debug=False):
     """
-    Compte les étoiles gagnées par filtrage HSV.
+    Counts earned stars by HSV filtering.
 
-    Logique :
-    - Étoiles gagnées = argenté/blanc = haute luminosité + faible saturation
-    - Étoiles perdues = noires/sombres (invisibles au filtre)
-    - Le bandeau doré "Victoire" est éliminé car il est saturé (doré ≠ argenté)
+    Logic:
+    - Earned stars = silver/white = high brightness + low saturation
+    - Lost stars = black/dark (invisible to the filter)
+    - The gold "Victory" banner is excluded because it is saturated (gold ≠ silver)
 
-    Indépendant de la résolution : les zones sont en pourcentage de l'image.
-    Plus besoin de template star_earned.png.
+    Resolution-independent: zones are expressed as percentages of the image.
+    No longer needs the star_earned.png template.
     """
     h, w = img_cv.shape[:2]
 
-    # Zone des étoiles : tiers supérieur, centre de l'image
+    # Star zone: upper third, center of the image
     sy1 = int(h * 0.03)
     sy2 = int(h * 0.35)
     sx1 = int(w * 0.25)
@@ -116,20 +116,20 @@ def count_stars(img_cv, debug=False):
         os.makedirs(debug_dir, exist_ok=True)
         cv2.imwrite(os.path.join(debug_dir, 'star_region.png'), region)
 
-    # Filtrage HSV : argenté = saturation faible + valeur haute
+    # HSV filtering: silver = low saturation + high value
     hsv = cv2.cvtColor(region, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, (0, 0, STAR_VALUE_MIN), (180, STAR_SATURATION_MAX, 255))
 
-    # Nettoyage morphologique
+    # Morphological cleanup
     kernel_close = np.ones((5, 5), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_close)
     kernel_open = np.ones((7, 7), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_open)
 
-    # Composantes connectées
+    # Connected components
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, 8)
 
-    # Filtrer : les étoiles sont grandes, dans le haut, et ~carrées
+    # Filter: stars are large, near the top, and roughly square
     star_candidates = []
     for i in range(1, num_labels):
         area = stats[i, cv2.CC_STAT_AREA]
@@ -143,7 +143,7 @@ def count_stars(img_cv, debug=False):
             if 1.0 / STAR_MAX_ASPECT < aspect < STAR_MAX_ASPECT:
                 star_candidates.append((cx, cy, area, bw, bh))
 
-    # NMS spatial : éliminer les détections trop proches
+    # Spatial NMS: remove detections that are too close together
     star_candidates.sort(key=lambda c: -c[2])
     kept = []
     for sc in star_candidates:
@@ -161,27 +161,27 @@ def count_stars(img_cv, debug=False):
             cv2.putText(debug_img, f"a={area}", (int(cx) - 20, int(cy) - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
         cv2.imwrite(os.path.join(debug_dir, 'star_mask.png'), debug_img)
-        print(f"   ⭐ Étoiles : {stars} ({len(star_candidates)} candidats, {len(kept)} après NMS)")
+        print(f" * Stars: {stars} ({len(star_candidates)} candidates, {len(kept)} after NMS)")
 
     return stars
 
 
 # =============================================================================
-#         DÉTECTION DYNAMIQUE DE LA ZONE POURCENTAGE
+# DYNAMIC PERCENTAGE ZONE DETECTION
 # =============================================================================
 
 def find_pct_region(img_cv):
     """
-    Trouve dynamiquement la zone du pourcentage vert.
-    Cherche le gros texte vert dans le tiers supérieur de l'image.
-    Indépendant de la résolution.
+    Dynamically finds the green percentage zone.
+    Looks for large green text in the upper third of the image.
+    Resolution-independent.
 
     Returns:
-        (x1, y1, x2, y2) en coordonnées absolues, ou None si non trouvé.
+        (x1, y1, x2, y2) in absolute coordinates, or None if not found.
     """
     h, w = img_cv.shape[:2]
 
-    # Zone de recherche : tiers supérieur, tiers central
+    # Search zone: upper third, center third
     search_y1 = 0
     search_y2 = h // 3
     search_x1 = w // 3
@@ -189,15 +189,15 @@ def find_pct_region(img_cv):
 
     search_region = img_cv[search_y1:search_y2, search_x1:search_x2]
 
-    # Isolation du vert avec seuils stricts (gros texte seulement)
+    # Green isolation with strict thresholds (large text only)
     mask = isolate_green(search_region, green_thresh=25, bright_thresh=100)
     kernel = np.ones((3, 3), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
 
-    # Composantes connectées
+    # Connected components
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, 8)
 
-    # Filtrer les composantes : chiffres = assez grands, pas trop larges
+    # Filter components: digits = large enough, not too wide
     digit_components = []
     for i in range(1, num_labels):
         area = stats[i, cv2.CC_STAT_AREA]
@@ -212,13 +212,13 @@ def find_pct_region(img_cv):
     if not digit_components:
         return None
 
-    # Grouper les composantes proches en Y (même ligne de texte)
+    # Group components close in Y (same text line)
     median_y = np.median([c[1] for c in digit_components])
     close = [c for c in digit_components if abs(c[1] - median_y) < 15]
     if not close:
         close = digit_components
 
-    # Bounding box englobant + padding
+    # Enclosing bounding box + padding
     x1 = min(c[0] for c in close)
     y1 = min(c[1] for c in close)
     x2 = max(c[0] + c[2] for c in close)
@@ -230,26 +230,26 @@ def find_pct_region(img_cv):
 
 
 # =============================================================================
-#              LECTURE DU POURCENTAGE (Digit Template Matching)
+# PERCENTAGE READING (Digit Template Matching)
 # =============================================================================
 
 def load_digit_templates():
     """
-    Charge les templates de chiffres 0-9 et % depuis reward_templates/digits/.
-    Retourne (digits_dict, pct_mask) où digits_dict = {int: mask} et
-    pct_mask = masque du symbole %.
+    Loads digit templates 0-9 and % from reward_templates/digits/.
+    Returns (digits_dict, pct_mask) where digits_dict = {int: mask} and
+    pct_mask = mask of the % symbol.
     """
     digit_templates = {}
     pct_mask = None
 
     if not os.path.exists(DIGITS_DIR):
-        print(f"⚠️  Dossier digits introuvable : {DIGITS_DIR}")
+        print(f"WARNING: Digits folder not found: {DIGITS_DIR}")
         return digit_templates, pct_mask
 
     for digit in range(10):
         path = os.path.join(DIGITS_DIR, f'{digit}.png')
         if not os.path.exists(path):
-            print(f"⚠️  Template manquant : {path}")
+            print(f"WARNING: Missing template: {path}")
             continue
 
         img = cv2.imread(path)
@@ -266,7 +266,7 @@ def load_digit_templates():
 
         digit_templates[digit] = mask
 
-    # Charger le template %
+    # Load the % template
     pct_path = os.path.join(DIGITS_DIR, 'pct.png')
     if os.path.exists(pct_path):
         pct_img = cv2.imread(pct_path)
@@ -280,7 +280,7 @@ def load_digit_templates():
                                     max(0, x - pad):x + w + pad * 2]
 
     if digit_templates:
-        print(f"📦 {len(digit_templates)} digit templates chargés"
+        print(f"{len(digit_templates)} digit templates loaded"
               f"{' + %' if pct_mask is not None else ''}")
 
     return digit_templates, pct_mask
@@ -288,23 +288,23 @@ def load_digit_templates():
 
 def read_percentage(img_cv, debug=False):
     """
-    Lit le pourcentage par digit template matching.
+    Reads the percentage by digit template matching.
 
-    Approche :
-    1. Trouver dynamiquement la zone du texte vert (indépendant de la résolution)
-    2. Localiser le symbole "%" pour délimiter la zone des chiffres
-    3. Matcher les chiffres 0-9 uniquement à GAUCHE du %
-    4. Lire de gauche à droite pour former le nombre
+    Approach:
+    1. Dynamically find the green text zone (resolution-independent)
+    2. Locate the "%" symbol to delimit the digit zone
+    3. Match digits 0-9 only to the LEFT of %
+    4. Read left to right to form the number
     """
     if debug:
         debug_dir = DEBUG_DIR
         os.makedirs(debug_dir, exist_ok=True)
 
-    # 1. Trouver la zone du pourcentage dynamiquement
+    # 1. Dynamically find the percentage zone
     pct_coords = find_pct_region(img_cv)
     if pct_coords is None:
         if debug:
-            print("   ⚠️  Zone PCT non trouvée !")
+            print(" WARNING: PCT zone not found!")
         return -1
 
     rx1, ry1, rx2, ry2 = pct_coords
@@ -316,27 +316,27 @@ def read_percentage(img_cv, debug=False):
         cv2.imwrite(os.path.join(debug_dir, 'pct_region.png'), region)
         cv2.imwrite(os.path.join(debug_dir, 'pct_green_mask.png'), region_mask)
 
-    # Vérifier qu'il y a du contenu vert
+    # Check that there is green content
     green_pixels = np.sum(region_mask > 0)
     if green_pixels < 30:
         if debug:
-            print("   ⚠️  Trop peu de pixels verts dans la zone PCT")
+            print(" WARNING: Too few green pixels in PCT zone")
         return -1
 
-    # 2. Charger les templates
+    # 2. Load templates
     digit_templates, pct_tmpl = load_digit_templates()
     if not digit_templates:
-        print("   ❌ Pas de digit templates disponibles !")
+        print(" ERROR: No digit templates available!")
         return -1
 
-    # Hauteur du contenu vert
+    # Height of green content
     coords = cv2.findNonZero(region_mask)
     if coords is None:
         return -1
     _, _, _, content_h = cv2.boundingRect(coords)
 
-    # 3. Localiser le "%" pour délimiter la zone des chiffres
-    digits_right_limit = region_w  # Par défaut : toute la largeur
+    # 3. Locate "%" to delimit the digit zone
+    digits_right_limit = region_w
 
     if pct_tmpl is not None:
         pct_h, pct_w = pct_tmpl.shape[:2]
@@ -363,10 +363,10 @@ def read_percentage(img_cv, debug=False):
             digits_right_limit = best_pct_x - 2
 
         if debug:
-            print(f"   🔍 % détecté : conf={best_pct_conf:.2f}, x={best_pct_x}, "
-                  f"limite chiffres={digits_right_limit}")
+            print(f" % detected: conf={best_pct_conf:.2f}, x={best_pct_x}, "
+                  f"digit limit={digits_right_limit}")
 
-    # 4. Matcher les chiffres uniquement à gauche du %
+    # 4. Match digits only to the left of %
     digit_region = region_mask[:, :max(1, digits_right_limit)]
 
     all_matches = []
@@ -395,10 +395,10 @@ def read_percentage(img_cv, debug=False):
 
     if not all_matches:
         if debug:
-            print("   ⚠️  Aucun chiffre détecté")
+            print(" WARNING: No digit detected")
         return -1
 
-    # 5. NMS basé sur l'overlap des bounding boxes
+    # 5. NMS based on bounding box overlap
     all_matches.sort(key=lambda m: -m[4])
     kept = []
     for match in all_matches:
@@ -419,13 +419,13 @@ def read_percentage(img_cv, debug=False):
         if not is_dup:
             kept.append(match)
 
-    # 6. Lire de gauche à droite
+    # 6. Read left to right
     kept.sort(key=lambda m: m[0])
     digits_found = [m[3] for m in kept]
 
     if debug:
         debug_img = cv2.cvtColor(region_mask, cv2.COLOR_GRAY2BGR)
-        # Ligne rouge = limite droite (début du %)
+        # Red line = right limit (start of %)
         if digits_right_limit < region_w:
             cv2.line(debug_img, (digits_right_limit, 0),
                      (digits_right_limit, region_h), (0, 0, 255), 1)
@@ -435,23 +435,23 @@ def read_percentage(img_cv, debug=False):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.35, (0, 255, 0), 1)
         cv2.imwrite(os.path.join(debug_dir, 'pct_digit_matches.png'), debug_img)
 
-        print(f"   🔍 Matches brut: {len(all_matches)}, après NMS: {len(kept)}")
+        print(f" Raw matches: {len(all_matches)}, after NMS: {len(kept)}")
         for cx, x_left, x_right, digit, conf, mw, my, mh in kept:
-            print(f"      Digit {digit} à x={cx}, conf={conf:.3f}")
+            print(f" Digit {digit} at x={cx}, conf={conf:.3f}")
 
     if not digits_found:
         return -1
 
-    # Limiter à 3 chiffres max
+    # Limit to 3 digits max
     if len(digits_found) > 3:
         digits_found = digits_found[:3]
 
-    # Construire le nombre
+    # Build the number
     number = 0
     for d in digits_found:
         number = number * 10 + d
 
-    # Validation : 0 à 100
+    # Validation: 0 to 100
     if number > 100:
         if len(digits_found) >= 3 and digits_found[:3] == [1, 0, 0]:
             number = 100
@@ -460,30 +460,30 @@ def read_percentage(img_cv, debug=False):
             if 0 <= n2 <= 100:
                 number = n2
                 if debug:
-                    print(f"   🧠 Correction : {digits_found} → {n2}")
+                    print(f" Correction: {digits_found} → {n2}")
             else:
                 number = digits_found[0]
         else:
             number = digits_found[0]
 
     if debug:
-        print(f"   📊 Pourcentage lu : {number}%")
+        print(f" Percentage read: {number}%")
 
     return number
 
 
 def read_percentage_from_stars(stars):
-    """Estimation du pourcentage basée sur les étoiles (fallback)."""
+    """Percentage estimate based on stars (fallback)."""
     estimates = {0: 15, 1: 55, 2: 75, 3: 100}
     return estimates.get(stars, 0)
 
 
 # =============================================================================
-#                    LECTURE COMPLÈTE
+# FULL READING
 # =============================================================================
 
 def read_attack_results(img_pil=None, debug=False):
-    """Lit les résultats d'attaque complets avec correction logique."""
+    """Reads full attack results with logical correction."""
     if img_pil is None:
         img_pil = adb_screenshot()
         if img_pil is None:
@@ -491,51 +491,51 @@ def read_attack_results(img_pil=None, debug=False):
 
     img_cv = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
-    # 1. Lire le pourcentage (digit template matching)
+    # 1. Read the percentage (digit template matching)
     percentage = read_percentage(img_cv, debug=debug)
 
-    # 2. Compter les étoiles (HSV)
+    # 2. Count stars (HSV)
     stars = count_stars(img_cv, debug=debug)
 
-    # Fallback si le template matching a raté
+    # Fallback if template matching failed
     if percentage < 0:
-        print("   ⚠️  Digit matching échoué, estimation depuis les étoiles...")
+        print(" WARNING: Digit matching failed, estimating from stars...")
         percentage = read_percentage_from_stars(stars)
 
     # ---------------------------------------------------------
-    # 🧠 CORRECTION LOGIQUE
+    # LOGICAL CORRECTION
     # ---------------------------------------------------------
 
-    # Fix OCR 6→1 : le template matching confond souvent le 6 avec le 1.
-    # Résultat : 60-69% lu comme 10-19%. On détecte ce cas par croisement
-    # avec les étoiles : 2★ nécessite au minimum 50%.
-    # Pour 1★, 16% est techniquement possible (TH détruit à 16%) mais
-    # statistiquement c'est presque toujours un 6X% mal lu.
+    # OCR fix 6→1: template matching often confuses 6 with 1.
+    # Result: 60-69% read as 10-19%. Detected by cross-checking
+    # with stars: 2★ requires at least 50%.
+    # For 1★, 16% is technically possible (TH destroyed at 16%) but
+    # statistically it is almost always a misread 6X%.
     if 10 <= percentage <= 19:
-        corrected_pct = percentage + 50  # 16 → 66, 13 → 63, etc.
+        corrected_pct = percentage + 50
         if stars >= 2:
-            # 2★ + <50% = impossible → correction certaine
-            print(f"   🧠 Fix OCR 6→1 : {percentage}% impossible avec {stars}★"
-                  f" → corrigé en {corrected_pct}%")
+            # 2★ + <50% = impossible → certain correction
+            print(f" OCR fix 6→1: {percentage}% impossible with {stars}★"
+                  f" → corrected to {corrected_pct}%")
             percentage = corrected_pct
         elif stars == 1 and corrected_pct <= 100:
-            # 1★ + 1X% = suspect → correction probable
-            print(f"   🧠 Fix OCR 6→1 : {percentage}% suspect avec {stars}★"
-                  f" → corrigé en {corrected_pct}%")
+            # 1★ + 1X% = suspicious → probable correction
+            print(f" OCR fix 6→1: {percentage}% suspect with {stars}★"
+                  f" → corrected to {corrected_pct}%")
             percentage = corrected_pct
 
     if percentage == 100:
         stars = 3
     elif 0 <= percentage < 100 and stars == 3:
-        print("   🧠 Correction : Impossible 3 étoiles sans 100%. Réduction à 2.")
+        print(" Correction: Impossible to have 3 stars without 100%. Reducing to 2.")
         stars = 2
     elif percentage >= 50 and stars == 0:
-        print("   🧠 Correction : >= 50% garantit 1 étoile minimum.")
+        print(" Correction: >= 50% guarantees at least 1 star.")
         stars = 1
 
-    # Garde-fou final : 2★ nécessite ≥50%
+    # Final safeguard: 2★ requires ≥50%
     if stars >= 2 and percentage < 50:
-        print(f"   🧠 Correction : {stars}★ mais {percentage}% → forcé à 50%")
+        print(f" Correction: {stars}★ but {percentage}% → forced to 50%")
         percentage = 50
 
     reward = calculate_reward(stars, percentage)
@@ -549,7 +549,7 @@ def read_attack_results(img_pil=None, debug=False):
 
 
 def calculate_reward(stars, percentage):
-    """Calcule la récompense pour l'agent RL."""
+    """Calculates the reward for the RL agent."""
     reward = (stars * 100) + percentage
 
     if stars >= 1:
@@ -563,18 +563,18 @@ def calculate_reward(stars, percentage):
 
 
 # =============================================================================
-#                 EXTRACTION DES TEMPLATES
+# TEMPLATE EXTRACTION
 # =============================================================================
 
 def extract_result_screen():
-    """Capture l'écran de résultats et sauvegarde les zones utiles."""
-    print("📸 Extraction de l'écran de résultats...")
-    print("   Assure-toi d'être sur l'écran de résultats d'attaque")
-    print("   (avec les étoiles et 'Victoire' ou 'Défaite')\n")
+    """Captures the results screen and saves useful zones."""
+    print("📸 Extracting the results screen...")
+    print(" Make sure you are on the attack results screen")
+    print(" (with stars and 'Victory' or 'Defeat')\n")
 
     img_pil = adb_screenshot()
     if img_pil is None:
-        print("❌ Impossible de capturer l'écran")
+        print("ERROR: Unable to capture screen")
         return
 
     img_cv = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
@@ -584,70 +584,70 @@ def extract_result_screen():
     full_path = os.path.join(TEMPLATES_DIR, '_screenshot_resultats.png')
     cv2.imwrite(full_path, img_cv)
 
-    # Zone dynamique du pourcentage
+    # Dynamic percentage zone
     pct_coords = find_pct_region(img_cv)
     if pct_coords:
         x1, y1, x2, y2 = pct_coords
         pct_region = img_cv[y1:y2, x1:x2]
         cv2.imwrite(os.path.join(TEMPLATES_DIR, '_zone_pourcentage.png'), pct_region)
 
-    print(f"✅ Screenshots sauvegardés dans {TEMPLATES_DIR}/")
+    print(f"Screenshots saved in {TEMPLATES_DIR}/")
     print()
-    print("📝 PROCHAINE ÉTAPE :")
-    print("   Mettre les templates 0-9 + pct.png dans reward_templates/digits/")
-    print("   Puis lancer --test pour vérifier")
+    print("📝 NEXT STEP:")
+    print(" Place templates 0-9 + pct.png in reward_templates/digits/")
+    print(" Then run --test to verify")
 
 
 # =============================================================================
-#                            TEST
+# TEST
 # =============================================================================
 
 def test_reward_reader(image_path=None):
-    """Test le reward reader."""
-    print("🧪 Test du Reward Reader\n")
+    """Tests the reward reader."""
+    print("Reward Reader Test\n")
 
     if image_path and os.path.exists(image_path):
-        print(f"   Image : {image_path}")
+        print(f" Image: {image_path}")
         img_pil = Image.open(image_path).convert("RGB")
     else:
-        print("   Capture ADB en cours...")
+        print(" ADB capture in progress...")
         img_pil = adb_screenshot()
         if img_pil is None:
-            print("❌ Impossible de capturer l'écran")
+            print("ERROR: Unable to capture screen")
             return
 
     results = read_attack_results(img_pil, debug=True)
 
     print(f"\n{'=' * 40}")
-    print(f"⭐ Étoiles : {results['stars']}/3")
-    print(f"📊 Pourcentage : {results['percentage']}%")
-    print(f"🏆 Récompense RL : {results['reward']}")
+    print(f"* Stars: {results['stars']}/3")
+    print(f"Percentage: {results['percentage']}%")
+    print(f"RL Reward: {results['reward']}")
     print(f"{'=' * 40}")
 
-    print("\n📁 Images de debug dans le dossier debug_reward/")
+    print("\nDebug images in debug_reward/ folder")
 
 
 def test_digits_only(image_path=None):
-    """Test uniquement la lecture des chiffres."""
-    print("🔢 Test du Digit Template Matching\n")
+    """Tests digit reading only."""
+    print("🔢 Digit Template Matching Test\n")
 
     if image_path and os.path.exists(image_path):
-        print(f"   Image : {image_path}")
+        print(f" Image: {image_path}")
         img_pil = Image.open(image_path).convert("RGB")
     else:
-        print("   Capture ADB en cours...")
+        print(" ADB capture in progress...")
         img_pil = adb_screenshot()
         if img_pil is None:
-            print("❌ Impossible de capturer l'écran")
+            print("ERROR: Unable to capture screen")
             return
 
     img_cv = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
     pct = read_percentage(img_cv, debug=True)
-    print(f"\n📊 Résultat : {pct}%")
+    print(f"\nResult: {pct}%")
 
 
 # =============================================================================
-#                              MAIN
+# MAIN
 # =============================================================================
 
 if __name__ == "__main__":
@@ -668,16 +668,16 @@ if __name__ == "__main__":
                 break
         test_digits_only(img_path)
     else:
-        print("Reward Reader — Lecture des résultats d'attaque")
+        print("Reward Reader — Attack results reader")
         print()
-        print("Usage :")
-        print("  python scripts/rl/reward_reader.py --extract      (capturer l'écran)")
-        print("  python scripts/rl/reward_reader.py --test         (tester tout)")
-        print("  python scripts/rl/reward_reader.py --test-digits  (tester les chiffres seuls)")
+        print("Usage:")
+        print(" python scripts/rl/reward_reader.py --extract (capture screen)")
+        print(" python scripts/rl/reward_reader.py --test (test everything)")
+        print(" python scripts/rl/reward_reader.py --test-digits (test digits only)")
         print()
-        print("Setup :")
-        print("  1. Mets les templates 0-9 + pct.png dans reward_templates/digits/")
-        print("  2. Lance --test pour vérifier")
+        print("Setup:")
+        print(" 1. Place templates 0-9 + pct.png in reward_templates/digits/")
+        print(" 2. Run --test to verify")
         print()
-        print("Note : Plus besoin de star_earned.png !")
-        print("       Les étoiles sont détectées par couleur (HSV).")
+        print("Note: star_earned.png is no longer needed!")
+        print(" Stars are detected by color (HSV).")

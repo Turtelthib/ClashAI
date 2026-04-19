@@ -20,43 +20,43 @@ IMAGE_TO_TEST = 'test_img/hdv13.png'
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# --- CHARGEMENT DES CLASSES ---
-print("📂 Chargement de la liste des classes depuis classes.json...")
+# --- LOADING CLASSES ---
+print("Chargement de la liste des classes depuis classes.json...")
 try:
     json_path = os.path.join(WEIGHTS_DIR, 'classes.json')
     with open(json_path, 'r') as f:
         CLASSES_CNN = json.load(f)
-    print(f"✅ {len(CLASSES_CNN)} classes chargées.")
+    print(f"{len(CLASSES_CNN)} classes chargées.")
 except FileNotFoundError:
-    print("❌ ERREUR : Le fichier 'classes.json' est introuvable !")
-    print(f"   L'IA cherche dans : {os.path.abspath(json_path)}")
+    print("ERROR: ERREUR : Le fichier 'classes.json' est introuvable !")
+    print(f" L'IA cherche dans : {os.path.abspath(json_path)}")
     print("👉 Lancez d'abord 'python main/train_all.py' pour générer ce fichier.")
     exit()
 
-# --- CHARGEMENT DES MODÈLES ---
-print("🧠 Chargement du système hybride...")
+# --- LOADING MODELS ---
+print("Chargement du système hybride...")
 yolo_model = YOLO(YOLO_PATH)
 
 cnn_model = MyCustomCNN(num_classes=len(CLASSES_CNN)).to(DEVICE)
 cnn_model.load_state_dict(torch.load(CNN_PATH, map_location=DEVICE))
 cnn_model.eval()
 
-# --- PIPELINE DE TRANSFORMATION ---
+# --- TRANSFORMATION PIPELINE ---
 transform = transforms.Compose([
     transforms.Resize((128, 128)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
 ])
 
-# --- INFÉRENCE ---
-print(f"🕵️ Analyse de {IMAGE_TO_TEST}...")
+# --- INFERENCE ---
+print(f"🕵 Analyse de {IMAGE_TO_TEST}...")
 
 results = yolo_model.predict(IMAGE_TO_TEST, conf=0.25, iou=0.50, verbose=False)
 result = results[0]
 
 img_cv = cv2.imread(IMAGE_TO_TEST)
 if img_cv is None:
-    print(f"❌ Erreur : Impossible de lire l'image '{IMAGE_TO_TEST}'")
+    print(f"ERROR: Erreur : Impossible de lire l'image '{IMAGE_TO_TEST}'")
     exit()
 
 img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
@@ -66,7 +66,7 @@ count = 0
 for box in result.boxes:
     x1, y1, x2, y2 = map(int, box.xyxy[0])
 
-    # Clamp aux dimensions de l'image
+    # Clamp to image dimensions
     x1 = max(0, x1)
     y1 = max(0, y1)
     x2 = min(img_cv.shape[1], x2)
@@ -89,7 +89,7 @@ for box in result.boxes:
     if confidence > 0.5:
         count += 1
 
-        # Couleur déterministe par classe
+        # Deterministic color per class
         random.seed(predicted_idx.item() * 10)
         color = (random.randint(50, 255), random.randint(50, 255), random.randint(50, 255))
 
@@ -97,10 +97,10 @@ for box in result.boxes:
         cv2.putText(img_cv, f"{cnn_label} {confidence:.2f}", (x1, y1 - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-        print(f"✅ Objet trouvé : {cnn_label} ({confidence:.0%})")
+        print(f"Objet trouvé : {cnn_label} ({confidence:.0%})")
 
-# --- SAUVEGARDE ---
+# --- SAVE ---
 output_file = "Result.jpg"
 cv2.imwrite(output_file, img_cv)
-print(f"\n✨ Analyse terminée ! {count} objets détectés.")
-print(f"🖼️  Résultat sauvegardé sous : {output_file}")
+print(f"\nAnalyse terminée ! {count} objets détectés.")
+print(f"🖼 Résultat sauvegardé sous : {output_file}")

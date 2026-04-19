@@ -1,102 +1,102 @@
 # clashai/combat/action_space.py
-# Action space V4 pour ClashAI.
+# Action space V4 for ClashAI.
 #
-# 37 actions au lieu de 289 (V3).
-# L'agent choisit un RÔLE × SECTEUR pour le deploy,
-# et des actions de haut niveau pour le combat.
-# L'environnement traduit en taps ADB concrets.
+# 37 actions instead of 289 (V3).
+# The agent chooses a ROLE × SECTOR for deploy,
+# and high-level actions for combat.
+# The environment translates these into concrete ADB taps.
 #
-# Deploy (25) : 5 rôles × 5 secteurs relatifs au côté d'attaque
-# Sorts  (3)  : soin, rage, gel — ciblage automatique par SpellCaster
+# Deploy (25) : 5 roles × 5 sectors relative to the attack side
+# Spells (3) : soin, rage, gel — auto-targeted by SpellCaster
 # Abilities (5): roi, reine, grand_gardien, championne, prince_gargouille
-# Observe (1) : screenshot + mise à jour features
+# Observe (1) : screenshot + update features
 # Control (3) : wait_short, wait_long, done
 
 import numpy as np
 
 
 # =============================================================================
-#                         RÔLES DE DEPLOY
+# RÔLES DE DEPLOY
 # =============================================================================
 
 DEPLOY_ROLES = ['tank', 'ranged', 'melee', 'hero', 'siege']
-NUM_ROLES = len(DEPLOY_ROLES)  # 5
+NUM_ROLES = len(DEPLOY_ROLES)
 
-# Mapping rôle → liste ordonnée de noms de troupes (priorité de deploy)
+# Mapping role → ordered list of troop names (deploy priority)
 ROLE_TO_TROOPS = {
-    'tank':   ['golem'],
+    'tank': ['golem'],
     'ranged': ['sorcier', 'sorciere', 'archere'],
-    'melee':  ['pekka'],
-    'hero':   ['roi', 'reine', 'grand_gardien', 'championne', 'prince_gargouille'],
-    'siege':  ['lance_buche'],
+    'melee': ['pekka'],
+    'hero': ['roi', 'reine', 'grand_gardien', 'championne', 'prince_gargouille'],
+    'siege': ['lance_buche'],
 }
 
 
 # =============================================================================
-#                         SECTEURS DE DEPLOY
+# SECTEURS DE DEPLOY
 # =============================================================================
 
 DEPLOY_SECTORS = ['far_left', 'left', 'center', 'right', 'far_right']
-NUM_SECTORS = len(DEPLOY_SECTORS)  # 5
+NUM_SECTORS = len(DEPLOY_SECTORS)
 
-# Mapping secteur → offset relatif par rapport au centre d'attaque
-# (en nombre de positions sur les 20 du périmètre)
+# Mapping sector → relative offset from the attack center
+# (in number of positions out of the 20 on the perimeter)
 SECTOR_OFFSETS = {
-    'far_left':  -4,
-    'left':      -2,
-    'center':     0,
-    'right':     +2,
+    'far_left': -4,
+    'left': -2,
+    'center': 0,
+    'right': +2,
     'far_right': +4,
 }
 
 
 # =============================================================================
-#                         ACTION SPACE
+# ACTION SPACE
 # =============================================================================
 
-# Deploy: rôle × secteur
-NUM_DEPLOY_ACTIONS = NUM_ROLES * NUM_SECTORS          # 25
+# Deploy: role × sector
+NUM_DEPLOY_ACTIONS = NUM_ROLES * NUM_SECTORS
 
-# Sorts (auto-ciblés par SpellCaster)
+# Spells (auto-targeted by SpellCaster)
 SPELL_NAMES = ['soin', 'rage', 'gel']
-ACTION_SPELL_START = NUM_DEPLOY_ACTIONS               # 25
-ACTION_CAST_HEAL = ACTION_SPELL_START                  # 25
-ACTION_CAST_RAGE = ACTION_SPELL_START + 1              # 26
-ACTION_CAST_FREEZE = ACTION_SPELL_START + 2            # 27
+ACTION_SPELL_START = NUM_DEPLOY_ACTIONS
+ACTION_CAST_HEAL = ACTION_SPELL_START
+ACTION_CAST_RAGE = ACTION_SPELL_START + 1
+ACTION_CAST_FREEZE = ACTION_SPELL_START + 2
 
-# Abilities héros
+# Hero abilities
 HERO_NAMES = ['roi', 'reine', 'grand_gardien', 'championne', 'prince_gargouille']
 NUM_HEROES = len(HERO_NAMES)
-ACTION_ABILITY_START = ACTION_SPELL_START + 3          # 28
-ACTION_ABILITY_ROI = ACTION_ABILITY_START              # 28
-ACTION_ABILITY_REINE = ACTION_ABILITY_START + 1        # 29
-ACTION_ABILITY_GG = ACTION_ABILITY_START + 2           # 30
-ACTION_ABILITY_CHAMP = ACTION_ABILITY_START + 3        # 31
-ACTION_ABILITY_PG = ACTION_ABILITY_START + 4           # 32
+ACTION_ABILITY_START = ACTION_SPELL_START + 3
+ACTION_ABILITY_ROI = ACTION_ABILITY_START
+ACTION_ABILITY_REINE = ACTION_ABILITY_START + 1
+ACTION_ABILITY_GG = ACTION_ABILITY_START + 2
+ACTION_ABILITY_CHAMP = ACTION_ABILITY_START + 3
+ACTION_ABILITY_PG = ACTION_ABILITY_START + 4
 
 # Observe (screenshot + update features)
-ACTION_OBSERVE = ACTION_ABILITY_START + NUM_HEROES     # 33
+ACTION_OBSERVE = ACTION_ABILITY_START + NUM_HEROES
 
 # Control
-ACTION_WAIT_SHORT = ACTION_OBSERVE + 1                 # 34
-ACTION_WAIT_LONG = ACTION_OBSERVE + 2                  # 35
-ACTION_DONE = ACTION_OBSERVE + 3                       # 36
+ACTION_WAIT_SHORT = ACTION_OBSERVE + 1
+ACTION_WAIT_LONG = ACTION_OBSERVE + 2
+ACTION_DONE = ACTION_OBSERVE + 3
 
-TOTAL_ACTIONS = ACTION_DONE + 1                        # 37
+TOTAL_ACTIONS = ACTION_DONE + 1
 
 # Limits
-MAX_STEPS_SAFETY = 200   # V4.2: filet de sécurité contre les boucles infinies
-                         # La vraie fin d'épisode est naturelle (_all_resources_exhausted)
-NUM_POSITIONS = 20  # positions sur le périmètre (hérité V3)
+MAX_STEPS_SAFETY = 200
+                         # The true episode end is natural (_all_resources_exhausted)
+NUM_POSITIONS = 20
 
 
 # =============================================================================
-#                     ENCODE / DECODE
+# ENCODE / DECODE
 # =============================================================================
 
 def decode_action(action_idx):
     """
-    Décode un index d'action V4.
+    Decodes a V4 action index.
 
     Returns:
         ('deploy', role_idx, sector_idx)
@@ -129,7 +129,7 @@ def decode_action(action_idx):
 
 
 def encode_action(action_type, idx1=None, idx2=None):
-    """Encode une action en index."""
+    """Encodes an action as an index."""
     if action_type == 'deploy':
         return idx1 * NUM_SECTORS + idx2
     elif action_type == 'spell':
@@ -148,16 +148,16 @@ def encode_action(action_type, idx1=None, idx2=None):
 
 
 # =============================================================================
-#                     ROLE INVENTORY
+# ROLE INVENTORY
 # =============================================================================
 
 def build_role_inventory(remaining_troops, troop_types):
     """
-    Construit l'inventaire par rôle à partir des troupes restantes.
+    Builds the per-role inventory from remaining troops.
 
     Args:
-        remaining_troops: array (N,) — compteur par type de troupe
-        troop_types: list[dict] — TROOP_TYPES du V3
+        remaining_troops: array (N,) — counter per troop type
+        troop_types: list[dict] — TROOP_TYPES from V3
 
     Returns:
         role_counts: dict {role_name: total_count}
@@ -172,7 +172,7 @@ def build_role_inventory(remaining_troops, troop_types):
             continue
         role = troop['role']
         if role == 'spell':
-            continue  # les sorts sont gérés séparément
+            continue
         if role in role_counts:
             role_counts[role] += count
             role_queues[role].append((i, count))
@@ -182,7 +182,7 @@ def build_role_inventory(remaining_troops, troop_types):
 
 def build_spell_inventory(remaining_troops, troop_types):
     """
-    Construit l'inventaire des sorts restants.
+    Builds the inventory of remaining spells.
 
     Returns:
         spell_counts: dict {'soin': n, 'rage': n, 'gel': n}
@@ -195,46 +195,46 @@ def build_spell_inventory(remaining_troops, troop_types):
 
 
 # =============================================================================
-#                     ACTION MASK
+# ACTION MASK
 # =============================================================================
 
 def compute_action_mask(remaining_troops, troop_types, hero_ability_mask=None):
     """
-    Calcule le masque d'actions valides V4.2.
+    Computes the valid action mask for V4.2.
 
-    V4.2 : phases fusionnées — plus de phase binaire deploy/combat.
-    Le masking est basé uniquement sur les ressources disponibles.
+    V4.2 : merged phases — no more binary deploy/combat phase.
+    Masking is based solely on available resources.
 
     Args:
-        remaining_troops: array (N,) — compteur par type
+        remaining_troops: array (N,) — counter per type
         troop_types: list[dict] — TROOP_TYPES
-        hero_ability_mask: array (5,) — 1.0 si ability dispo
+        hero_ability_mask: array (5,) — 1.0 if ability available
 
     Returns:
-        mask: array (37,) — 1.0 = action valide
+        mask: array (37,) — 1.0 = valid action
     """
     mask = np.zeros(TOTAL_ACTIONS, dtype=np.float32)
     role_counts, _ = build_role_inventory(remaining_troops, troop_types)
     spell_counts = build_spell_inventory(remaining_troops, troop_types)
 
-    # Deploy actions (0-24) : disponibles si le rôle a des troupes restantes
+    # Deploy actions (0-24) : available if the role has remaining troops
     for role_idx, role_name in enumerate(DEPLOY_ROLES):
         if role_counts[role_name] > 0:
             start = role_idx * NUM_SECTORS
             mask[start:start + NUM_SECTORS] = 1.0
 
-    # Spell actions (25-27) : disponibles si le sort est encore disponible
+    # Spell actions (25-27) : available if the spell is still available
     for spell_idx, spell_name in enumerate(SPELL_NAMES):
         if spell_counts[spell_name] > 0:
             mask[ACTION_SPELL_START + spell_idx] = 1.0
 
-    # Abilities (28-32) : disponibles si l'ability héros est prête
+    # Abilities (28-32) : available if the hero ability is ready
     if hero_ability_mask is not None:
         for i in range(NUM_HEROES):
             if hero_ability_mask[i] > 0:
                 mask[ACTION_ABILITY_START + i] = 1.0
 
-    # observe (33), wait_short (34), wait_long (35), done (36) : toujours disponibles
+    # observe (33), wait_short (34), wait_long (35), done (36) : always available
     mask[ACTION_OBSERVE] = 1.0
     mask[ACTION_WAIT_SHORT] = 1.0
     mask[ACTION_WAIT_LONG] = 1.0
@@ -245,12 +245,12 @@ def compute_action_mask(remaining_troops, troop_types, hero_ability_mask=None):
 
 def sector_to_position(sector_idx, center_pos, num_positions=NUM_POSITIONS):
     """
-    Convertit un secteur relatif en position absolue sur le périmètre.
+    Converts a relative sector to an absolute position on the perimeter.
 
     Args:
         sector_idx: 0-4
-        center_pos: position centrale (calculée depuis le côté d'attaque)
-        num_positions: nombre total de positions
+        center_pos: center position (computed from the attack side)
+        num_positions: total number of positions
 
     Returns:
         position: int (0 to num_positions-1)
@@ -261,30 +261,30 @@ def sector_to_position(sector_idx, center_pos, num_positions=NUM_POSITIONS):
 
 
 # =============================================================================
-#                         TEST
+# TEST
 # =============================================================================
 
 if __name__ == "__main__":
-    print("🧪 Test Action Space V4\n")
+    print("Test Action Space V4\n")
     print(f"Total actions: {TOTAL_ACTIONS}\n")
 
-    print("1. Decode toutes les actions:")
+    print("1. Decode all actions:")
     for a in range(TOTAL_ACTIONS):
         t, i1, i2 = decode_action(a)
         if t == 'deploy':
-            print(f"   [{a:2d}] deploy {DEPLOY_ROLES[i1]} @ {DEPLOY_SECTORS[i2]}")
+            print(f" [{a:2d}] deploy {DEPLOY_ROLES[i1]} @ {DEPLOY_SECTORS[i2]}")
         elif t == 'spell':
-            print(f"   [{a:2d}] spell {i1}")
+            print(f" [{a:2d}] spell {i1}")
         elif t == 'ability':
-            print(f"   [{a:2d}] ability {HERO_NAMES[i1]}")
+            print(f" [{a:2d}] ability {HERO_NAMES[i1]}")
         else:
-            print(f"   [{a:2d}] {t}")
+            print(f" [{a:2d}] {t}")
 
-    print("\n2. Encode/decode roundtrip:")
+    print("\n2. Encode/decode round-trip:")
     for a in range(TOTAL_ACTIONS):
         t, i1, i2 = decode_action(a)
         encoded = encode_action(t, i1, i2)
         assert encoded == a, f"Mismatch: {a} != {encoded}"
-    print("   ✅ Roundtrip OK")
+    print(" Round-trip OK")
 
-    print(f"\n✅ Action space V4 : {TOTAL_ACTIONS} actions")
+    print(f"\nAction space V4 : {TOTAL_ACTIONS} actions")

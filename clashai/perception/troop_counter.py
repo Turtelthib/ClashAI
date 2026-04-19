@@ -1,17 +1,17 @@
 # scripts/rl/troop_count_reader.py
-# Lit le nombre de troupes (x2, x6, x10) affiché sur chaque icône
-# dans la barre d'attaque.
+# Reads the troop count (x2, x6, x10) displayed on each icon
+# in the attack bar.
 #
-# Méthode :
-#   1. TroopFinder donne la position de chaque troupe dans la barre
-#   2. On crop la zone "xN" en haut à gauche de l'icône
-#   3. On isole le texte blanc par seuillage
-#   4. On lit les chiffres par template matching (mêmes templates que reward_reader)
+# Method:
+# 1. TroopFinder gives the position of each troop in the bar
+# 2. We crop the "xN" zone in the top-left of the icon
+# 3. We isolate white text by thresholding
+# 4. We read digits by template matching (same templates as reward_reader)
 #
-# Usage :
-#   from clashai.perception.troop_counter import read_troop_counts
-#   counts = read_troop_counts(screenshot_pil, troop_finder)
-#   # counts = {'golem': 2, 'sorcier': 6, 'sorciere': 10, ...}
+# Usage:
+# from clashai.perception.troop_counter import read_troop_counts
+# counts = read_troop_counts(screenshot_pil, troop_finder)
+# # counts = {'golem': 2, 'sorcier': 6, 'sorciere': 10, ...}
 
 import os
 import cv2
@@ -20,37 +20,37 @@ from PIL import Image
 
 
 # =============================================================================
-#                         CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
 from clashai.paths import REWARD_DIGITS_DIR
 
-# Dossier des templates de chiffres (partagé avec reward_reader)
+# Digit templates folder (shared with reward_reader)
 DIGITS_DIR = REWARD_DIGITS_DIR
 
-# La zone "xN" est en haut à gauche de chaque icône dans la barre
-# Offset relatif à la position du template match (centre de l'icône)
-# Les icônes font ~80x80px dans la barre, le "xN" est en haut-gauche
-COUNT_OFFSET_X = -35   # Décalage X depuis le centre de l'icône
-COUNT_OFFSET_Y = -45   # Décalage Y depuis le centre (vers le haut)
-COUNT_WIDTH = 45        # Largeur de la zone à cropper
-COUNT_HEIGHT = 25       # Hauteur de la zone à cropper
+# The "xN" zone is in the top-left of each icon in the bar
+# Offset relative to the template match position (icon center)
+# Icons are ~80x80px in the bar, the "xN" is in the top-left
+COUNT_OFFSET_X = -35
+COUNT_OFFSET_Y = -45
+COUNT_WIDTH = 45
+COUNT_HEIGHT = 25
 
-# Seuil pour le texte blanc
-WHITE_THRESHOLD = 200   # V > 200 = texte blanc
+# Threshold for white text
+WHITE_THRESHOLD = 200
 
 # Template matching
 DIGIT_MATCH_THRESHOLD = 0.65
 
 
 # =============================================================================
-#                    CHARGEMENT DES TEMPLATES
+# TEMPLATE LOADING
 # =============================================================================
 
 _digit_templates = None
 
 def _load_digit_templates():
-    """Charge les templates de chiffres 0-9."""
+    """Loads digit templates 0-9."""
     global _digit_templates
     if _digit_templates is not None:
         return _digit_templates
@@ -58,7 +58,7 @@ def _load_digit_templates():
     _digit_templates = {}
 
     if not os.path.exists(DIGITS_DIR):
-        print(f"⚠️  Dossier digits introuvable : {DIGITS_DIR}")
+        print(f"WARNING: Digits folder not found: {DIGITS_DIR}")
         return _digit_templates
 
     for digit in range(10):
@@ -72,18 +72,18 @@ def _load_digit_templates():
 
 
 # =============================================================================
-#                    LECTURE DES COMPTEURS
+# COUNTER READING
 # =============================================================================
 
 def _read_count_from_region(region_bgr):
     """
-    Lit un nombre (1-99) depuis une petite image contenant "xN" ou "xNN".
+    Reads a number (1-99) from a small image containing "xN" or "xNN".
 
     Args:
-        region_bgr: image BGR de la zone contenant le texte
+        region_bgr: BGR image of the zone containing the text
 
     Returns:
-        count: int ou None si non lisible
+        count: int or None if unreadable
     """
     if region_bgr is None or region_bgr.size == 0:
         return None
@@ -92,22 +92,22 @@ def _read_count_from_region(region_bgr):
     if not templates:
         return None
 
-    # Convertir en niveaux de gris
+    # Convert to grayscale
     gray = cv2.cvtColor(region_bgr, cv2.COLOR_BGR2GRAY)
 
-    # Isoler le texte blanc (les chiffres sont blancs sur fond sombre)
+    # Isolate white text (digits are white on dark background)
     _, binary = cv2.threshold(gray, WHITE_THRESHOLD, 255, cv2.THRESH_BINARY)
 
-    # Upscale pour le template matching (les chiffres sont petits)
+    # Upscale for template matching (digits are small)
     scale = 2.0
     binary_large = cv2.resize(binary, None, fx=scale, fy=scale,
                                interpolation=cv2.INTER_CUBIC)
 
-    # Chercher les chiffres par template matching
-    found_digits = []  # (x_position, digit_value)
+    # Look for digits by template matching
+    found_digits = []
 
     for digit, tmpl in templates.items():
-        # Essayer plusieurs tailles de template
+        # Try multiple template sizes
         for tmpl_scale in [0.4, 0.5, 0.6, 0.7, 0.8]:
             h_t = max(1, int(tmpl.shape[0] * tmpl_scale))
             w_t = max(1, int(tmpl.shape[1] * tmpl_scale))
@@ -117,19 +117,19 @@ def _read_count_from_region(region_bgr):
 
             tmpl_resized = cv2.resize(tmpl, (w_t, h_t))
 
-            # Binariser le template aussi
+            # Binarize the template as well
             _, tmpl_bin = cv2.threshold(tmpl_resized, 128, 255, cv2.THRESH_BINARY)
 
             result = cv2.matchTemplate(binary_large, tmpl_bin, cv2.TM_CCOEFF_NORMED)
             locations = np.where(result >= DIGIT_MATCH_THRESHOLD)
 
             for my, mx in zip(locations[0], locations[1]):
-                # Vérifier qu'on n'a pas déjà un chiffre à cette position
+                # Check that we don't already have a digit at this position
                 duplicate = False
                 for fx, fd in found_digits:
                     if abs(mx - fx) < w_t * 0.6:
                         duplicate = True
-                        # Garder le meilleur match
+                        # Keep the best match
                         if result[my, mx] > fd[1]:
                             found_digits.remove((fx, fd))
                             found_digits.append((mx, (digit, result[my, mx])))
@@ -140,10 +140,10 @@ def _read_count_from_region(region_bgr):
     if not found_digits:
         return None
 
-    # Trier par position X (gauche → droite)
+    # Sort by X position (left → right)
     found_digits.sort(key=lambda x: x[0])
 
-    # Construire le nombre
+    # Build the number
     number = 0
     for _, (digit, conf) in found_digits:
         number = number * 10 + digit
@@ -157,14 +157,14 @@ def _read_count_from_region(region_bgr):
 
 def read_troop_counts(screenshot_pil, troop_finder):
     """
-    Lit le nombre de chaque troupe depuis la barre d'attaque.
+    Reads the count of each troop from the attack bar.
 
     Args:
-        screenshot_pil: PIL Image du screenshot complet
-        troop_finder: TroopFinder avec les positions déjà mises à jour
+        screenshot_pil: PIL Image of the full screenshot
+        troop_finder: TroopFinder with positions already updated
 
     Returns:
-        counts: dict {nom_troupe: nombre} pour les troupes détectées
+        counts: dict {troop_name: count} for detected troops
     """
     img_cv = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
     h, w = img_cv.shape[:2]
@@ -172,11 +172,11 @@ def read_troop_counts(screenshot_pil, troop_finder):
     counts = {}
 
     for name, (tx, ty, conf) in troop_finder.positions.items():
-        # Convertir la position ADB en coordonnées image
+        # Convert ADB position to image coordinates
         ix = int(tx * w / 1920)
         iy = int(ty * h / 1080)
 
-        # Zone du "xN" en haut-gauche de l'icône
+        # "xN" zone in the top-left of the icon
         x1 = ix + int(COUNT_OFFSET_X * w / 1920)
         y1 = iy + int(COUNT_OFFSET_Y * h / 1080)
         x2 = x1 + int(COUNT_WIDTH * w / 1920)
@@ -201,14 +201,14 @@ def read_troop_counts(screenshot_pil, troop_finder):
 
 
 # =============================================================================
-#                            TEST
+# TEST
 # =============================================================================
 
 def test_reader(image_path=None):
-    """Test le lecteur de compteurs."""
+    """Tests the counter reader."""
     from clashai.perception.troop_finder import TroopFinder
 
-    print("🧪 Test du Troop Count Reader\n")
+    print("Troop Count Reader Test\n")
 
     if image_path:
         img_pil = Image.open(image_path).convert("RGB")
@@ -216,7 +216,7 @@ def test_reader(image_path=None):
         from clashai.navigation.game_loop import adb_screenshot
         img_pil = adb_screenshot()
         if img_pil is None:
-            print("❌ Impossible de capturer l'écran")
+            print("ERROR: Unable to capture screen")
             return
 
     finder = TroopFinder()
@@ -224,14 +224,14 @@ def test_reader(image_path=None):
 
     counts = read_troop_counts(img_pil, finder)
 
-    print("\n📊 Compteurs lus :")
+    print("\nCounts read:")
     for name, count in sorted(counts.items()):
-        print(f"   {name}: x{count}")
+        print(f" {name}: x{count}")
 
-    # Troupes détectées mais pas de compteur lu
+    # Troops detected but no count read
     for name in finder.positions:
         if name not in counts:
-            print(f"   {name}: ??? (non lu)")
+            print(f" {name}: ??? (non lu)")
 
 
 if __name__ == "__main__":

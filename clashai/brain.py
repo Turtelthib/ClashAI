@@ -1,28 +1,28 @@
 # scripts/rl/brain.py
-# ClashAI Brain — Le cerveau unique du joueur IA.
+# ClashAI Brain — The single brain of the AI player.
 #
-# Un seul programme, un seul joueur, un seul compte.
-# Le Brain décide quoi faire à chaque instant, exactement comme un
-# humain qui regarde son téléphone :
+# One program, one player, one account.
+# The Brain decides what to do at every moment, exactly like a
+# human looking at their phone:
 #
-#   "Tiens, je suis au village... je vais checker le chat...
-#    Oh, on me demande d'attaquer le #3 en GdC... ok j'y vais...
-#    C'est fait, je reviens au village... pas de nouvelles commandes...
-#    Bon, je lance une attaque multi pour farm..."
+# "Hey, I'm at the village... let me check the chat...
+# Oh, I've been asked to attack #3 in CW... ok let's go...
+# Done, back to the village... no new commands...
+# Alright, launching a multiplayer attack to farm..."
 #
-# Boucle principale :
-#   1. Où je suis ? (CNN écran)
-#   2. Y a-t-il une commande urgente ? (chat clan)
-#   3. Sinon, qu'est-ce que je fais ? (farm, gdc, attente)
-#   4. Exécuter l'action
-#   5. Retour au village → recommencer
+# Main loop:
+# 1. Where am I? (screen CNN)
+# 2. Is there an urgent command? (clan chat)
+# 3. Otherwise, what do I do? (farm, cw, wait)
+# 4. Execute the action
+# 5. Return to village → repeat
 #
-# Usage :
-#   python -m clashai.brain
-#   python -m clashai.brain --mode farm        (attaques multi seulement)
-#   python -m clashai.brain --mode gdc         (GdC seulement, attend les commandes)
-#   python -m clashai.brain --mode auto        (tout : farm + GdC + chat)
-#   python -m clashai.brain --episodes 50      (farm N attaques puis stop)
+# Usage:
+# python -m clashai.brain
+# python -m clashai.brain --mode farm (multiplayer attacks only)
+# python -m clashai.brain --mode gdc (CW only, waits for commands)
+# python -m clashai.brain --mode auto (everything: farm + CW + chat)
+# python -m clashai.brain --episodes 50 (farm N attacks then stop)
 
 import os
 import time
@@ -32,45 +32,45 @@ from datetime import datetime
 
 # Setup paths
 from clashai.paths import RL_WEIGHTS_DIR
-# (paths centralisés via clashai.paths)
+# (paths centralized via clashai.paths)
 
 
 # =============================================================================
-#                         CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
-# Intervalles (secondes)
-CHAT_CHECK_INTERVAL = 45       # Vérifier le chat toutes les 45s
-IDLE_BETWEEN_ATTACKS = 20      # Pause min entre deux attaques farm
-IDLE_BETWEEN_ATTACKS_MAX = 60  # Pause max (aléatoire pour être humain)
+# Intervals (seconds)
+CHAT_CHECK_INTERVAL = 45
+IDLE_BETWEEN_ATTACKS = 20
+IDLE_BETWEEN_ATTACKS_MAX = 60
 
-# Priorités (plus haut = plus urgent)
-PRIORITY_GDC_COMMAND = 100     # Commande GdC du chat → top priorité
-PRIORITY_FARM_ATTACK = 10      # Attaque farm → priorité normale
-PRIORITY_IDLE = 0              # Rien à faire → attente
+# Priorities (higher = more urgent)
+PRIORITY_GDC_COMMAND = 100
+PRIORITY_FARM_ATTACK = 10
+PRIORITY_IDLE = 0
 
-# Mode farm : nombre d'attaques avant de checker le chat
+# Farm mode: number of attacks before checking the chat
 ATTACKS_BEFORE_CHAT_CHECK = 2
 
-# Nom du bot
+# Bot name
 DEFAULT_BOT_NAME = 'mini_pekka'
 
 
 # =============================================================================
-#                         BRAIN
+# BRAIN
 # =============================================================================
 
 class ClashBrain:
     """
-    Le cerveau unique de ClashAI.
-    
-    Gère tout le compte comme un vrai joueur :
-    - Attaques farm (multi, pour les ressources)
-    - Commandes GdC (depuis le chat du clan)
-    - Comportement humain (pauses aléatoires, zooms)
-    - Navigation robuste (sait toujours revenir au village)
-    
-    Futur : gestion du village (améliorations, donations, récolte)
+    The single brain of ClashAI.
+
+    Manages the whole account like a real player:
+    - Farm attacks (multiplayer, for resources)
+    - CW commands (from clan chat)
+    - Human-like behavior (random pauses, zooms)
+    - Robust navigation (always knows how to return to the village)
+
+    Future: village management (upgrades, donations, harvesting)
     """
 
     def __init__(self, mode='auto', bot_name=DEFAULT_BOT_NAME, verbose=True):
@@ -86,7 +86,7 @@ class ClashBrain:
         self._total_destruction = 0
         self._start_time = None
 
-        # Modules (chargés au démarrage)
+        # Modules (loaded at startup)
         self._models = None
         self._env = None
         self._agent = None
@@ -94,48 +94,48 @@ class ClashBrain:
         self._gdc_navigator = None
         self._cc_manager = None
 
-        # File d'attente des tâches
+        # Task queue
         self._task_queue = []
 
-        # Compteurs pour le cycle
+        # Cycle counters
         self._attacks_since_chat_check = 0
         self._last_chat_check = 0
 
     def start(self, max_episodes=None):
         """
-        Démarre le Brain. C'est la seule méthode à appeler.
-        
+        Starts the Brain. This is the only method to call.
+
         Args:
-            max_episodes: nombre max d'attaques farm (None = infini)
+            max_episodes: max number of farm attacks (None = infinite)
         """
         self._running = True
         self._start_time = time.time()
 
         print(f"\n{'='*60}")
-        print("  🧠 ClashAI Brain — Démarrage")
-        print(f"  Mode       : {self.mode}")
-        print(f"  Bot name   : @{self.bot_name}")
+        print(" ClashAI Brain — Démarrage")
+        print(f" Mode : {self.mode}")
+        print(f" Bot name : @{self.bot_name}")
         if max_episodes:
-            print(f"  Max attacks: {max_episodes}")
-        print(f"  Heure      : {datetime.now().strftime('%H:%M:%S')}")
+            print(f" Max attacks: {max_episodes}")
+        print(f" Heure : {datetime.now().strftime('%H:%M:%S')}")
         print(f"{'='*60}\n")
 
-        # 1. Charger tous les modules
+        # 1. Load all modules
         self._load_modules()
 
-        # 2. Boucle principale
+        # 2. Main loop
         try:
             self._main_loop(max_episodes)
         except KeyboardInterrupt:
-            print("\n\n⛔ Arrêt demandé (Ctrl+C)")
+            print("\n\nArrêt demandé (Ctrl+C)")
         finally:
             self._shutdown()
 
     def _load_modules(self):
-        """Charge les modèles et initialise tous les modules."""
-        print("📦 Chargement des modules...")
+        """Loads models and initializes all modules."""
+        print("Loading modules...")
 
-        # Modèles de perception
+        # Perception models
         from clashai.navigation import game_loop
         self._models = game_loop.load_models()
 
@@ -143,7 +143,7 @@ class ClashBrain:
         from clashai.combat.agent_v4 import PPOAgentV4
         self._agent = PPOAgentV4()
 
-        # Charger le meilleur checkpoint si disponible
+        # Load best checkpoint if available
         weights_dir = RL_WEIGHTS_DIR
         best_path = os.path.join(weights_dir, 'agent_v4_best.pth')
         checkpoint_path = os.path.join(weights_dir, 'agent_v4_checkpoint.pth')
@@ -156,123 +156,123 @@ class ClashBrain:
                     self._use_heuristic = False
                     break
                 except RuntimeError as e:
-                    print(f"   ⚠️  Checkpoint incompatible ({os.path.basename(ckpt_path)}) : {e}")
-                    print("   🧠 Fallback mode heuristique")
+                    print(f" WARNING: Checkpoint incompatible ({os.path.basename(ckpt_path)}) : {e}")
+                    print(" Fallback mode heuristique")
 
         if self._use_heuristic:
-            print("   🧠 Mode heuristique (pas de checkpoint compatible)")
+            print(" Mode heuristique (pas de checkpoint compatible)")
         else:
-            print("   🤖 Mode RL (checkpoint chargé)")
+            print(" Mode RL (checkpoint chargé)")
 
-        # Chat monitor (si mode auto ou gdc)
+        # Chat monitor (if auto or gdc mode)
         if self.mode in ('auto', 'gdc'):
             from clashai.social.clan_chat_monitor import ClanChatMonitor
             self._chat_monitor = ClanChatMonitor(
                 bot_name=self.bot_name, verbose=self.verbose
             )
 
-        # GdC navigator (si mode auto ou gdc)
+        # GdC navigator (if auto or gdc mode)
         if self.mode in ('auto', 'gdc'):
             from clashai.navigation.gdc_navigator import GdCNavigator
             self._gdc_navigator = GdCNavigator(
                 self._models, verbose=self.verbose
             )
 
-        # Clan Castle Manager (V4.1 — demande de troupes)
+        # Clan Castle Manager (V4.1 — troop request)
         from clashai.social.clan_castle import ClanCastleManager
         self._cc_manager = ClanCastleManager(
             models=self._models,
             verbose=self.verbose,
         )
 
-        # Fonctions de navigation de base
+        # Basic navigation functions
         from clashai.navigation import game_loop as gl
         self._classify_screen = gl.classify_screen
         self._adb_screenshot = gl.adb_screenshot
         self._adb_tap = gl.adb_tap
 
-        print("✅ Tous les modules chargés\n")
+        print("Tous les modules chargés\n")
 
     # -----------------------------------------------------------------
-    #                    BOUCLE PRINCIPALE
+    # MAIN LOOP
     # -----------------------------------------------------------------
 
     def _main_loop(self, max_episodes=None):
         """
-        Le cœur du Brain. Décide quoi faire à chaque instant.
-        
-        Cycle :
-          1. S'assurer qu'on est au village
-          2. Vérifier les commandes du chat (si c'est le moment)
-          3. Décider de la prochaine action
-          4. Exécuter
-          5. Pause humaine
-          6. Recommencer
+        The heart of the Brain. Decides what to do at every moment.
+
+        Cycle:
+          1. Make sure we are at the village
+          2. Check chat commands (if it is time)
+          3. Decide the next action
+          4. Execute
+          5. Human pause
+          6. Repeat
         """
         while self._running:
-            # --- Limite d'épisodes ---
+            # --- Episode limit ---
             if max_episodes and self._attacks_done >= max_episodes:
-                print(f"\n🏁 {max_episodes} attaques terminées")
+                print(f"\n{max_episodes} attacks completed")
                 break
 
-            # --- 1. Retour au village ---
+            # --- 1. Return to village ---
             if not self._ensure_at_village():
-                print("   ⚠️  Impossible de revenir au village, retry...")
+                print(" WARNING: Unable to return to village, retry...")
                 time.sleep(5)
                 continue
 
-            # --- 2. Vérifier le chat du clan ---
+            # --- 2. Check clan chat ---
             if self._should_check_chat():
                 commands = self._check_clan_chat()
 
-                # Traiter les commandes par priorité
+                # Process commands by priority
                 for cmd in commands:
                     if cmd['type'] == 'attack':
                         self._task_queue.append({
                             'type': 'gdc_attack',
                             'target': cmd['target'],
                             'priority': PRIORITY_GDC_COMMAND,
-                            'original_cmd': cmd,  # Pour mark_executed
+                            'original_cmd': cmd,
                         })
                     elif cmd['type'] == 'stop':
-                        print("   🛑 Commande d'arrêt reçue")
+                        print(" Stop command received")
                         if self._chat_monitor:
                             self._chat_monitor.mark_executed(cmd)
                         self._running = False
                         return
 
-                # Trier par priorité
+                # Sort by priority
                 self._task_queue.sort(key=lambda t: t['priority'], reverse=True)
 
-            # --- 3. Décider de la prochaine action ---
+            # --- 3. Decide the next action ---
             if self._task_queue:
-                # Exécuter la tâche la plus urgente
+                # Execute the most urgent task
                 task = self._task_queue.pop(0)
                 self._execute_task(task)
             elif self.mode in ('farm', 'auto'):
-                # Pas de tâche urgente → farm
+                # No urgent task → farm
                 self._execute_task({
                     'type': 'farm_attack',
                     'priority': PRIORITY_FARM_ATTACK,
                 })
             elif self.mode == 'gdc':
-                # Mode GdC : attendre les commandes
+                # CW mode: wait for commands
                 if self.verbose:
-                    print(f"   ⏳ Attente de commandes GdC... "
-                          f"(prochain check dans {CHAT_CHECK_INTERVAL}s)")
+                    print(f" ⏳ Waiting for CW commands... "
+                          f"(next check in {CHAT_CHECK_INTERVAL}s)")
                 time.sleep(CHAT_CHECK_INTERVAL)
                 continue
 
-            # --- 4. Pause humaine ---
+            # --- 4. Human pause ---
             if self._running:
                 self._human_pause()
 
     # -----------------------------------------------------------------
-    #                    EXÉCUTION DES TÂCHES
+    # TASK EXECUTION
     # -----------------------------------------------------------------
 
     def _execute_task(self, task):
-        """Exécute une tâche (attaque farm ou GdC)."""
+        """Executes a task (farm attack or CW attack)."""
         task_type = task['type']
 
         if task_type == 'farm_attack':
@@ -282,25 +282,25 @@ class ClashBrain:
             target = task['target']
             original_cmd = task.get('original_cmd')
 
-            # Accusé de réception AVANT l'attaque
+            # Acknowledgement BEFORE the attack
             if self._chat_monitor:
                 self._send_chat_ack(target, before=True)
 
-            # Attaque
+            # Attack
             info = self._do_gdc_attack(target)
 
-            # Marquer comme exécutée
+            # Mark as executed
             if original_cmd and self._chat_monitor:
                 self._chat_monitor.mark_executed(original_cmd)
 
-            # Accusé de réception APRÈS l'attaque (avec résultat)
+            # Acknowledgement AFTER the attack (with result)
             if self._chat_monitor and info:
                 self._send_chat_ack(target, before=False, result=info)
 
     def _send_chat_ack(self, target, before=True, result=None):
-        """Envoie un message dans le chat du clan."""
+        """Sends a message in the clan chat."""
         try:
-            # Ouvrir le chat
+            # Open the chat
             if self._chat_monitor.open_chat(
                     self._classify_screen, self._models):
                 time.sleep(0.3)
@@ -316,23 +316,23 @@ class ClashBrain:
                         f"IA - {target} fait {stars}e {pct}pct"
                     )
 
-                # Fermer le chat
+                # Close the chat
                 self._chat_monitor.close_chat()
         except Exception as e:
             if self.verbose:
-                print(f"   ⚠️  Erreur envoi chat: {e}")
+                print(f" WARNING: Erreur envoi chat: {e}")
 
     def _do_farm_attack(self):
-        """Exécute une attaque farm (multi classique)."""
+        """Executes a farm attack (classic multiplayer)."""
         self._attacks_done += 1
 
         if self.verbose:
             print(f"\n{'='*60}")
-            print(f"  ⚔️  Attaque farm #{self._attacks_done}")
-            print(f"  {datetime.now().strftime('%H:%M:%S')}")
+            print(f" ⚔ Attaque farm #{self._attacks_done}")
+            print(f" {datetime.now().strftime('%H:%M:%S')}")
             print(f"{'='*60}")
 
-        # V4.1: demander des troupes CC avant l'attaque
+        # V4.1: request CC troops before the attack
         self._request_cc_troops()
 
         info = self._run_attack_episode()
@@ -346,61 +346,61 @@ class ClashBrain:
 
             if self.verbose:
                 avg_dest = self._total_destruction / max(self._attacks_done, 1)
-                print(f"\n   📊 Farm #{self._attacks_done}: "
-                      f"{stars}⭐ {pct}% | "
-                      f"Moyenne: {avg_dest:.1f}%")
+                print(f"\n Farm #{self._attacks_done}: "
+                      f"{stars}* {pct}% | "
+                      f"Average: {avg_dest:.1f}%")
 
     def _do_gdc_attack(self, target_number):
         """
-        Exécute une attaque GdC sur une cible spécifique.
-        
+        Executes a CW attack on a specific target.
+
         Returns:
-            info: dict avec les résultats, ou None
+            info: dict with results, or None
         """
         self._gdc_attacks_done += 1
 
         if self.verbose:
             print(f"\n{'='*60}")
-            print(f"  🏰 Attaque GdC — Cible #{target_number}")
-            print(f"  {datetime.now().strftime('%H:%M:%S')}")
+            print(f" Attaque GdC — Cible #{target_number}")
+            print(f" {datetime.now().strftime('%H:%M:%S')}")
             print(f"{'='*60}")
 
-        # V4.1: demander des troupes CC avant l'attaque
+        # V4.1: request CC troops before the attack
         self._request_cc_troops()
 
         if self._gdc_navigator is None:
-            print("   ❌ GdC navigator non initialisé")
+            print(" ERROR: GdC navigator not initialized")
             return None
 
-        # Naviguer vers la cible
+        # Navigate to the target
         success = self._gdc_navigator.attack_target(target_number)
 
         if not success:
-            print(f"   ❌ Navigation vers cible #{target_number} échouée")
+            print(f" ERROR: Navigation vers cible #{target_number} échouée")
             return None
 
-        # L'agent attaque
+        # Agent attacks
         info = self._run_attack_episode()
 
         if info:
             stars = info.get('stars', 0)
             pct = info.get('percentage', 0)
             if self.verbose:
-                print(f"\n   📊 GdC #{target_number}: {stars}⭐ {pct}%")
+                print(f"\n GdC #{target_number}: {stars}* {pct}%")
 
         return info
 
     def _request_cc_troops(self):
         """
-        Demande des troupes de château de clan si le cooldown est passé.
-        V4.1: appelé automatiquement avant chaque attaque.
+        Requests clan castle troops if the cooldown has passed.
+        V4.1: called automatically before each attack.
         """
         if self._cc_manager is None:
             return
 
         try:
             if self._cc_manager._cooldown_ready():
-                # S'assurer qu'on est au village
+                # Make sure we are at the village
                 if not self._ensure_at_village():
                     return
                 self._cc_manager.request_if_needed(
@@ -408,15 +408,15 @@ class ClashBrain:
                 )
         except Exception as e:
             if self.verbose:
-                print(f"   ⚠️ Erreur demande CC: {e}")
+                print(f" WARNING: Erreur demande CC: {e}")
 
     def _run_attack_episode(self):
         """
-        Exécute un épisode d'attaque complet avec l'agent V4.
-        Utilisé pour le farm ET la GdC.
-        
+        Executes a complete attack episode with agent V4.
+        Used for both farm AND CW.
+
         Returns:
-            info: dict avec les résultats, ou None si échec
+            info: dict with results, or None on failure
         """
         from clashai.combat.environment_v4 import ClashEnvV4
         from clashai.combat.action_space import MAX_STEPS_SAFETY
@@ -427,7 +427,7 @@ class ClashBrain:
             grid, vector = obs
 
             if self._use_heuristic:
-                # Mode heuristique
+                # Heuristic mode
                 actions = env.get_heuristic_sequence()
                 for action in actions:
                     obs, mask, reward, done, info = env.step(action)
@@ -435,7 +435,7 @@ class ClashBrain:
                     if done:
                         break
             else:
-                # Mode RL
+                # RL mode
                 for step in range(MAX_STEPS_SAFETY):
                     action, _, _ = self._agent.select_action(grid, vector, mask)
                     obs, mask, reward, done, info = env.step(action)
@@ -447,24 +447,24 @@ class ClashBrain:
             return info
 
         except Exception as e:
-            print(f"   ❌ Erreur pendant l'attaque : {e}")
+            print(f" ERROR: Erreur pendant l'attaque : {e}")
             import traceback
             traceback.print_exc()
             return None
 
     # -----------------------------------------------------------------
-    #                    CHAT & NAVIGATION
+    # CHAT & NAVIGATION
     # -----------------------------------------------------------------
 
     def _should_check_chat(self):
-        """Détermine s'il faut vérifier le chat maintenant."""
+        """Determines whether the chat should be checked now."""
         if self.mode == 'farm':
-            return False  # Pas de chat en mode farm pur
+            return False
 
         if self._chat_monitor is None:
             return False
 
-        # Vérifier après N attaques ou après un intervalle de temps
+        # Check after N attacks or after a time interval
         now = time.time()
         time_since_check = now - self._last_chat_check
 
@@ -477,44 +477,44 @@ class ClashBrain:
 
     def _check_clan_chat(self):
         """
-        Ouvre le chat, lit les commandes, ferme le chat.
-        Comme un joueur qui jette un œil au chat entre deux attaques.
-        
+        Opens the chat, reads commands, closes the chat.
+        Like a player glancing at the chat between attacks.
+
         Returns:
-            commands: liste de commandes détectées
+            commands: list of detected commands
         """
         if self.verbose:
-            print("\n   💬 Vérification du chat clan...")
+            print("\n 💬 Vérification du chat clan...")
 
         self._last_chat_check = time.time()
         self._attacks_since_chat_check = 0
 
-        # Ouvrir le chat
+        # Open the chat
         if not self._chat_monitor.open_chat(self._classify_screen, self._models):
             if self.verbose:
-                print("   ⚠️  Impossible d'ouvrir le chat")
+                print(" WARNING: Unable to open chat")
             return []
 
         time.sleep(0.5)
 
-        # Lire les commandes
+        # Read commands
         img = self._adb_screenshot()
         commands = []
         if img is not None:
             commands = self._chat_monitor.check_once(img)
 
-        # Fermer le chat
+        # Close the chat
         self._chat_monitor.close_chat()
 
         if commands and self.verbose:
-            print(f"   📨 {len(commands)} commande(s) trouvée(s)")
+            print(f" 📨 {len(commands)} commande(s) trouvée(s)")
 
         return commands
 
     def _ensure_at_village(self):
         """
-        S'assure qu'on est au village. Navigate si nécessaire.
-        
+        Makes sure we are at the village. Navigates if necessary.
+
         Returns:
             success: bool
         """
@@ -529,9 +529,9 @@ class ClashBrain:
             if state == 'village_home':
                 return True
 
-            # Navigation contextuelle
+            # Contextual navigation
             if state == 'resultats_attaque':
-                # Chercher le bouton vert "Rentrer"
+                # Look for the green "Return" button
                 _img_cv = __import__('cv2').cvtColor(
                     __import__('numpy').array(img), 
                     __import__('cv2').COLOR_RGB2BGR
@@ -584,15 +584,15 @@ class ClashBrain:
         return False
 
     # -----------------------------------------------------------------
-    #                    COMPORTEMENT HUMAIN
+    # HUMAN BEHAVIOR
     # -----------------------------------------------------------------
 
     def _human_pause(self):
-        """Pause entre les actions, comme un vrai joueur."""
+        """Pause between actions, like a real player."""
         wait = random.uniform(IDLE_BETWEEN_ATTACKS, IDLE_BETWEEN_ATTACKS_MAX)
 
         if self.verbose:
-            print(f"\n   😴 Pause ({wait:.0f}s)...")
+            print(f"\n 😴 Pause ({wait:.0f}s)...")
 
         elapsed = 0
         while elapsed < wait and self._running:
@@ -633,29 +633,29 @@ class ClashBrain:
             elapsed += pause
 
     # -----------------------------------------------------------------
-    #                    SHUTDOWN & STATS
+    # SHUTDOWN & STATS
     # -----------------------------------------------------------------
 
     def _shutdown(self):
-        """Arrêt propre et affichage des stats."""
+        """Clean shutdown and stats display."""
         self._running = False
         elapsed = time.time() - self._start_time if self._start_time else 0
 
         print(f"\n{'='*60}")
-        print("  🧠 ClashAI Brain — Arrêt")
+        print(" ClashAI Brain — Arrêt")
         print(f"{'='*60}")
-        print(f"   Durée totale    : {elapsed/60:.1f} minutes")
-        print(f"   Attaques farm   : {self._attacks_done}")
-        print(f"   Attaques GdC    : {self._gdc_attacks_done}")
-        print(f"   Étoiles totales : {self._total_stars}")
+        print(f" Total duration : {elapsed/60:.1f} minutes")
+        print(f" Farm attacks : {self._attacks_done}")
+        print(f" CW attacks : {self._gdc_attacks_done}")
+        print(f" Total stars : {self._total_stars}")
         if self._attacks_done > 0:
             avg = self._total_destruction / self._attacks_done
-            print(f"   Destruction moy : {avg:.1f}%")
+            print(f" Avg destruction : {avg:.1f}%")
         print(f"{'='*60}\n")
 
 
 # =============================================================================
-#                            MAIN
+# MAIN
 # =============================================================================
 
 if __name__ == "__main__":

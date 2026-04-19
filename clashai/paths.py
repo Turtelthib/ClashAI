@@ -1,11 +1,11 @@
-"""Chemins centralisés du projet ClashAI.
+"""Centralized paths for the ClashAI project.
 
-Tous les modules importent leurs chemins depuis ici au lieu de
-recalculer project_root avec os.path.dirname() à chaque fois.
+All modules import their paths from here instead of
+recomputing project_root with os.path.dirname() each time.
 """
 import os
 
-# Racine du projet = parent du package clashai/
+# Project root = parent of the clashai/ package
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Configs

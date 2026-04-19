@@ -1,15 +1,15 @@
 # clashai/combat/environment_v4.py
-# Environnement V4 pour ClashAI.
+# V4 environment for ClashAI.
 #
-# Hérite de ClashEnvV3 pour réutiliser toute la navigation ADB
-# et override les méthodes clés pour le nouvel action space.
+# Inherits from ClashEnvV3 to reuse all ADB navigation
+# and overrides key methods for the new action space.
 #
-# Changements vs V3 :
-#   - 37 actions (rôle × secteur + sorts auto-ciblés)
-#   - Observation compactée (54 dims au lieu de 76)
-#   - TroopManager pour le deploy par rôle
-#   - Reward shaping centralisé
-#   - L'agent choisit librement l'ordre des sorts/abilities
+# Changes vs V3:
+# - 37 actions (role × sector + auto-targeted spells)
+# - Compacted observation (54 dims instead of 76)
+# - TroopManager for role-based deployment
+# - Centralized reward shaping
+# - Agent freely chooses the order of spells/abilities
 
 import time
 import numpy as np
@@ -33,7 +33,7 @@ from clashai.combat.reward_shaping import (
     compute_hero_survival_bonus,
 )
 
-# Imports V3 pour accéder aux constantes
+# V3 imports to access constants
 from clashai.combat.agent import (
     TROOP_TYPES, TROOP_NAME_TO_IDX,
 )
@@ -51,19 +51,19 @@ NO_TROOPS_CHECKS_THRESHOLD = 3
 
 class ClashEnvV4(ClashEnvV3):
     """
-    Environnement V4 — action space simplifié (37 actions).
+    V4 environment — simplified action space (37 actions).
 
-    Hérite de V3 pour la navigation ADB, l'override porte sur :
+    Inherits from V3 for ADB navigation; overrides:
     - Observation (54 dims)
     - Action mask (37 actions)
-    - Exécution d'actions (rôle × secteur)
-    - Reward shaping (module séparé)
+    - Action execution (role × sector)
+    - Reward shaping (separate module)
     """
 
     def __init__(self, models, verbose=True):
         super().__init__(models, verbose)
 
-        # TroopManager V4 (remplace la sélection directe V3)
+        # TroopManager V4 (replaces direct V3 selection)
         self._troop_mgr = TroopManager(
             troop_finder=self._troop_finder,
             troop_types=TROOP_TYPES,
@@ -76,8 +76,8 @@ class ClashEnvV4(ClashEnvV3):
         # V4 state
         self._sector_map = np.zeros(NUM_SECTORS, dtype=np.float32)
         self._last_sector = None
-        self._center_pos = NUM_POSITIONS // 2  # mis à jour dans reset
-        # Initialisé ici pour que _get_obs() (appelé par super().reset()) ne crash pas
+        self._center_pos = NUM_POSITIONS // 2
+        # Initialized here so _get_obs() (called by super().reset()) does not crash
         self._episode_start_time = time.time()
         self._buildings_destroyed_total = 0
         self._prev_building_count = 0
@@ -85,21 +85,21 @@ class ClashEnvV4(ClashEnvV3):
         self._exhaustion_rescanned = False
 
         if verbose:
-            print("\n🎮 ClashEnv V4 initialisé")
-            print(f"   Actions     : {TOTAL_ACTIONS} "
+            print("\nClashEnv V4 initialisé")
+            print(f" Actions : {TOTAL_ACTIONS} "
                   f"({NUM_ROLES}×{NUM_SECTORS} deploy + "
                   f"{len(SPELL_NAMES)} sorts + {NUM_HEROES} abilities)")
-            print(f"   Vector      : {VECTOR_SIZE} dims")
-            print("   Phases      : fusionnees (V4.2)")
-            print(f"   Safety cap  : {MAX_STEPS_SAFETY} steps")
+            print(f" Vector : {VECTOR_SIZE} dims")
+            print(" Phases : fusionnees (V4.2)")
+            print(f" Safety cap : {MAX_STEPS_SAFETY} steps")
 
     # -----------------------------------------------------------------
-    #  Observation V4 (54 dims)
+    # Observation V4 (54 dims)
     # -----------------------------------------------------------------
 
     def _get_obs(self):
-        """Construit l'observation V4 : grid + vector 54 dims."""
-        # Temps écoulé normalisé sur 180s (timer COC 3min) — plus stable que step/MAX
+        """Builds the V4 observation: grid + 54-dim vector."""
+        # Elapsed time normalized over 180s (CoC 3-min timer) — more stable than step/MAX
         elapsed = time.time() - self._episode_start_time
         time_norm = np.array([min(elapsed / 180.0, 1.0)], dtype=np.float32)
 
@@ -109,40 +109,40 @@ class ClashEnvV4(ClashEnvV3):
 
         hero_status = self._hero_manager.get_status_vector()
 
-        # V4 : role counts au lieu de troop counts individuels
+        # V4: role counts instead of individual troop counts
         role_counts = np.zeros(ROLE_FEATURES, dtype=np.float32)
         for i, role in enumerate(DEPLOY_ROLES):
             for troop in TROOP_TYPES:
                 if troop['role'] == role and troop['name'] in TROOP_NAME_TO_IDX:
                     idx = TROOP_NAME_TO_IDX[troop['name']]
                     role_counts[i] += self._remaining_troops[idx]
-        role_counts = role_counts / 10.0  # normaliser
+        role_counts = role_counts / 10.0
 
-        # V4 : spell counts
+        # V4: spell counts
         spell_counts = np.zeros(SPELL_FEATURES, dtype=np.float32)
         for i, spell_name in enumerate(SPELL_NAMES):
             if spell_name in TROOP_NAME_TO_IDX:
                 spell_counts[i] = self._remaining_troops[TROOP_NAME_TO_IDX[spell_name]]
-        spell_counts = spell_counts / 3.0  # normaliser
+        spell_counts = spell_counts / 3.0
 
         vector = np.concatenate([
-            self._features,           # (20,) village features
-            role_counts,              # (5,)  troupes par rôle
-            spell_counts,             # (3,)  sorts restants
-            self._sector_map,         # (5,)  densité deploy par secteur
-            time_norm,                # (1,)  temps écoulé / 180s
-            combat_feats,             # (15,)
-            hero_status,              # (5,)
+            self._features,
+            role_counts,
+            spell_counts,
+            self._sector_map,
+            time_norm,
+            combat_feats,
+            hero_status,
         ])
 
         return self._grid, vector
 
     # -----------------------------------------------------------------
-    #  Action mask V4 (37 actions)
+    # Action mask V4 (37 actions)
     # -----------------------------------------------------------------
 
     def _get_mask(self):
-        """Masque d'actions V4."""
+        """V4 action mask."""
         hero_mask = self._hero_manager.get_ability_mask()
         return compute_action_mask(
             self._remaining_troops,
@@ -151,11 +151,11 @@ class ClashEnvV4(ClashEnvV3):
         )
 
     # -----------------------------------------------------------------
-    #  Execute action V4
+    # Execute action V4
     # -----------------------------------------------------------------
 
     def _execute_action(self, action_idx):
-        """Exécute une action V4."""
+        """Executes a V4 action."""
         action_type, idx1, idx2 = decode_action(action_idx)
 
         if action_type == 'deploy':
@@ -170,60 +170,60 @@ class ClashEnvV4(ClashEnvV3):
         elif action_type == 'observe':
             time.sleep(DELAY_OBSERVE)
             self._update_combat_observation()
-            return f"👁️ observe ({DELAY_OBSERVE}s)"
+            return f"observe ({DELAY_OBSERVE}s)"
 
         elif action_type == 'wait_short':
             time.sleep(DELAY_WAIT_SHORT)
             self._troop_mgr._last_troop_name = None
-            return "attendre 0.5s"
+            return "wait 0.5s"
 
         elif action_type == 'wait_long':
             time.sleep(DELAY_WAIT_LONG)
             self._troop_mgr._last_troop_name = None
-            return "attendre 2.0s"
+            return "wait 2.0s"
 
         elif action_type == 'done':
-            return "DONE (fin episode)"
+            return "DONE (episode end)"
 
         return "???"
 
     def _execute_deploy(self, role_idx, sector_idx):
-        """Deploy une troupe du rôle donné au secteur donné."""
+        """Deploys a troop of the given role at the given sector."""
         role_name = DEPLOY_ROLES[role_idx]
 
-        # TroopManager choisit la prochaine troupe du rôle
+        # TroopManager selects the next troop for the role
         troop_idx, troop_name = self._troop_mgr.select_next_for_role(
             role_name, self._remaining_troops
         )
 
         if troop_idx is None:
-            return f"⚠️ {role_name} épuisé"
+            return f"WARNING: {role_name} exhausted"
 
         time.sleep(DELAY_SWITCH_TROOP)
 
-        # Convertir secteur → position absolue
+        # Convert sector → absolute position
         abs_pos = TroopManager.sector_to_position(sector_idx, self._center_pos)
 
-        # V4.2 : wraparound sur le nombre RÉEL de positions trouvées
-        # (get_perimeter_from_buildings peut en retourner < NUM_POSITIONS).
-        # Ne JAMAIS fallback sur _village_center qui est en plein HDV.
+        # V4.2: wraparound on the REAL number of found positions
+        # (get_perimeter_from_buildings may return < NUM_POSITIONS).
+        # NEVER fall back on _village_center which is inside the TH.
         if self._deploy_positions and len(self._deploy_positions) > 0:
             abs_pos = abs_pos % len(self._deploy_positions)
             x, y = self._deploy_positions[abs_pos]
         else:
-            # Seul cas de fallback possible : aucune position trouvée du tout.
-            # On tape juste à côté du bord gauche (safe), pas au centre.
+            # Only possible fallback: no positions found at all.
+            # Tap near the left edge (safe), not at the center.
             x, y = (100, 400)
 
         self._adb_tap(x, y)
         time.sleep(DELAY_DEPLOY)
 
-        # Tracker héros
+        # Track heroes
         troop = TROOP_TYPES[troop_idx]
         if troop['role'] == 'hero':
             self._hero_manager.mark_deployed(troop_name)
 
-        # Mettre à jour les compteurs
+        # Update counters
         self._remaining_troops[troop_idx] = max(
             0, self._remaining_troops[troop_idx] - 1
         )
@@ -233,21 +233,21 @@ class ClashEnvV4(ClashEnvV3):
         return f"{troop_name} → {DEPLOY_ROLES[role_idx]}@{sector_idx}"
 
     def _execute_spell(self, spell_name):
-        """Lance un sort avec ciblage automatique."""
+        """Casts a spell with automatic targeting."""
         if spell_name not in TROOP_NAME_TO_IDX:
-            return f"⚠️ sort {spell_name} inconnu"
+            return f"WARNING: spell {spell_name} unknown"
 
         spell_idx = TROOP_NAME_TO_IDX[spell_name]
         if self._remaining_troops[spell_idx] <= 0:
-            return f"⚠️ {spell_name} épuisé"
+            return f"WARNING: {spell_name} exhausted"
 
-        # Sélectionner le sort dans la barre
+        # Select the spell in the bar
         if not self._troop_mgr.select_troop(spell_name):
-            return f"⚠️ {spell_name} non trouvé"
+            return f"WARNING: {spell_name} not found"
 
         time.sleep(DELAY_SWITCH_TROOP)
 
-        # Ciblage auto via SpellCaster
+        # Auto-targeting via SpellCaster
         combat_img = self._adb_screenshot()
         if combat_img is not None:
             if self._combat_observer.has_yolo:
@@ -273,13 +273,13 @@ class ClashEnvV4(ClashEnvV3):
         )
         self._troop_mgr._last_troop_name = None
 
-        return f"🧪{spell_name} → ({x}, {y})"
+        return f"{spell_name} → ({x}, {y})"
 
     def _execute_ability(self, hero_idx):
-        """Active l'ability d'un héros."""
+        """Activates a hero's ability."""
         hero_name = HERO_NAMES[hero_idx]
 
-        # Scanner si l'icône n'est pas encore trouvée
+        # Scan if the icon has not been found yet
         if hero_name not in self._hero_manager._icon_positions:
             screenshot = self._adb_screenshot()
             if screenshot is not None and self._hero_manager.has_templates():
@@ -289,15 +289,15 @@ class ClashEnvV4(ClashEnvV3):
         time.sleep(DELAY_ABILITY)
 
         if success:
-            return f"⚡ {hero_name} ability activée"
-        return f"⚠️ {hero_name} ability échouée"
+            return f"{hero_name} ability activated"
+        return f"WARNING: {hero_name} ability failed"
 
     # -----------------------------------------------------------------
-    #  Reward shaping V4
+    # Reward shaping V4
     # -----------------------------------------------------------------
 
     def _compute_shaping_reward(self, action_idx):
-        """Reward shaping V4.2 — dispatch sur action_type au lieu de self._phase."""
+        """Reward shaping V4.2 — dispatches on action_type instead of self._phase."""
         action_type, idx1, idx2 = decode_action(action_idx)
 
         if action_type == 'deploy':
@@ -321,7 +321,7 @@ class ClashEnvV4(ClashEnvV3):
                 self._combat_step_count,
                 HERO_NAMES,
             )
-            # Bonus destruction bâtiments détectée sur ce step (observe uniquement)
+            # Building destruction bonus detected on this step (observe only)
             if action_type == 'observe' and self._buildings_destroyed_total > 0:
                 new_destroyed = self._buildings_destroyed_total - getattr(
                     self, '_last_rewarded_destroyed', 0
@@ -341,17 +341,17 @@ class ClashEnvV4(ClashEnvV3):
         return reward
 
     # -----------------------------------------------------------------
-    #  Fin naturelle d'épisode
+    # Fin naturelle d'épisode
     # -----------------------------------------------------------------
 
     def _all_resources_exhausted(self):
         """
-        Retourne True quand l'agent n'a plus rien à faire.
+        Returns True when the agent has nothing left to do.
 
-        Quand le compteur dit zéro, on fait UN rescan physique de la barre
-        pour attraper les stragglers avant de conclure. Évite le cleanup
-        post-episode tardif : les troupes résiduelles sont découvertes ici
-        et déployées naturellement au prochain step.
+        When the counter reaches zero, one physical bar rescan is performed
+        to catch stragglers before concluding. Avoids late post-episode
+        cleanup: residual troops are discovered here and deployed naturally
+        on the next step.
         """
         role_counts, _ = build_role_inventory(self._remaining_troops, TROOP_TYPES)
         spell_counts = build_spell_inventory(self._remaining_troops, TROOP_TYPES)
@@ -364,48 +364,48 @@ class ClashEnvV4(ClashEnvV3):
         if not (no_troops and no_spells and no_abilities):
             return False
 
-        # Compteur à zéro — vérifier physiquement la barre une seule fois
+        # Counter at zero — physically check the bar once
         if not self._exhaustion_rescanned:
             self._exhaustion_rescanned = True
             self._troop_mgr.rescan(self._remaining_troops)
-            # Re-évaluer après rescan
+            # Re-evaluate after rescan
             role_counts, _ = build_role_inventory(self._remaining_troops, TROOP_TYPES)
             spell_counts = build_spell_inventory(self._remaining_troops, TROOP_TYPES)
             no_troops = all(v == 0 for v in role_counts.values())
             no_spells = all(v == 0 for v in spell_counts.values())
             if not (no_troops and no_spells):
                 if self.verbose:
-                    print("      ♻️  Stragglers détectés après rescan — épisode continue")
+                    print(" Stragglers detected after rescan — episode continues")
                 return False
 
         return True
 
     # -----------------------------------------------------------------
-    #  Step V4
+    # Step V4
     # -----------------------------------------------------------------
 
     def step(self, action_idx):
-        """Exécute un step V4.2 — sans phases rigides."""
+        """Executes a V4.2 step — no rigid phases."""
         self._step_count += 1
         action_type, _, _ = decode_action(action_idx)
 
         shaping = self._compute_shaping_reward(action_idx)
         action_desc = self._execute_action(action_idx)
 
-        # Compteur proxy "combat" — s'incrémente dès qu'on ne déploie pas
+        # Proxy "combat" counter — increments whenever not deploying
         if action_type != 'deploy':
             self._combat_step_count += 1
 
         if self.verbose:
             sh = f" ({shaping:+.0f})" if shaping != 0 else ""
-            print(f"   Step {self._step_count:2d} [{action_type}]: {action_desc}{sh}")
+            print(f" Step {self._step_count:2d} [{action_type}]: {action_desc}{sh}")
 
-        # Rescan périodique
+        # Periodic rescan
         if (self._step_count % RESCAN_EVERY_N_STEPS == 0
                 and action_type != 'done'):
             self._troop_mgr.rescan(self._remaining_troops)
 
-        # Fin d'épisode
+        # Episode end
         is_over = self._check_battle_end()
         is_done = (
             is_over
@@ -415,7 +415,7 @@ class ClashEnvV4(ClashEnvV3):
         )
 
         if is_done:
-            # Déployer les troupes restantes si l'agent a choisi done prématurément
+            # Deploy remaining troops if the agent chose done prematurely
             any_troops_left = any(
                 self._remaining_troops[i] > 0
                 for i, t in enumerate(TROOP_TYPES)
@@ -427,7 +427,7 @@ class ClashEnvV4(ClashEnvV3):
                     self._deploy_positions,
                     self._village_center,
                 )
-                time.sleep(1.0)  # laisser le jeu traiter les troupes
+                time.sleep(1.0)
 
             reward, info = self._finish_episode()
             info['step'] = self._step_count
@@ -440,13 +440,13 @@ class ClashEnvV4(ClashEnvV3):
             if spell_penalty != 0:
                 reward += spell_penalty
                 if self.verbose:
-                    print(f"   Malus sorts non utilises: {spell_penalty:.0f}")
+                    print(f" Malus sorts non utilises: {spell_penalty:.0f}")
             hero_bonus = compute_hero_survival_bonus(self._combat_features)
             if hero_bonus > 0:
                 reward += hero_bonus
                 if self.verbose:
                     heroes_alive = round((self._combat_features[4] if self._combat_features is not None else 0) * 5)
-                    print(f"   Bonus héros survivants: +{hero_bonus:.0f} ({heroes_alive} héros)")
+                    print(f" Bonus héros survivants: +{hero_bonus:.0f} ({heroes_alive} héros)")
             return self._get_obs(), self._get_mask(), reward, True, info
 
         return self._get_obs(), self._get_mask(), shaping, False, {
@@ -455,24 +455,24 @@ class ClashEnvV4(ClashEnvV3):
         }
 
     # -----------------------------------------------------------------
-    #  Reset override (V4 specific state)
+    # Reset override (V4 specific state)
     # -----------------------------------------------------------------
 
     def reset(self):
-        """Reset V4 — appelle le reset V3 puis adapte."""
+        """Reset V4 — calls the V3 reset then adapts."""
         super().reset()
 
-        # V4.2 : forcer _phase='combat' pour les méthodes héritées V3
-        # (_check_battle_end, _update_combat_observation utilisent self._phase)
+        # V4.2: force _phase='combat' for inherited V3 methods
+        # (_check_battle_end, _update_combat_observation use self._phase)
         self._phase = 'combat'
         self._episode_start_time = time.time()
 
-        # V4.2 : compteurs YOLO continu bâtiments
+        # V4.2: continuous YOLO building counters
         self._buildings_destroyed_total = 0
         self._prev_building_count = len(self._buildings) if self._buildings else 0
         self._last_rewarded_destroyed = 0
         self._exhaustion_rescanned = False
-        # Passer le compte initial au combat observer pour buildings_remaining_ratio
+        # Pass the initial count to the combat observer for buildings_remaining_ratio
         self._combat_observer.start_combat(
             initial_building_count=self._prev_building_count
         )
@@ -482,8 +482,8 @@ class ClashEnvV4(ClashEnvV3):
         self._last_sector = None
         self._troop_mgr.reset()
 
-        # V4.2 : recalculer les positions de déploiement depuis les bbox YOLO
-        # Plus fiable que la détection HSV (overlay rouge parfois faible)
+        # V4.2: recompute deploy positions from YOLO bboxes
+        # More reliable than HSV detection (red overlay sometimes faint)
         if self._buildings:
             from clashai.perception.deploy_zone import (
                 get_perimeter_from_buildings, save_deploy_debug_image,
@@ -517,10 +517,10 @@ class ClashEnvV4(ClashEnvV3):
                         rejected_rays=deploy_debug.get('rejected_rays') if deploy_debug else None,
                     )
                     if path and self.verbose:
-                        print(f"   📸 Debug deploy : {path}")
+                        print(f" 📸 Debug deploy : {path}")
             except Exception as e:
                 if self.verbose:
-                    print(f"   ⚠️ Debug deploy image : {e}")
+                    print(f" WARNING: Debug deploy image : {e}")
         else:
             self._center_pos = NUM_POSITIONS // 2
 
@@ -528,23 +528,23 @@ class ClashEnvV4(ClashEnvV3):
         return self._get_obs(), self._get_mask()
 
     # -----------------------------------------------------------------
-    #  YOLO continu V4.2
+    # YOLO continu V4.2
     # -----------------------------------------------------------------
 
     def _update_combat_observation(self):
         """
-        Override V4.2 — YOLO continu : bâtiments + troupes à chaque observe.
-        Met à jour grid, features village ET features combat depuis un screenshot frais.
+        Override V4.2 — continuous YOLO: buildings + troops on every observe.
+        Updates grid, village features AND combat features from a fresh screenshot.
         """
         import time as _time
         screenshot = self._adb_screenshot()
         if screenshot is None:
             return
 
-        # 1. YOLO bâtiments → rafraîchir la grille
+        # 1. YOLO buildings → refresh the grid
         t0 = _time.time()
         new_buildings = self._analyze_village(screenshot, self.models)
-        t_buildings = (_time.time() - t0) * 1000  # ms
+        t_buildings = (_time.time() - t0) * 1000
 
         if new_buildings:
             from clashai.combat.state_encoder import encode_state
@@ -552,7 +552,7 @@ class ClashEnvV4(ClashEnvV3):
             self._grid = state['grid']
             self._features = state['features']
 
-            # Diff pour détecter les destructions
+            # Diff to detect destructions
             curr_count = len(new_buildings)
             destroyed = max(0, self._prev_building_count - curr_count)
             self._buildings_destroyed_total += destroyed
@@ -560,11 +560,11 @@ class ClashEnvV4(ClashEnvV3):
             self._buildings = new_buildings
 
             if destroyed > 0 and self.verbose:
-                print(f"      💥 {destroyed} détruit(s) — "
+                print(f" {destroyed} destroyed — "
                       f"total: {self._buildings_destroyed_total} "
-                      f"({curr_count} restants)")
+                      f"({curr_count} remaining)")
 
-        # 2. YOLO troupes → rafraîchir combat features
+        # 2. YOLO troops → refresh combat features
         t0 = _time.time()
         spells_remaining = build_spell_inventory(self._remaining_troops, TROOP_TYPES)
         features, _ = self._combat_observer.observe(
@@ -574,24 +574,24 @@ class ClashEnvV4(ClashEnvV3):
             phase='combat',
             buildings_count=len(new_buildings) if new_buildings else self._prev_building_count,
         )
-        t_troops = (_time.time() - t0) * 1000  # ms
+        t_troops = (_time.time() - t0) * 1000
 
         self._combat_features = features
 
         if self.verbose:
-            print(f"      ⏱️  YOLO buildings: {t_buildings:.0f}ms | "
+            print(f" YOLO buildings: {t_buildings:.0f}ms | "
                   f"troops: {t_troops:.0f}ms")
 
     # -----------------------------------------------------------------
-    #  Heuristic V4
+    # Heuristic V4
     # -----------------------------------------------------------------
 
     def get_heuristic_sequence(self):
         """
-        Séquence heuristique V4 — 1 action par unité.
+        Heuristic sequence V4 — 1 action per unit.
 
-        Chaque troupe = 1 action deploy(rôle, secteur).
-        Les secteurs cyclent pour répartir les troupes.
+        Each troop = 1 deploy(role, sector) action.
+        Sectors cycle to spread troops evenly.
         """
         from clashai.combat.action_space import encode_action as enc
 
@@ -603,9 +603,9 @@ class ClashEnvV4(ClashEnvV3):
         spell_inv = build_spell_inventory(self._remaining_troops, TROOP_TYPES)
 
         if self.verbose:
-            print(f"   📋 Inventaire V4 : {dict(role_inv)} | sorts: {dict(spell_inv)}")
+            print(f" V4 inventory: {dict(role_inv)} | spells: {dict(spell_inv)}")
 
-        # 1. TANKS — spread aux extrémités puis centre
+        # 1. TANKS — spread at extremes then center
         tank_sectors = [FAR_LEFT, FAR_RIGHT, CENTER, LEFT, RIGHT]
         for i in range(role_inv.get('tank', 0)):
             actions.append(enc('deploy', TANK, tank_sectors[i % len(tank_sectors)]))
@@ -620,7 +620,7 @@ class ClashEnvV4(ClashEnvV3):
 
         actions.append(enc('wait_short'))
 
-        # 3. RANGED — le reste en ligne (left, center, right)
+        # 3. RANGED — remaining in a line (left, center, right)
         ranged_remaining = max(0, role_inv.get('ranged', 0) - funnel)
         ranged_sectors = [LEFT, CENTER, RIGHT]
         for i in range(ranged_remaining):
@@ -628,12 +628,12 @@ class ClashEnvV4(ClashEnvV3):
 
         actions.append(enc('wait_long'))
 
-        # 4. MELEE — au centre
+        # 4. MELEE — at center
         melee_sectors = [CENTER, LEFT, RIGHT]
         for i in range(role_inv.get('melee', 0)):
             actions.append(enc('deploy', MELEE, melee_sectors[i % len(melee_sectors)]))
 
-        # 5. SIEGE — centre (V4.1: siège AVANT héros)
+        # 5. SIEGE — center (V4.1: siege BEFORE heroes)
         for _ in range(role_inv.get('siege', 0)):
             actions.append(enc('deploy', SIEGE, CENTER))
 
@@ -641,11 +641,11 @@ class ClashEnvV4(ClashEnvV3):
         for _ in range(role_inv.get('hero', 0)):
             actions.append(enc('deploy', HERO, CENTER))
 
-        # V4.2 : pas de done intermédiaire — done = fin d'épisode
-        # Les sorts et abilities suivent directement le deploy.
+        # V4.2: no intermediate done — done = end of episode
+        # Spells and abilities follow directly after deploy.
         actions.append(enc('observe'))
 
-        # Sorts en priorité — rage, gel, soin (ordre tactique)
+        # Spells in priority order — rage, freeze, heal (tactical order)
         spell_priority = ['rage', 'gel', 'soin']
         for spell_name in spell_priority:
             count = spell_inv.get(spell_name, 0)
@@ -653,13 +653,13 @@ class ClashEnvV4(ClashEnvV3):
                 actions.append(enc('observe'))
                 actions.append(enc('spell', spell_name))
 
-        # Abilities — uniquement les héros déployés (skip championne/PG si absents)
+        # Abilities — deployed heroes only (skip championne/PG if absent)
         for i, hero_name in enumerate(HERO_NAMES):
             if self._hero_manager.is_deployed(hero_name):
                 actions.append(enc('observe'))
                 actions.append(enc('ability', i))
 
         actions.append(enc('observe'))
-        actions.append(enc('done'))  # fin explicite pour BC pre-training
+        actions.append(enc('done'))
 
         return actions

@@ -1,46 +1,46 @@
 # scripts/rl/state_encoder.py
-# Transforme la sortie de YOLO+CNN en état exploitable par l'agent RL.
+# Transforms YOLO+CNN output into a state usable by the RL agent.
 #
-# V3 : 2 nouveaux canaux de grille (danger sol, danger air) + features enrichies
+# V3: 2 new grid channels (ground danger, air danger) + enriched features
 #
-# Entrée : liste de bâtiments [{class, confidence, bbox, center}, ...]
-# Sortie : grille (12, 40, 40) + vecteur features (20,)
+# Input: list of buildings [{class, confidence, bbox, center}, ...]
+# Output: grid (12, 40, 40) + feature vector (20,)
 #
-# Canaux de grille (12) :
-#   0  : défenses dangereuses (infernos, eagle, arcX, etc.)
-#   1  : défenses moyennes (canons, tours archères, mortiers, etc.)
-#   2  : défenses anti-aériennes
-#   3  : défenses spéciales (teslas, tours runiques)
-#   4  : ressources
-#   5  : HDV
-#   6  : château de clan
-#   7  : hall des héros
-#   8  : bâtiments non-défensifs
-#   9  : densité totale
-#   10 : danger sol (heatmap DPS sol approximatif)     ← NOUVEAU V3
-#   11 : danger air (heatmap DPS air approximatif)     ← NOUVEAU V3
+# Grid channels (12):
+# 0: dangerous defenses (infernos, eagle, arcX, etc.)
+# 1: medium defenses (cannons, archer towers, mortars, etc.)
+# 2: anti-air defenses
+# 3: special defenses (teslas, runic towers)
+# 4: resources
+# 5: TH (Town Hall)
+# 6: clan castle
+# 7: hero hall
+# 8: non-defensive buildings
+# 9: total density
+# 10: ground danger (approximate ground DPS heatmap) ← NEW V3
+# 11: air danger (approximate air DPS heatmap) ← NEW V3
 #
-# Features village (20) :
-#   0  : nombre de défenses dangereuses (normalisé)
-#   1  : nombre de défenses moyennes (normalisé)
-#   2  : nombre de défenses anti-aériennes (normalisé)
-#   3  : nombre de ressources (normalisé)
-#   4  : total de bâtiments (normalisé)
-#   5-6: position HDV (x, y normalisées)
-#   7  : HDV centré ou en bord
-#   8  : nombre de tours d'enfer (normalisé)           ← NOUVEAU V3
-#   9-10: position moyenne des infernos (x, y)          ← NOUVEAU V3
-#   11-12: position aigle artilleur (x, y)              ← NOUVEAU V3
-#   13-14: position château de clan (x, y)              ← NOUVEAU V3
-#   15-18: score de faiblesse par quadrant (N, E, S, O) ← NOUVEAU V3
-#   19 : nombre de scattershots (normalisé)             ← NOUVEAU V3
+# Village features (20):
+# 0: number of dangerous defenses (normalized)
+# 1: number of medium defenses (normalized)
+# 2: number of anti-air defenses (normalized)
+# 3: number of resources (normalized)
+# 4: total buildings (normalized)
+# 5-6: TH position (x, y normalized)
+# 7: TH centered or on edge
+# 8: number of inferno towers (normalized) ← NEW V3
+# 9-10: average inferno position (x, y) ← NEW V3
+# 11-12: eagle artillery position (x, y) ← NEW V3
+# 13-14: clan castle position (x, y) ← NEW V3
+# 15-18: weakness score per quadrant (N, E, S, W) ← NEW V3
+# 19: number of scattershots (normalized) ← NEW V3
 
 import math
 import numpy as np
 
 
 # =============================================================================
-#                    CATÉGORIES DE BÂTIMENTS
+# CATÉGORIES DE BÂTIMENTS
 # =============================================================================
 
 CATEGORIES = {
@@ -80,16 +80,16 @@ CATEGORIES = {
         'animalerie', 'forgeron', 'cabane_assistants', 'cabane_bob',
         'sort'
     ],
-    # Canaux 10-11 (danger) calculés séparément
+    # Channels 10-11 (danger) computed separately
 }
 
 CHANNEL_NAMES = list(CATEGORIES.keys()) + [
     'densite_totale',
-    'danger_sol',       # NOUVEAU V3
-    'danger_air',       # NOUVEAU V3
+    'danger_sol',
+    'danger_air',
 ]
 
-# Mapping inversé : nom de classe → index du canal
+# Reverse mapping: class name → channel index
 CLASS_TO_CHANNEL = {}
 for channel_idx, (category, classes) in enumerate(CATEGORIES.items()):
     for cls_name in classes:
@@ -97,68 +97,68 @@ for channel_idx, (category, classes) in enumerate(CATEGORIES.items()):
 
 
 # =============================================================================
-#                    CONFIGURATION DE LA GRILLE
+# GRID CONFIGURATION
 # =============================================================================
 
 GRID_SIZE = 40
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1080
-NUM_CHANNELS = len(CHANNEL_NAMES)  # 12
+NUM_CHANNELS = len(CHANNEL_NAMES)
 
-CELL_WIDTH = SCREEN_WIDTH / GRID_SIZE    # 48 px
-CELL_HEIGHT = SCREEN_HEIGHT / GRID_SIZE  # 27 px
+CELL_WIDTH = SCREEN_WIDTH / GRID_SIZE
+CELL_HEIGHT = SCREEN_HEIGHT / GRID_SIZE
 
-# Nombre de features village
+# Number of village features
 NUM_VILLAGE_FEATURES = 20
 
 
 # =============================================================================
-#                    DPS & PORTÉE DES DÉFENSES (V3)
+# DPS & RANGE OF DEFENSES (V3)
 # =============================================================================
 
-# Portée approximative en pixels ADB (HDV18 max level)
-# et DPS normalisé (1.0 = défense la plus forte)
-# 'ground' = cible les troupes au sol, 'air' = cible les troupes aériennes
-# 'both' = cible les deux
+# Approximate range in ADB pixels (TH18 max level)
+# and normalised DPS (1.0 = strongest defense)
+# 'ground' = targets ground troops, 'air' = targets air troops
+# 'both' = targets both
 DEFENSE_STATS = {
-    # --- Défenses dangereuses ---
-    'tour_enfer_mono':       {'range': 400, 'dps': 1.0, 'targets': 'both'},
-    'tour_enfer_multiple':   {'range': 350, 'dps': 0.9, 'targets': 'both'},
-    'aigle_artilleur':       {'range': 600, 'dps': 0.8, 'targets': 'both'},
-    'arcX_sol':              {'range': 450, 'dps': 0.85, 'targets': 'ground'},
-    'arcX_sol_air':          {'range': 450, 'dps': 0.85, 'targets': 'both'},
-    'catapulte_erratique':   {'range': 500, 'dps': 0.7, 'targets': 'ground'},
-    'monolithe':             {'range': 400, 'dps': 0.9, 'targets': 'ground'},
-    'tour_vengeuse':         {'range': 350, 'dps': 0.6, 'targets': 'both'},
-    'gigabombe':             {'range': 300, 'dps': 0.5, 'targets': 'ground'},
-    'tour_runique_seisme':   {'range': 350, 'dps': 0.5, 'targets': 'ground'},
-    # --- Défenses moyennes ---
-    'canon':                 {'range': 300, 'dps': 0.3, 'targets': 'ground'},
-    'tour_archere':          {'range': 350, 'dps': 0.35, 'targets': 'both'},
-    'mortier':               {'range': 400, 'dps': 0.2, 'targets': 'ground'},
-    'multi_mortier':         {'range': 350, 'dps': 0.4, 'targets': 'ground'},
-    'tour_sorcier':          {'range': 350, 'dps': 0.4, 'targets': 'both'},
-    'tour_bombe':            {'range': 300, 'dps': 0.35, 'targets': 'ground'},
-    'canon_double':          {'range': 300, 'dps': 0.4, 'targets': 'ground'},
-    'canon_ricochet':        {'range': 350, 'dps': 0.35, 'targets': 'ground'},
-    'cracheur_feu':          {'range': 250, 'dps': 0.5, 'targets': 'ground'},
-    'super_tour_sorcier':    {'range': 350, 'dps': 0.5, 'targets': 'both'},
+    # --- Dangerous defenses ---
+    'tour_enfer_mono': {'range': 400, 'dps': 1.0, 'targets': 'both'},
+    'tour_enfer_multiple': {'range': 350, 'dps': 0.9, 'targets': 'both'},
+    'aigle_artilleur': {'range': 600, 'dps': 0.8, 'targets': 'both'},
+    'arcX_sol': {'range': 450, 'dps': 0.85, 'targets': 'ground'},
+    'arcX_sol_air': {'range': 450, 'dps': 0.85, 'targets': 'both'},
+    'catapulte_erratique': {'range': 500, 'dps': 0.7, 'targets': 'ground'},
+    'monolithe': {'range': 400, 'dps': 0.9, 'targets': 'ground'},
+    'tour_vengeuse': {'range': 350, 'dps': 0.6, 'targets': 'both'},
+    'gigabombe': {'range': 300, 'dps': 0.5, 'targets': 'ground'},
+    'tour_runique_seisme': {'range': 350, 'dps': 0.5, 'targets': 'ground'},
+    # --- Medium defenses ---
+    'canon': {'range': 300, 'dps': 0.3, 'targets': 'ground'},
+    'tour_archere': {'range': 350, 'dps': 0.35, 'targets': 'both'},
+    'mortier': {'range': 400, 'dps': 0.2, 'targets': 'ground'},
+    'multi_mortier': {'range': 350, 'dps': 0.4, 'targets': 'ground'},
+    'tour_sorcier': {'range': 350, 'dps': 0.4, 'targets': 'both'},
+    'tour_bombe': {'range': 300, 'dps': 0.35, 'targets': 'ground'},
+    'canon_double': {'range': 300, 'dps': 0.4, 'targets': 'ground'},
+    'canon_ricochet': {'range': 350, 'dps': 0.35, 'targets': 'ground'},
+    'cracheur_feu': {'range': 250, 'dps': 0.5, 'targets': 'ground'},
+    'super_tour_sorcier': {'range': 350, 'dps': 0.5, 'targets': 'both'},
     'tour_archere_multiple': {'range': 350, 'dps': 0.4, 'targets': 'both'},
-    'tour_archere_rapide':   {'range': 350, 'dps': 0.45, 'targets': 'both'},
+    'tour_archere_rapide': {'range': 350, 'dps': 0.45, 'targets': 'both'},
     'tour_multi_equipe_rapide': {'range': 350, 'dps': 0.4, 'targets': 'ground'},
-    'tour_multi_equipe_lente':  {'range': 350, 'dps': 0.35, 'targets': 'ground'},
-    'cabane_ouvrier_arme':   {'range': 250, 'dps': 0.2, 'targets': 'ground'},
-    # --- Anti-aérien ---
-    'defense_antiaerienne':  {'range': 350, 'dps': 0.6, 'targets': 'air'},
-    'prop_air':              {'range': 300, 'dps': 0.3, 'targets': 'air'},
-    # --- Défenses spéciales ---
-    'tesla':                 {'range': 250, 'dps': 0.5, 'targets': 'both'},
-    'tour_runique_rage':     {'range': 300, 'dps': 0.3, 'targets': 'both'},
-    'tour_runique_poison':   {'range': 300, 'dps': 0.3, 'targets': 'both'},
+    'tour_multi_equipe_lente': {'range': 350, 'dps': 0.35, 'targets': 'ground'},
+    'cabane_ouvrier_arme': {'range': 250, 'dps': 0.2, 'targets': 'ground'},
+    # --- Anti-air ---
+    'defense_antiaerienne': {'range': 350, 'dps': 0.6, 'targets': 'air'},
+    'prop_air': {'range': 300, 'dps': 0.3, 'targets': 'air'},
+    # --- Special defenses ---
+    'tesla': {'range': 250, 'dps': 0.5, 'targets': 'both'},
+    'tour_runique_rage': {'range': 300, 'dps': 0.3, 'targets': 'both'},
+    'tour_runique_poison': {'range': 300, 'dps': 0.3, 'targets': 'both'},
     'tour_runique_invisible': {'range': 300, 'dps': 0.2, 'targets': 'both'},
 }
 
-# Classes spécifiques pour les features enrichies
+# Specific classes for enriched features
 INFERNO_CLASSES = ['tour_enfer_mono', 'tour_enfer_multiple']
 EAGLE_CLASSES = ['aigle_artilleur']
 SCATTER_CLASSES = ['catapulte_erratique']
@@ -166,7 +166,7 @@ CC_CLASSES = ['chateau_clan']
 
 
 # =============================================================================
-#                    FONCTIONS D'ENCODAGE
+# FONCTIONS D'ENCODAGE
 # =============================================================================
 
 def buildings_to_grid(buildings):
@@ -178,7 +178,7 @@ def buildings_to_grid(buildings):
     """
     grid = np.zeros((NUM_CHANNELS, GRID_SIZE, GRID_SIZE), dtype=np.float32)
 
-    # Canaux 0-8 : catégories de bâtiments (identique V2)
+    # Channels 0-8: building categories (same as V2)
     for b in buildings:
         cls_name = b['class']
         cx, cy = b['center']
@@ -191,13 +191,13 @@ def buildings_to_grid(buildings):
             channel = CLASS_TO_CHANNEL[cls_name]
             grid[channel, grid_y, grid_x] += confidence
 
-        # Canal 9 : densité totale
+        # Channel 9: total density
         grid[9, grid_y, grid_x] += confidence
 
-    # Canaux 10-11 : danger heatmaps (NOUVEAU V3)
+    # Channels 10-11: danger heatmaps (NEW V3)
     _compute_danger_heatmap(grid, buildings)
 
-    # Normaliser chaque canal entre 0 et 1
+    # Normalise each channel between 0 and 1
     for c in range(NUM_CHANNELS):
         max_val = grid[c].max()
         if max_val > 0:
@@ -208,15 +208,15 @@ def buildings_to_grid(buildings):
 
 def _compute_danger_heatmap(grid, buildings):
     """
-    Calcule les canaux de danger (sol et air).
-    
-    Pour chaque cellule de la grille, on additionne le DPS de toutes
-    les défenses dont la portée couvre cette cellule.
-    C'est une approximation — la portée réelle dépend du niveau de la
-    défense et du zoom, mais ça donne une carte de chaleur utile.
+    Computes the danger channels (ground and air).
+
+    For each grid cell, the DPS of all defenses whose range covers
+    that cell is accumulated.
+    This is an approximation — actual range depends on defense level
+    and zoom, but it produces a useful heatmap.
     """
-    ch_ground = 10  # Canal danger sol
-    ch_air = 11     # Canal danger air
+    ch_ground = 10
+    ch_air = 11
 
     for b in buildings:
         cls_name = b['class']
@@ -228,15 +228,15 @@ def _compute_danger_heatmap(grid, buildings):
         dps = stats['dps'] * b['confidence']
         targets = stats['targets']
 
-        # Convertir la portée en cellules de grille
+        # Convert range to grid cells
         range_cells_x = stats['range'] / CELL_WIDTH
         range_cells_y = stats['range'] / CELL_HEIGHT
 
-        # Position de la défense sur la grille
+        # Defense position on the grid
         def_gx = cx / CELL_WIDTH
         def_gy = cy / CELL_HEIGHT
 
-        # Scanner les cellules dans le carré englobant
+        # Scan cells within the bounding square
         min_gx = max(0, int(def_gx - range_cells_x))
         max_gx = min(GRID_SIZE - 1, int(def_gx + range_cells_x))
         min_gy = max(0, int(def_gy - range_cells_y))
@@ -244,13 +244,13 @@ def _compute_danger_heatmap(grid, buildings):
 
         for gy in range(min_gy, max_gy + 1):
             for gx in range(min_gx, max_gx + 1):
-                # Distance en pixels (approximée)
+                # Distance in pixels (approximated)
                 dist_px = math.sqrt(
                     ((gx - def_gx) * CELL_WIDTH) ** 2 +
                     ((gy - def_gy) * CELL_HEIGHT) ** 2
                 )
                 if dist_px <= stats['range']:
-                    # DPS décroissant avec la distance (linéaire)
+                    # DPS decaying with distance (linear)
                     falloff = 1.0 - (dist_px / stats['range']) * 0.5
                     contribution = dps * falloff
 
@@ -269,27 +269,27 @@ def extract_features(buildings):
     """
     features = np.zeros(NUM_VILLAGE_FEATURES, dtype=np.float32)
 
-    # Compteurs
+    # Counters
     n_defenses_danger = 0
     n_defenses_medium = 0
     n_anti_aerien = 0
     n_ressources = 0
     total_buildings = len(buildings)
 
-    # Positions spécifiques
+    # Specific positions
     hdv_position = None
     inferno_positions = []
     eagle_position = None
     cc_position = None
     scatter_count = 0
 
-    # Toutes les défenses (pour les quadrants)
+    # All defenses (for quadrant scoring)
     defense_classes = set()
     for cat in ['defenses_dangereuses', 'defenses_moyennes',
                 'defenses_anti_aeriennes', 'defenses_speciales']:
         defense_classes.update(CATEGORIES[cat])
 
-    defense_positions = []  # (x_norm, y_norm, weight)
+    defense_positions = []
 
     for b in buildings:
         cls_name = b['class']
@@ -319,7 +319,7 @@ def extract_features(buildings):
             weight = 2.0 if cls_name in CATEGORIES['defenses_dangereuses'] else 1.0
             defense_positions.append((cx / SCREEN_WIDTH, cy / SCREEN_HEIGHT, weight))
 
-    # --- Features 0-7 : identiques V2 ---
+    # --- Features 0-7: identical to V2 ---
 
     features[0] = min(n_defenses_danger / 10.0, 1.0)
     features[1] = min(n_defenses_medium / 20.0, 1.0)
@@ -341,12 +341,12 @@ def extract_features(buildings):
     else:
         features[7] = 0.0
 
-    # --- Features 8-19 : NOUVEAU V3 ---
+    # --- Features 8-19: NEW V3 ---
 
-    # 8 : Nombre de tours d'enfer
+    # 8: Number of inferno towers
     features[8] = min(len(inferno_positions) / 4.0, 1.0)
 
-    # 9-10 : Position moyenne des infernos
+    # 9-10: Average inferno position
     if inferno_positions:
         mean_x = np.mean([p[0] for p in inferno_positions])
         mean_y = np.mean([p[1] for p in inferno_positions])
@@ -356,7 +356,7 @@ def extract_features(buildings):
         features[9] = 0.5
         features[10] = 0.5
 
-    # 11-12 : Position aigle artilleur
+    # 11-12: Eagle artillery position
     if eagle_position is not None:
         features[11] = eagle_position[0] / SCREEN_WIDTH
         features[12] = eagle_position[1] / SCREEN_HEIGHT
@@ -364,7 +364,7 @@ def extract_features(buildings):
         features[11] = 0.5
         features[12] = 0.5
 
-    # 13-14 : Position château de clan
+    # 13-14: Clan castle position
     if cc_position is not None:
         features[13] = cc_position[0] / SCREEN_WIDTH
         features[14] = cc_position[1] / SCREEN_HEIGHT
@@ -372,31 +372,31 @@ def extract_features(buildings):
         features[13] = 0.5
         features[14] = 0.5
 
-    # 15-18 : Score de faiblesse par quadrant (N, E, S, O)
-    # Plus le score est BAS, plus le quadrant est faible → meilleur côté d'attaque
-    # On calcule le DPS total pondéré dans chaque quadrant
-    quadrant_scores = [0.0, 0.0, 0.0, 0.0]  # N, E, S, O
+    # 15-18: Weakness score per quadrant (N, E, S, W)
+    # Lower score = weaker quadrant → better attack side
+    # Compute total weighted DPS per quadrant
+    quadrant_scores = [0.0, 0.0, 0.0, 0.0]
     for dx_norm, dy_norm, weight in defense_positions:
-        # Centrer sur le milieu de l'écran
-        rx = dx_norm - 0.5  # -0.5 à 0.5
+        # Centre on the screen midpoint
+        rx = dx_norm - 0.5
         ry = dy_norm - 0.5
 
-        # Contribution à chaque quadrant (inversée par distance au bord)
-        # Nord = haut (ry négatif), Sud = bas (ry positif)
-        # Est = droite (rx positif), Ouest = gauche (rx négatif)
-        quadrant_scores[0] += weight * max(0, 0.5 - ry)  # N : plus fort si défense en haut
-        quadrant_scores[1] += weight * max(0, 0.5 + rx)  # E : plus fort si défense à droite
-        quadrant_scores[2] += weight * max(0, 0.5 + ry)  # S : plus fort si défense en bas
-        quadrant_scores[3] += weight * max(0, 0.5 - rx)  # O : plus fort si défense à gauche
+        # Contribution to each quadrant (inversely weighted by edge distance)
+        # North = top (ry negative), South = bottom (ry positive)
+        # East = right (rx positive), West = left (rx negative)
+        quadrant_scores[0] += weight * max(0, 0.5 - ry)
+        quadrant_scores[1] += weight * max(0, 0.5 + rx)
+        quadrant_scores[2] += weight * max(0, 0.5 + ry)
+        quadrant_scores[3] += weight * max(0, 0.5 - rx)
 
-    # Normaliser par le max
+    # Normalise by the max
     max_q = max(quadrant_scores) if max(quadrant_scores) > 0 else 1.0
     features[15] = quadrant_scores[0] / max_q
     features[16] = quadrant_scores[1] / max_q
     features[17] = quadrant_scores[2] / max_q
     features[18] = quadrant_scores[3] / max_q
 
-    # 19 : Nombre de scattershots
+    # 19: Number of scattershots
     features[19] = min(scatter_count / 3.0, 1.0)
 
     return features
@@ -456,54 +456,54 @@ def get_attack_direction_coords(direction_idx, spread=0.5):
 
 
 # =============================================================================
-#                         UTILITAIRES
+# UTILITAIRES
 # =============================================================================
 
 def find_best_attack_side(buildings, verbose=False):
     """
-    Heuristique V3.1 : choix intelligent du côté d'attaque.
-    
-    Combine 3 critères au lieu d'un seul :
-    
-    1. Faiblesse défensive (DPS total dans ce secteur) — poids 1.0
-       → Attaquer là où il y a moins de défenses
-    
-    2. Proximité du TH — poids 0.7
-       → Les troupes doivent atteindre le TH pour les étoiles
-    
-    3. Accessibilité des infernos — poids 0.5
-       → Arriver tôt sur les infernos permet de les geler/détruire
-       → Avec GoWitch, les golems absorbent pendant qu'on freeze
-    
-    4. Distance à l'eagle — poids 0.3
-       → L'eagle a une zone morte (ne tire pas au contact)
-       → Arriver vite sur l'eagle réduit ses dégâts
-    
+    Heuristic V3.1: smart attack-side selection.
+
+    Combines 3 criteria instead of one:
+
+    1. Defensive weakness (total DPS in that sector) — weight 1.0
+       → Attack where there are fewer defenses
+
+    2. TH proximity — weight 0.7
+       → Troops must reach the TH for stars
+
+    3. Inferno accessibility — weight 0.5
+       → Reaching infernos early allows freezing/destroying them
+       → With GoWitch, golems absorb while we freeze
+
+    4. Eagle distance — weight 0.3
+       → The eagle has a dead zone (doesn't fire at close range)
+       → Reaching the eagle quickly reduces its damage
+
     Returns:
-        best_direction: int 0-7 (index du meilleur secteur d'attaque)
+        best_direction: int 0-7 (index of the best attack sector)
     """
-    # Points de déploiement normalisés (0-1) pour chaque direction
+    # Normalised deploy points (0-1) for each direction
     DEPLOY_POINTS = {
-        0: (0.50, 0.05),   # N  (haut centre)
-        1: (0.95, 0.05),   # NE (haut droite)
-        2: (0.95, 0.50),   # E  (droite centre)
-        3: (0.95, 0.90),   # SE (bas droite)
-        4: (0.50, 0.90),   # S  (bas centre)
-        5: (0.05, 0.90),   # SW (bas gauche)
-        6: (0.05, 0.50),   # W  (gauche centre)
-        7: (0.05, 0.05),   # NW (haut gauche)
+        0: (0.50, 0.05),
+        1: (0.95, 0.05),
+        2: (0.95, 0.50),
+        3: (0.95, 0.90),
+        4: (0.50, 0.90),
+        5: (0.05, 0.90),
+        6: (0.05, 0.50),
+        7: (0.05, 0.05),
     }
     
     DIRECTION_NAMES = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO']
-    MAX_DIST = math.sqrt(2.0)  # Distance max normalisée (coin à coin)
+    MAX_DIST = math.sqrt(2.0)
     
-    # Poids des critères
-    W_DEFENSE = 1.0    # Faiblesse défensive
-    W_TH = 0.7         # Proximité du TH
-    W_INFERNO = 0.5    # Accessibilité des infernos
-    W_EAGLE = 0.3      # Accessibilité de l'eagle
+    # Criteria weights
+    W_DEFENSE = 1.0
+    W_TH = 0.7
+    W_INFERNO = 0.5
+    W_EAGLE = 0.3
     
-    # --- 1. Score DPS par secteur (logique existante) ---
+    # --- 1. DPS score per sector (existing logic) ---
     sector_dps = [0.0] * 8
     for b in buildings:
         cls_name = b['class']
@@ -521,7 +521,7 @@ def find_best_attack_side(buildings, verbose=False):
     
     max_dps = max(sector_dps) if max(sector_dps) > 0 else 1.0
     
-    # --- 2. Positions clés ---
+    # --- 2. Key positions ---
     hdv_pos = None
     inferno_positions = []
     eagle_pos = None
@@ -538,26 +538,26 @@ def find_best_attack_side(buildings, verbose=False):
         elif cls in EAGLE_CLASSES:
             eagle_pos = (cx_norm, cy_norm)
     
-    # --- 3. Scorer chaque direction ---
+    # --- 3. Score each direction ---
     scores = []
     for d in range(8):
         deploy_x, deploy_y = DEPLOY_POINTS[d]
         
-        # Critère 1 : faiblesse défensive (inversé : faible DPS = bon)
+        # Criterion 1: defensive weakness (inverted: low DPS = good)
         defense_score = 1.0 - (sector_dps[d] / max_dps)
         
-        # Critère 2 : proximité TH
+        # Criterion 2: TH proximity
         if hdv_pos is not None:
             th_dist = math.sqrt(
                 (deploy_x - hdv_pos[0])**2 + (deploy_y - hdv_pos[1])**2
             )
             th_score = 1.0 - (th_dist / MAX_DIST)
         else:
-            th_score = 0.5  # Pas de TH détecté → neutre
+            th_score = 0.5
         
-        # Critère 3 : accessibilité des infernos
-        #   On prend la distance au plus PROCHE inferno
-        #   (l'idée : les golems arrivent dessus → freeze)
+        # Criterion 3: inferno accessibility
+        # Take the distance to the CLOSEST inferno
+        # (idea: golems reach it → freeze)
         if inferno_positions:
             min_inf_dist = min(
                 math.sqrt((deploy_x - ix)**2 + (deploy_y - iy)**2)
@@ -565,9 +565,9 @@ def find_best_attack_side(buildings, verbose=False):
             )
             inferno_score = 1.0 - (min_inf_dist / MAX_DIST)
         else:
-            inferno_score = 0.5  # Pas d'infernos → neutre
+            inferno_score = 0.5
         
-        # Critère 4 : accessibilité eagle
+        # Criterion 4: eagle accessibility
         if eagle_pos is not None:
             eagle_dist = math.sqrt(
                 (deploy_x - eagle_pos[0])**2 + (deploy_y - eagle_pos[1])**2
@@ -576,7 +576,7 @@ def find_best_attack_side(buildings, verbose=False):
         else:
             eagle_score = 0.5
         
-        # Score composite
+        # Composite score
         total = (W_DEFENSE * defense_score 
                  + W_TH * th_score
                  + W_INFERNO * inferno_score
@@ -591,51 +591,51 @@ def find_best_attack_side(buildings, verbose=False):
             'eagle': eagle_score,
         })
     
-    # Trier par score total décroissant
+    # Sort by descending total score
     scores.sort(key=lambda s: s['total'], reverse=True)
     best = scores[0]
     
     if verbose:
-        print("\n   🎯 Analyse des côtés d'attaque :")
+        print("\n Attack side analysis:")
         for s in scores:
             marker = " ← BEST" if s['direction'] == best['direction'] else ""
-            print(f"      {DIRECTION_NAMES[s['direction']]:2s}: "
+            print(f" {DIRECTION_NAMES[s['direction']]:2s}: "
                   f"total={s['total']:.2f} "
-                  f"(déf={s['defense']:.2f} th={s['th']:.2f} "
+                  f"(def={s['defense']:.2f} th={s['th']:.2f} "
                   f"inf={s['inferno']:.2f} eag={s['eagle']:.2f}){marker}")
     
     return best['direction']
 
 
 def print_state_summary(state):
-    """Affiche un résumé de l'état encodé."""
+    """Prints a summary of the encoded state."""
     grid = state['grid']
     features = state['features']
 
-    print("\n📊 État encodé V3 :")
-    print(f"   Grille : {grid.shape}")
+    print("\nEncoded state V3:")
+    print(f" Grille : {grid.shape}")
 
     for i, name in enumerate(CHANNEL_NAMES):
         active_cells = (grid[i] > 0).sum()
         if active_cells > 0:
-            print(f"   Canal {i:2d} ({name}): {active_cells} cellules actives")
+            print(f" Canal {i:2d} ({name}): {active_cells} cellules actives")
 
     labels = [
-        'Déf. dangereuses', 'Déf. moyennes', 'Anti-aérien', 'Ressources',
-        'Total bâtiments', 'HDV x', 'HDV y', 'HDV bord',
-        'Infernos', 'Inferno moy. x', 'Inferno moy. y',
-        'Aigle x', 'Aigle y', 'CC x', 'CC y',
-        'Quadrant N', 'Quadrant E', 'Quadrant S', 'Quadrant O',
+        'Dangerous def.', 'Medium def.', 'Anti-air', 'Resources',
+        'Total buildings', 'TH x', 'TH y', 'TH edge',
+        'Infernos', 'Avg inferno x', 'Avg inferno y',
+        'Eagle x', 'Eagle y', 'CC x', 'CC y',
+        'Quadrant N', 'Quadrant E', 'Quadrant S', 'Quadrant W',
         'Scattershots'
     ]
-    print(f"\n   Features ({len(features)} dims) :")
+    print(f"\n Features ({len(features)} dims):")
     for i, (label, val) in enumerate(zip(labels, features)):
         marker = " ←NEW" if i >= 8 else ""
-        print(f"   [{i:2d}] {label:18s} = {val:.3f}{marker}")
+        print(f" [{i:2d}] {label:18s} = {val:.3f}{marker}")
 
 
 # =============================================================================
-#                            TEST
+# TEST
 # =============================================================================
 
 if __name__ == "__main__":
@@ -661,17 +661,17 @@ if __name__ == "__main__":
     print_state_summary(state)
 
     best_side = find_best_attack_side(fake_buildings, verbose=True)
-    directions = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO']
-    print(f"\n🎯 Meilleur côté d'attaque : {directions[best_side]}")
+    directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+    print(f"\nBest attack side: {directions[best_side]}")
 
-    # Vérifier les dimensions
-    print("\n📐 Dimensions :")
-    print(f"   Grid    : {state['grid'].shape} (attendu: ({NUM_CHANNELS}, {GRID_SIZE}, {GRID_SIZE}))")
-    print(f"   Features: {state['features'].shape} (attendu: ({NUM_VILLAGE_FEATURES},))")
+    # Check dimensions
+    print("\n📐 Dimensions:")
+    print(f" Grid: {state['grid'].shape} (expected: ({NUM_CHANNELS}, {GRID_SIZE}, {GRID_SIZE}))")
+    print(f" Features: {state['features'].shape} (expected: ({NUM_VILLAGE_FEATURES},))")
 
-    # Vérifier la danger map
+    # Check danger map
     ground = state['grid'][10]
     air = state['grid'][11]
-    print("\n🔥 Danger map :")
-    print(f"   Sol : {(ground > 0).sum()} cellules couvertes, max={ground.max():.3f}")
-    print(f"   Air : {(air > 0).sum()} cellules couvertes, max={air.max():.3f}")
+    print("\n🔥 Danger map:")
+    print(f" Ground: {(ground > 0).sum()} cells covered, max={ground.max():.3f}")
+    print(f" Air: {(air > 0).sum()} cells covered, max={air.max():.3f}")

@@ -1,17 +1,17 @@
 # scripts/rl/capture_combat.py
-# Capture automatique de screenshots pendant les combats pour annotation YOLO.
+# Automatic screenshot capture during combat for YOLO annotation.
 #
-# Ce script tourne EN PARALLÈLE du Brain ou de l'entraînement.
-# Il prend des screenshots toutes les 2 secondes quand le CNN détecte
-# l'écran "phase_attaque" (combat en cours).
+# This script runs IN PARALLEL with Brain or training.
+# It takes screenshots every 2 seconds when the CNN detects
+# the "phase_attaque" screen (combat in progress).
 #
-# Les screenshots sont sauvegardés dans combat_captures/ avec un nom unique.
-# Tu les annoteras ensuite avec un outil comme LabelImg, Roboflow ou CVAT.
+# Screenshots are saved in combat_captures/ with a unique name.
+# You will then annotate them with a tool like LabelImg, Roboflow or CVAT.
 #
-# Usage :
-#   python scripts/rl/capture_combat.py
-#   python scripts/rl/capture_combat.py --interval 3 --max 500
-#   python scripts/rl/capture_combat.py --output mon_dossier/
+# Usage:
+# python scripts/rl/capture_combat.py
+# python scripts/rl/capture_combat.py --interval 3 --max 500
+# python scripts/rl/capture_combat.py --output my_folder/
 
 import os
 import time
@@ -22,32 +22,32 @@ from clashai.paths import PROJECT_ROOT as project_root
 
 
 # =============================================================================
-#                         CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
 DEFAULT_OUTPUT_DIR = os.path.join(project_root, 'combat_captures')
-DEFAULT_INTERVAL = 2.0      # Secondes entre chaque capture
-DEFAULT_MAX_CAPTURES = 300   # Limite par session
-COMBAT_STATES = ['phase_attaque']  # États CNN = combat en cours
+DEFAULT_INTERVAL = 2.0
+DEFAULT_MAX_CAPTURES = 300
+COMBAT_STATES = ['phase_attaque']
 
 
 # =============================================================================
-#                         CAPTURE
+# CAPTURE
 # =============================================================================
 
 def capture_combat_screenshots(output_dir=DEFAULT_OUTPUT_DIR,
                                 interval=DEFAULT_INTERVAL,
                                 max_captures=DEFAULT_MAX_CAPTURES):
     """
-    Capture des screenshots pendant les combats.
-    
-    Attend que le CNN détecte 'phase_attaque', puis capture
-    toutes les N secondes jusqu'à ce que l'écran change.
+    Captures screenshots during combat.
+
+    Waits for the CNN to detect 'phase_attaque', then captures
+    every N seconds until the screen changes.
     """
     os.makedirs(output_dir, exist_ok=True)
     
-    # Charger les modèles
-    print("📦 Chargement des modèles...")
+    # Load models
+    print("Chargement des modèles...")
     from clashai.navigation import game_loop as gl
     models = gl.load_models()
     
@@ -55,16 +55,16 @@ def capture_combat_screenshots(output_dir=DEFAULT_OUTPUT_DIR,
     combat_count = 0
     
     print(f"\n{'='*60}")
-    print("  📸 Capture de combat pour annotation YOLO")
-    print(f"  Dossier  : {output_dir}")
-    print(f"  Interval : {interval}s")
-    print(f"  Max      : {max_captures}")
+    print(" 📸 Capture de combat pour annotation YOLO")
+    print(f" Dossier : {output_dir}")
+    print(f" Interval : {interval}s")
+    print(f" Max : {max_captures}")
     print(f"{'='*60}\n")
     print("En attente d'un combat...\n")
     
     try:
         while total_captured < max_captures:
-            # Attendre qu'un combat commence
+            # Wait for a combat to start
             img = gl.adb_screenshot()
             if img is None:
                 time.sleep(1)
@@ -76,10 +76,10 @@ def capture_combat_screenshots(output_dir=DEFAULT_OUTPUT_DIR,
                 time.sleep(2)
                 continue
             
-            # Combat détecté !
+            # Combat detected!
             combat_count += 1
             combat_captures = 0
-            print(f"⚔️  Combat #{combat_count} détecté !")
+            print(f"⚔ Combat #{combat_count} détecté !")
             
             while total_captured < max_captures:
                 img = gl.adb_screenshot()
@@ -90,11 +90,11 @@ def capture_combat_screenshots(output_dir=DEFAULT_OUTPUT_DIR,
                 state, conf = gl.classify_screen(img, models)
                 
                 if state not in COMBAT_STATES:
-                    print(f"   Combat #{combat_count} terminé "
+                    print(f" Combat #{combat_count} terminé "
                           f"({combat_captures} captures)")
                     break
                 
-                # Sauvegarder le screenshot
+                # Save the screenshot
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
                 filename = f"combat_{combat_count:03d}_{timestamp}.png"
                 filepath = os.path.join(output_dir, filename)
@@ -104,31 +104,31 @@ def capture_combat_screenshots(output_dir=DEFAULT_OUTPUT_DIR,
                 combat_captures += 1
                 
                 if combat_captures % 10 == 0:
-                    print(f"   📸 {combat_captures} captures "
+                    print(f" 📸 {combat_captures} captures "
                           f"(total: {total_captured}/{max_captures})")
                 
                 time.sleep(interval)
             
-            print("   En attente du prochain combat...\n")
+            print(" En attente du prochain combat...\n")
     
     except KeyboardInterrupt:
-        print("\n⛔ Arrêt")
+        print("\nArrêt")
     
     print(f"\n{'='*60}")
-    print("  📸 Capture terminée")
-    print(f"  Combats   : {combat_count}")
-    print(f"  Captures  : {total_captured}")
-    print(f"  Dossier   : {output_dir}")
+    print(" 📸 Capture terminée")
+    print(f" Combats : {combat_count}")
+    print(f" Captures : {total_captured}")
+    print(f" Dossier : {output_dir}")
     print(f"{'='*60}")
     print("\n📝 Prochaine étape :")
-    print("   1. Ouvre les images dans un outil d'annotation (LabelImg, CVAT, Roboflow)")
-    print("   2. Annote les troupes avec des bounding boxes")
-    print("   3. Exporte en format YOLO (txt)")
-    print("   4. Entraîne le modèle avec train_yolo_troops.py")
+    print(" 1. Ouvre les images dans un outil d'annotation (LabelImg, CVAT, Roboflow)")
+    print(" 2. Annote les troupes avec des bounding boxes")
+    print(" 3. Exporte en format YOLO (txt)")
+    print(" 4. Entraîne le modèle avec train_yolo_troops.py")
 
 
 # =============================================================================
-#                         MAIN
+# MAIN
 # =============================================================================
 
 if __name__ == "__main__":

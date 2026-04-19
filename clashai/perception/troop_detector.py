@@ -1,14 +1,14 @@
 # clashai/perception/troop_detector.py
-# Détection de troupes mid-combat via YOLO.
+# Mid-combat troop detection via YOLO.
 #
-# Wrapper autour du modèle YOLO troupes (13 classes, mAP50=0.987).
-# Fournit des détections structurées exploitables par le CombatObserver
-# et le SpellCaster.
+# Wrapper around the troop YOLO model (13 classes, mAP50=0.987).
+# Provides structured detections usable by CombatObserver
+# and SpellCaster.
 #
-# Usage :
-#   detector = TroopDetector()
-#   detections = detector.detect(screenshot_pil)
-#   # detections = list[Detection(class_name, x, y, w, h, conf)]
+# Usage:
+# detector = TroopDetector()
+# detections = detector.detect(screenshot_pil)
+# # detections = list[Detection(class_name, x, y, w, h, conf)]
 
 import os
 from dataclasses import dataclass
@@ -18,47 +18,47 @@ from clashai.paths import WEIGHTS_DIR
 
 
 # =============================================================================
-#                         CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
 YOLO_TROOPS_PATH = os.path.join(WEIGHTS_DIR, 'yolo_troops.pt')
 
-# Classes du modèle YOLO troupes (ordre = index)
+# Troop YOLO model classes (order = index)
 TROOP_CLASSES = [
     'golem', 'sorcier', 'sorciere', 'pekka', 'archere',
     'lance_buche', 'roi', 'reine', 'grand_gardien', 'championne',
     'demolisseur', 'bouliste', 'prince_gargouille',
 ]
 
-# Catégories pour regroupement
+# Categories for grouping
 HERO_CLASSES = {'roi', 'reine', 'grand_gardien', 'championne', 'prince_gargouille'}
 SIEGE_CLASSES = {'lance_buche', 'demolisseur', 'bouliste'}
 TROOP_CLASSES_SET = set(TROOP_CLASSES) - HERO_CLASSES - SIEGE_CLASSES
 
-# Seuil de confiance
+# Confidence threshold
 DEFAULT_CONF = 0.35
 
 ADB_WIDTH = 1920
 ADB_HEIGHT = 1080
 
-# Zone d'exclusion UI (ne pas détecter dans la barre de troupes / header)
+# UI exclusion zone (do not detect in the troop bar / header)
 UI_TOP_Y_RATIO = 0.06
 UI_BOTTOM_Y_RATIO = 0.82
 
 
 # =============================================================================
-#                         DATACLASS
+# DATACLASS
 # =============================================================================
 
 @dataclass
 class Detection:
-    """Une détection de troupe YOLO."""
+    """A YOLO troop detection."""
     class_name: str
     class_id: int
-    x: int          # centre, coordonnées ADB
+    x: int
     y: int
-    w: int          # largeur bbox
-    h: int          # hauteur bbox
+    w: int
+    h: int
     conf: float
 
     @property
@@ -75,15 +75,15 @@ class Detection:
 
 
 # =============================================================================
-#                         TROOP DETECTOR
+# TROOP DETECTOR
 # =============================================================================
 
 class TroopDetector:
     """
-    Détecteur de troupes mid-combat basé sur YOLO.
-    
-    Charge le modèle YOLO troupes et fournit des détections structurées
-    avec filtrage de la zone UI.
+    Mid-combat troop detector based on YOLO.
+
+    Loads the troop YOLO model and provides structured detections
+    with UI zone filtering.
     """
 
     def __init__(self, weights_path: Optional[str] = None, conf: float = DEFAULT_CONF,
@@ -94,7 +94,7 @@ class TroopDetector:
         self._weights_path = weights_path or YOLO_TROOPS_PATH
 
     def _load_model(self):
-        """Charge le modèle YOLO (lazy loading)."""
+        """Loads the YOLO model (lazy loading)."""
         if self._model is not None:
             return
 
@@ -107,18 +107,18 @@ class TroopDetector:
         from ultralytics import YOLO
         self._model = YOLO(self._weights_path)
         if self.verbose:
-            print(f"   ✅ YOLO troupes chargé : {self._weights_path}")
+            print(f" YOLO troupes chargé : {self._weights_path}")
 
     def detect(self, screenshot_pil, filter_ui: bool = True) -> list[Detection]:
         """
-        Détecte les troupes dans un screenshot.
-        
+        Detects troops in a screenshot.
+
         Args:
             screenshot_pil: PIL Image (RGB)
-            filter_ui: filtrer les détections dans la zone UI
-            
+            filter_ui: filter detections in the UI zone
+
         Returns:
-            Liste de Detection triée par confiance décroissante
+            List of Detection sorted by decreasing confidence
         """
         self._load_model()
 
@@ -137,13 +137,13 @@ class TroopDetector:
                 conf = float(box.conf[0])
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
 
-                # Centre en coordonnées ADB
+                # Center in ADB coordinates
                 cx = int((x1 + x2) / 2 * scale_x)
                 cy = int((y1 + y2) / 2 * scale_y)
                 w = int((x2 - x1) * scale_x)
                 h = int((y2 - y1) * scale_y)
 
-                # Filtrer la zone UI
+                # Filter UI zone
                 if filter_ui:
                     y_ratio = cy / ADB_HEIGHT
                     if y_ratio < UI_TOP_Y_RATIO or y_ratio > UI_BOTTOM_Y_RATIO:
@@ -165,17 +165,17 @@ class TroopDetector:
             for d in detections:
                 counts[d.class_name] = counts.get(d.class_name, 0) + 1
             summary = ', '.join(f"{v}×{k}" for k, v in counts.items())
-            print(f"      🔍 YOLO troupes: {summary}")
+            print(f" YOLO troupes: {summary}")
 
         return detections
 
     def detect_grouped(self, screenshot_pil) -> dict:
         """
-        Détecte et regroupe les troupes par catégorie.
-        
+        Detects and groups troops by category.
+
         Returns:
-            dict avec clés 'troops', 'heroes', 'sieges', 'all',
-            chaque valeur étant une liste de Detection.
+            dict with keys 'troops', 'heroes', 'sieges', 'all',
+            each value being a list of Detection.
         """
         all_dets = self.detect(screenshot_pil)
         return {
@@ -187,10 +187,10 @@ class TroopDetector:
 
     def get_positions(self, screenshot_pil, class_filter: set = None) -> list[tuple[int, int]]:
         """
-        Retourne les positions (x, y) ADB des troupes détectées.
-        
+        Returns the ADB (x, y) positions of detected troops.
+
         Args:
-            class_filter: set de noms de classes à inclure (None = toutes)
+            class_filter: set of class names to include (None = all)
         """
         dets = self.detect(screenshot_pil)
         if class_filter:
@@ -198,7 +198,7 @@ class TroopDetector:
         return [(d.x, d.y) for d in dets]
 
     def count_by_class(self, screenshot_pil) -> dict[str, int]:
-        """Compte le nombre de troupes détectées par classe."""
+        """Counts the number of detected troops per class."""
         dets = self.detect(screenshot_pil)
         counts = {}
         for d in dets:
@@ -207,14 +207,14 @@ class TroopDetector:
 
 
 # =============================================================================
-#                            TEST
+# TEST
 # =============================================================================
 
 if __name__ == "__main__":
     import sys
     from PIL import Image
 
-    print("🧪 Test TroopDetector\n")
+    print("Test TroopDetector\n")
 
     if len(sys.argv) > 1:
         img_path = sys.argv[1]
@@ -222,10 +222,10 @@ if __name__ == "__main__":
         detector = TroopDetector()
         grouped = detector.detect_grouped(img)
         print("\nRésultats:")
-        print(f"  Troupes : {len(grouped['troops'])}")
-        print(f"  Héros   : {len(grouped['heroes'])}")
-        print(f"  Sièges  : {len(grouped['sieges'])}")
+        print(f" Troupes : {len(grouped['troops'])}")
+        print(f" Héros : {len(grouped['heroes'])}")
+        print(f" Sièges : {len(grouped['sieges'])}")
         for d in grouped['all']:
-            print(f"    {d.class_name:20s} ({d.x:4d}, {d.y:4d}) conf={d.conf:.2f}")
+            print(f" {d.class_name:20s} ({d.x:4d}, {d.y:4d}) conf={d.conf:.2f}")
     else:
         print("Usage: python -m clashai.perception.troop_detector <screenshot.png>")

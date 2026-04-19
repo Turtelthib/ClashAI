@@ -1,18 +1,18 @@
 # clashai/combat/combat_observer.py
-# Observation mid-combat pour ClashAI V4.
+# Mid-combat observation for ClashAI V4.
 #
-# Deux modes de perception :
-#   - YOLO troupes (V4) : position exacte de chaque troupe/héro par classe
-#   - Barres de vie HSV (V3 fallback) : clusters de barres vertes/rouges
+# Two perception modes:
+# - YOLO troops (V4): exact position of each troop/hero by class
+# - HSV health bars (V3 fallback): clusters of green/red bars
 #
-# Quand le TroopDetector YOLO est fourni, on l'utilise en priorité et les
-# barres de vie ne servent plus qu'à détecter les troupes blessées.
+# When a YOLO TroopDetector is provided, it takes priority and health bars
+# are only used to detect injured troops.
 #
-# Usage :
-#   from clashai.perception.troop_detector import TroopDetector
-#   detector = TroopDetector()
-#   observer = CombatObserver(troop_detector=detector)
-#   features, raw = observer.observe(screenshot_pil, village_center)
+# Usage:
+# from clashai.perception.troop_detector import TroopDetector
+# detector = TroopDetector()
+# observer = CombatObserver(troop_detector=detector)
+# features, raw = observer.observe(screenshot_pil, village_center)
 
 import cv2
 import numpy as np
@@ -20,18 +20,18 @@ from PIL import Image
 
 
 # =============================================================================
-#                         CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
 ADB_WIDTH = 1920
 ADB_HEIGHT = 1080
 
-# --- Barres de vie vertes (troupes en bonne santé) ---
+# --- Green health bars (healthy troops) ---
 HP_GREEN_H_RANGE = (45, 85)
 HP_GREEN_S_MIN = 100
 HP_GREEN_V_MIN = 120
 
-# --- Barres de vie orange/rouges (troupes blessées) ---
+# --- Red/orange health bars (injured troops) ---
 HP_RED_H_RANGE = (0, 15)
 HP_RED_S_MIN = 120
 HP_RED_V_MIN = 120
@@ -40,88 +40,88 @@ HP_ORANGE_H_RANGE = (15, 30)
 HP_ORANGE_S_MIN = 100
 HP_ORANGE_V_MIN = 120
 
-# --- Taille des barres de vie ---
+# --- Health bar size ---
 HP_BAR_MIN_AREA = 30
 HP_BAR_MAX_AREA = 800
-HP_BAR_MIN_RATIO = 1.5  # largeur/hauteur (les barres sont horizontales)
+HP_BAR_MIN_RATIO = 1.5
 
-# --- Barres de vie héros (plus grandes que les troupes normales) ---
+# --- Hero health bars (larger than normal troop bars) ---
 HERO_BAR_MIN_AREA = 200
 HERO_BAR_MAX_AREA = 2000
 HERO_BAR_MIN_RATIO = 2.0
 
-# --- Zones d'exclusion UI ---
-UI_BOTTOM_Y = 0.60   # Barre troupes, boutons
-UI_TOP_Y = 0.08      # Timer, ressources
+# --- UI exclusion zones ---
+UI_BOTTOM_Y = 0.60
+UI_TOP_Y = 0.08
 UI_LEFT_X = 0.02
 UI_RIGHT_X = 0.98
 
 # --- Clustering ---
-CLUSTER_RADIUS = 150    # pixels ADB
+CLUSTER_RADIUS = 150
 MIN_CLUSTER_SIZE = 2
 
-# Nombre de features en sortie
+# Number of output features
 COMBAT_FEATURES_SIZE = 15
 
 
 # =============================================================================
-#                    DÉTECTION DES BARRES DE VIE
+# HEALTH BAR DETECTION
 # =============================================================================
 
 def _detect_bars(img_cv, h_range, s_min, v_min, min_area, max_area, min_ratio):
     """
-    Détecte des barres de vie horizontales par couleur HSV.
-    
+    Detects horizontal health bars by HSV color.
+
     Returns:
-        positions: liste de (x, y) en coordonnées image
-        areas: liste des aires de chaque barre (pour distinguer héros/troupes)
+        positions: list of (x, y) in image coordinates
+        areas: list of areas for each bar (to distinguish heroes from troops)
     """
     hsv = cv2.cvtColor(img_cv, cv2.COLOR_BGR2HSV)
     h, w = img_cv.shape[:2]
-    
-    # Masque couleur
+
+    # Color mask
     lower = np.array([h_range[0], s_min, v_min])
     upper = np.array([h_range[1], 255, 255])
     mask = cv2.inRange(hsv, lower, upper)
-    
-    # Exclure les zones UI
+
+    # Exclude UI zones
     mask[:int(h * UI_TOP_Y), :] = 0
     mask[int(h * UI_BOTTOM_Y):, :] = 0
     mask[:, :int(w * UI_LEFT_X)] = 0
     mask[:, int(w * UI_RIGHT_X):] = 0
-    
-    # Nettoyer
+
+    # Clean up
     kernel = np.ones((3, 3), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-    
-    # Trouver les contours
+
+    # Find contours
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
+
     positions = []
     areas = []
     for cnt in contours:
         area = cv2.contourArea(cnt)
         if area < min_area or area > max_area:
             continue
-        
+
         x_rect, y_rect, w_rect, h_rect = cv2.boundingRect(cnt)
         if h_rect == 0:
             continue
         ratio = w_rect / h_rect
         if ratio < min_ratio:
             continue
-        
+
         cx = x_rect + w_rect // 2
         cy = y_rect + h_rect // 2
         positions.append((cx, cy))
         areas.append(area)
-    
+
     return positions, areas
 
 
 def detect_troop_bars(img_cv):
-    """Détecte les barres de vie vertes (troupes en bonne santé)."""
+    """Detects green health bars (healthy troops)."""
     return _detect_bars(
         img_cv, HP_GREEN_H_RANGE, HP_GREEN_S_MIN, HP_GREEN_V_MIN,
         HP_BAR_MIN_AREA, HP_BAR_MAX_AREA, HP_BAR_MIN_RATIO
@@ -129,7 +129,7 @@ def detect_troop_bars(img_cv):
 
 
 def detect_hurt_bars(img_cv):
-    """Détecte les barres de vie rouges/oranges (troupes blessées)."""
+    """Detects red/orange health bars (injured troops)."""
     red_pos, red_areas = _detect_bars(
         img_cv, HP_RED_H_RANGE, HP_RED_S_MIN, HP_RED_V_MIN,
         HP_BAR_MIN_AREA, HP_BAR_MAX_AREA, HP_BAR_MIN_RATIO
@@ -143,8 +143,8 @@ def detect_hurt_bars(img_cv):
 
 def detect_hero_bars(img_cv):
     """
-    Détecte les barres de vie des héros (plus grandes que les troupes normales).
-    Cherche les barres vertes ET oranges/rouges de grande taille.
+    Detects hero health bars (larger than normal troop bars).
+    Looks for large green AND orange/red bars.
     """
     green_pos, green_areas = _detect_bars(
         img_cv, HP_GREEN_H_RANGE, HP_GREEN_S_MIN, HP_GREEN_V_MIN,
@@ -154,41 +154,41 @@ def detect_hero_bars(img_cv):
         img_cv, HP_RED_H_RANGE, HP_RED_S_MIN, HP_RED_V_MIN,
         HERO_BAR_MIN_AREA, HERO_BAR_MAX_AREA, HERO_BAR_MIN_RATIO
     )
-    
+
     all_pos = green_pos + red_pos
-    # Nombre de héros détectés (probablement 0-5)
-    # On ne peut pas distinguer QUEL héros c'est juste par la barre,
-    # mais on sait combien sont vivants.
+    # Number of heroes detected (typically 0-5).
+    # We cannot identify WHICH hero from the bar alone,
+    # but we know how many are alive.
     return all_pos
 
 
 # =============================================================================
-#                    CLUSTERING
+# CLUSTERING
 # =============================================================================
 
 def _cluster_positions(positions, radius=CLUSTER_RADIUS, min_size=MIN_CLUSTER_SIZE):
     """
-    Clustering simple par distance (BFS).
-    
+    Simple distance-based clustering (BFS).
+
     Returns:
         clusters: list of {'center': (x,y), 'size': n}
-        trié par taille décroissante.
+        sorted by descending size.
     """
     if not positions:
         return []
-    
+
     points = np.array(positions, dtype=float)
     visited = [False] * len(points)
     clusters = []
-    
+
     for i in range(len(points)):
         if visited[i]:
             continue
-        
+
         cluster_pts = [i]
         visited[i] = True
         queue = [i]
-        
+
         while queue:
             current = queue.pop(0)
             for j in range(len(points)):
@@ -199,80 +199,80 @@ def _cluster_positions(positions, radius=CLUSTER_RADIUS, min_size=MIN_CLUSTER_SI
                     visited[j] = True
                     cluster_pts.append(j)
                     queue.append(j)
-        
+
         if len(cluster_pts) >= min_size:
             center = points[cluster_pts].mean(axis=0)
             clusters.append({
                 'center': (int(center[0]), int(center[1])),
                 'size': len(cluster_pts),
             })
-    
+
     clusters.sort(key=lambda c: c['size'], reverse=True)
     return clusters
 
 
 # =============================================================================
-#                    OBSERVATEUR PRINCIPAL
+# MAIN OBSERVER
 # =============================================================================
 
 class CombatObserver:
     """
-    Observe le champ de bataille pendant le combat et retourne
-    un vecteur de features compactes pour l'agent PPO.
-    
-    Features (15 dims) — compatibles V3 :
-        0  : buildings_remaining_ratio (1.0=aucun détruit, 0.0=tout détruit)
-        1  : combat_progress (0.0-1.0, temps écoulé / temps max)
-        2  : num_troops_alive (normalisé /50)
-        3  : num_troops_hurt (normalisé /20)
-        4  : num_heroes_alive (normalisé /5)
-        5  : main_cluster_x (normalisé 0-1)
-        6  : main_cluster_y (normalisé 0-1)
-        7  : num_clusters (normalisé /5)
-        8  : cluster_spread (distance max entre clusters, normalisé)
-        9  : troops_near_center (% de troupes proches du centre village)
-        10 : hurt_ratio (troupes blessées / total)
-        11-14 : spells_remaining (soin, rage, gel, pad) normalisé
-    
-    Quand troop_detector est fourni (V4), les features 2-9 sont calculées
-    à partir des détections YOLO (plus précises que les barres de vie).
-    Le raw_data contient alors les détections complètes par classe.
+    Observes the battlefield during combat and returns a compact feature
+    vector for the PPO agent.
+
+    Features (15 dims) — V3 compatible:
+        0 : buildings_remaining_ratio (1.0=none destroyed, 0.0=all destroyed)
+        1 : combat_progress (0.0-1.0, elapsed / max time)
+        2 : num_troops_alive (normalized /50)
+        3 : num_troops_hurt (normalized /20)
+        4 : num_heroes_alive (normalized /5)
+        5 : main_cluster_x (normalized 0-1)
+        6 : main_cluster_y (normalized 0-1)
+        7 : num_clusters (normalized /5)
+        8 : cluster_spread (max distance between clusters, normalized)
+        9 : troops_near_center (% of troops close to village center)
+        10 : hurt_ratio (injured troops / total)
+        11-14 : spells_remaining (heal, rage, freeze, pad) normalized
+
+    When troop_detector is provided (V4), features 2-9 are computed from
+    YOLO detections (more reliable than health bars).
+    raw_data then contains the full per-class detections.
     """
-    
+
     def __init__(self, verbose: bool = True, troop_detector=None):
         self.verbose = verbose
         self._combat_start_time = None
-        self._max_combat_time = 180.0  # 3 minutes
-        self._troop_detector = troop_detector  # TroopDetector ou None
+        self._max_combat_time = 180.0
+        self._troop_detector = troop_detector
         self._initial_building_count = 0
         self._current_building_count = 0
-    
+
     @property
     def has_yolo(self) -> bool:
         return self._troop_detector is not None
-    
+
     def start_combat(self, initial_building_count=None):
-        """Appelé au reset — démarre le timer et initialise le compteur de bâtiments."""
+        """Called at reset — starts the timer and initializes the building counter."""
         import time
         self._combat_start_time = time.time()
         self._initial_building_count = initial_building_count or 0
         self._current_building_count = initial_building_count or 0
-    
+
     def observe(self, screenshot_pil, village_center_adb=None,
-                spells_remaining=None, phase='combat', buildings_count=None):  # phase gardé pour compat V3
+                spells_remaining=None, phase='combat', buildings_count=None):
         """
-        Analyse un screenshot mid-combat.
+        Analyzes a mid-combat screenshot.
 
         Args:
             screenshot_pil: PIL Image
-            village_center_adb: (x, y) centre du village
+            village_center_adb: (x, y) village center
             spells_remaining: dict {'soin': n, 'rage': n, 'gel': n}
-            phase: 'deploy' ou 'combat' (gardé pour compatibilité V3, non utilisé pour feature[0])
-            buildings_count: nombre de bâtiments encore debout (optionnel)
+            phase: 'deploy' or 'combat' (kept for V3 compatibility, unused for feature[0])
+            buildings_count: number of buildings still standing (optional)
 
         Returns:
             combat_features: np.array (COMBAT_FEATURES_SIZE,)
-            raw_data: dict avec les données brutes pour le SpellCaster
+            raw_data: dict with raw data for SpellCaster
         """
         import time
 
@@ -286,7 +286,7 @@ class CombatObserver:
         scale_x = ADB_WIDTH / img_w
         scale_y = ADB_HEIGHT / img_h
 
-        # Feature 0: ratio bâtiments restants (0=tout détruit, 1=aucun détruit)
+        # Feature 0: remaining buildings ratio (0=all destroyed, 1=none destroyed)
         if self._initial_building_count > 0:
             features[0] = self._current_building_count / self._initial_building_count
         else:
@@ -296,65 +296,65 @@ class CombatObserver:
         if self._combat_start_time:
             elapsed = time.time() - self._combat_start_time
             features[1] = min(elapsed / self._max_combat_time, 1.0)
-        
-        # === DÉTECTION ===
+
+        # === DETECTION ===
         if self._troop_detector is not None:
             raw_data = self._observe_yolo(screenshot_pil, img_cv, scale_x, scale_y,
                                            features, village_center_adb)
         else:
             raw_data = self._observe_bars(img_cv, scale_x, scale_y,
                                            features, village_center_adb)
-        
-        # Features 11-14: Sorts restants (commun aux deux modes)
+
+        # Features 11-14: remaining spells (common to both modes)
         if spells_remaining:
             features[11] = min(spells_remaining.get('soin', 0) / 2.0, 1.0)
             features[12] = min(spells_remaining.get('rage', 0) / 3.0, 1.0)
             features[13] = min(spells_remaining.get('gel', 0) / 1.0, 1.0)
-        
+
         return features, raw_data
 
     # -----------------------------------------------------------------
-    #  V4 : observation via YOLO troupes
+    # V4: observation via YOLO troops
     # -----------------------------------------------------------------
     def _observe_yolo(self, screenshot_pil, img_cv, scale_x, scale_y,
                       features, village_center_adb):
-        """Remplit features[2-10] et raw_data via YOLO."""
+        """Fills features[2-10] and raw_data via YOLO."""
         grouped = self._troop_detector.detect_grouped(screenshot_pil)
-        
+
         all_dets = grouped['all']
         troops = grouped['troops']
         heroes = grouped['heroes']
-        
-        # Barres de vie pour les blessés (YOLO ne voit pas la santé)
+
+        # Health bars for injured detection (YOLO does not see health)
         hurt_pos, _ = detect_hurt_bars(img_cv)
         hurt_adb = [(int(x * scale_x), int(y * scale_y)) for x, y in hurt_pos]
-        
-        # Positions ADB de toutes les troupes YOLO
+
+        # ADB positions of all YOLO troops
         all_positions = [(d.x, d.y) for d in all_dets]
-        
-        # Feature 2: Troupes en vie (YOLO count, plus fiable)
+
+        # Feature 2: troops alive (YOLO count, more reliable)
         features[2] = min(len(troops) / 50.0, 1.0)
-        
-        # Feature 3: Troupes blessées (barres rouges proches d'une détection YOLO)
+
+        # Feature 3: injured troops (red bars near a YOLO detection)
         num_hurt = self._match_hurt_to_yolo(hurt_adb, all_positions)
         features[3] = min(num_hurt / 20.0, 1.0)
-        
-        # Feature 4: Héros en vie
+
+        # Feature 4: heroes alive
         features[4] = min(len(heroes) / 5.0, 1.0)
-        
+
         # Clustering
         clusters = _cluster_positions(all_positions)
         self._fill_cluster_features(features, clusters, all_positions, village_center_adb)
-        
-        # Feature 10: Hurt ratio
+
+        # Feature 10: hurt ratio
         total = len(all_dets)
         features[10] = num_hurt / max(total, 1)
-        
-        # Raw data enrichi pour SpellCaster V3
+
+        # Raw data for SpellCaster V3 compatibility
         hero_positions = {d.class_name: (d.x, d.y) for d in heroes}
-        
+
         raw_data = {
-            # Compat V3
+            # V3 compat
             'green_positions': [(d.x, d.y) for d in troops],
             'hurt_positions': hurt_adb,
             'hero_positions': [(d.x, d.y) for d in heroes],
@@ -362,27 +362,27 @@ class CombatObserver:
             'main_cluster': clusters[0]['center'] if clusters else None,
             'num_troops': total,
             'num_heroes': len(heroes),
-            # Nouveau V4
+            # V4
             'yolo_detections': all_dets,
             'yolo_grouped': grouped,
             'hero_positions_named': hero_positions,
-            # V4.1: comptage depuis les détections existantes (évite un 2e appel YOLO)
+            # V4.1: count from existing detections (avoids a second YOLO call)
             'troop_counts': self._count_from_detections(all_dets),
         }
-        
+
         if self.verbose:
             counts = {}
             for d in all_dets:
                 counts[d.class_name] = counts.get(d.class_name, 0) + 1
-            summary = ', '.join(f"{v}×{k}" for k, v in counts.items())
-            print(f"      👁️  YOLO: {summary} | {num_hurt} blessés | {len(clusters)} clusters")
-        
+            summary = ', '.join(f"{v}x{k}" for k, v in counts.items())
+            print(f" YOLO: {summary} | {num_hurt} injured | {len(clusters)} clusters")
+
         return raw_data
 
     def _match_hurt_to_yolo(self, hurt_adb, yolo_positions, radius=80):
         """
-        Compte les barres de vie rouges qui sont proches d'une détection YOLO.
-        Évite les faux positifs (bâtiments ennemis endommagés).
+        Counts red health bars that are close to a YOLO detection.
+        Avoids false positives from damaged enemy buildings.
         """
         count = 0
         for hx, hy in hurt_adb:
@@ -394,8 +394,8 @@ class CombatObserver:
 
     def _count_from_detections(self, detections):
         """
-        Compte les détections par classe sans re-lancer YOLO.
-        V4.1: remplace count_by_class() qui faisait une 2e inférence.
+        Counts detections by class without re-running YOLO.
+        V4.1: replaces count_by_class() which triggered a second inference.
         """
         counts = {}
         for d in detections:
@@ -403,28 +403,28 @@ class CombatObserver:
         return counts
 
     # -----------------------------------------------------------------
-    #  V3 fallback : observation via barres de vie HSV
+    # V3 fallback: observation via HSV health bars
     # -----------------------------------------------------------------
     def _observe_bars(self, img_cv, scale_x, scale_y, features, village_center_adb):
-        """Remplit features[2-10] et raw_data via barres de vie (V3)."""
+        """Fills features[2-10] and raw_data via health bars (V3)."""
         green_pos, _ = detect_troop_bars(img_cv)
         hurt_pos, _ = detect_hurt_bars(img_cv)
         hero_pos = detect_hero_bars(img_cv)
-        
+
         green_adb = [(int(x * scale_x), int(y * scale_y)) for x, y in green_pos]
         hurt_adb = [(int(x * scale_x), int(y * scale_y)) for x, y in hurt_pos]
         all_troops_adb = green_adb + hurt_adb
-        
+
         features[2] = min(len(green_pos) / 50.0, 1.0)
         features[3] = min(len(hurt_pos) / 20.0, 1.0)
         features[4] = min(len(hero_pos) / 5.0, 1.0)
-        
+
         clusters = _cluster_positions(all_troops_adb)
         self._fill_cluster_features(features, clusters, all_troops_adb, village_center_adb)
-        
+
         total_troops = len(green_pos) + len(hurt_pos)
         features[10] = len(hurt_pos) / max(total_troops, 1)
-        
+
         raw_data = {
             'green_positions': green_adb,
             'hurt_positions': hurt_adb,
@@ -434,28 +434,28 @@ class CombatObserver:
             'num_troops': total_troops,
             'num_heroes': len(hero_pos),
         }
-        
+
         if self.verbose:
-            print(f"      👁️  Barres: {len(green_pos)} saines, "
-                  f"{len(hurt_pos)} blessées, "
-                  f"{len(hero_pos)} héros, "
+            print(f" Bars: {len(green_pos)} healthy, "
+                  f"{len(hurt_pos)} injured, "
+                  f"{len(hero_pos)} heroes, "
                   f"{len(clusters)} clusters")
-        
+
         return raw_data
 
     # -----------------------------------------------------------------
-    #  Utilitaire commun : features de clusters
+    # Common utility: cluster features
     # -----------------------------------------------------------------
     def _fill_cluster_features(self, features, clusters, all_positions, village_center_adb):
-        """Remplit features[5-9] à partir des clusters."""
+        """Fills features[5-9] from clusters."""
         if not clusters:
             return
-        
+
         main = clusters[0]['center']
         features[5] = main[0] / ADB_WIDTH
         features[6] = main[1] / ADB_HEIGHT
         features[7] = min(len(clusters) / 5.0, 1.0)
-        
+
         if len(clusters) >= 2:
             positions = [c['center'] for c in clusters]
             max_dist = max(
@@ -464,7 +464,7 @@ class CombatObserver:
                 for p2 in positions[i+1:]
             )
             features[8] = min(max_dist / 1000.0, 1.0)
-        
+
         if village_center_adb and all_positions:
             vc = village_center_adb
             near_center = sum(
@@ -475,36 +475,36 @@ class CombatObserver:
 
 
 # =============================================================================
-#                            TEST
+# TEST
 # =============================================================================
 
 if __name__ == "__main__":
-    print("🧪 Test CombatObserver\n")
-    
+    print("Test CombatObserver\n")
+
     observer = CombatObserver()
     observer.start_combat()
-    
-    # Test avec image synthétique
+
+    # Test with synthetic image
     import time
     time.sleep(0.1)
-    
-    # Créer une image de test (noir avec quelques barres vertes)
+
+    # Create a test image (black with a few green bars)
     test_img = np.zeros((1080, 1920, 3), dtype=np.uint8)
-    # Simuler des barres de vie vertes
+    # Simulate green health bars
     for y in [300, 320, 350, 400, 410]:
         cv2.rectangle(test_img, (800, y), (840, y+4), (0, 200, 0), -1)
-    # Simuler des barres rouges
+    # Simulate red bars
     cv2.rectangle(test_img, (900, 380), (935, 384), (0, 0, 200), -1)
-    
+
     pil_img = Image.fromarray(cv2.cvtColor(test_img, cv2.COLOR_BGR2RGB))
-    
+
     features, raw = observer.observe(
         pil_img,
         village_center_adb=(960, 500),
         spells_remaining={'soin': 2, 'rage': 1, 'gel': 1},
         phase='combat'
     )
-    
+
     print(f"\nFeatures ({len(features)} dims):")
     labels = [
         'phase', 'progress', 'troops_alive', 'troops_hurt',
@@ -513,7 +513,7 @@ if __name__ == "__main__":
         'spell_heal', 'spell_rage', 'spell_freeze', 'pad'
     ]
     for i, (label, val) in enumerate(zip(labels, features)):
-        print(f"   [{i:2d}] {label:18s} = {val:.3f}")
-    
-    print(f"\nRaw: {raw['num_troops']} troupes, {raw['num_heroes']} héros")
-    print("✅ Test terminé !")
+        print(f" [{i:2d}] {label:18s} = {val:.3f}")
+
+    print(f"\nRaw: {raw['num_troops']} troops, {raw['num_heroes']} heroes")
+    print("Test done!")

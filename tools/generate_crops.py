@@ -13,17 +13,17 @@ output_dir = os.path.join(project_root, 'dataset_cnn')
 
 conf_threshold = 0.4
 
-print(f"Chargement du modèle : {model_path}")
+print(f"Loading model: {model_path}")
 model = YOLO(model_path)
 
 if os.path.exists(output_dir):
-    print(f"🧹 Nettoyage du dossier existant : {output_dir}")
+    print(f"Cleaning existing folder: {output_dir}")
     shutil.rmtree(output_dir)
 
 os.makedirs(output_dir)
 
 img_files = glob.glob(os.path.join(source_images, "*.jpg")) + glob.glob(os.path.join(source_images, "*.png"))
-print(f"Extraction sur {len(img_files)} images...")
+print(f"Extracting from {len(img_files)} images...")
 
 count = 0
 for img_path in tqdm(img_files):
@@ -54,4 +54,4 @@ for img_path in tqdm(img_files):
         cv2.imwrite(save_path, crop)
         count += 1
 
-print(f"Terminé ! {count} vignettes extraites dans '{output_dir}'")
+print(f"Done! {count} crops extracted to '{output_dir}'")

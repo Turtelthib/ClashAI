@@ -36,13 +36,13 @@ full_dataset = datasets.ImageFolder(root=DATA_DIR, transform=transform)
 classes = full_dataset.classes
 num_classes = len(classes)
 
-# Sauvegarde de la liste des classes
+# Save the class list
 json_path = os.path.join(WEIGHTS_DIR, 'classes.json')
 print(f"Sauvegarde de la liste des classes dans '{json_path}'...")
 with open(json_path, 'w') as f:
     json.dump(classes, f)
 
-print(f"📂 {num_classes} classes trouvées.")
+print(f"{num_classes} classes trouvées.")
 
 train_size = int(0.8 * len(full_dataset))
 val_size = len(full_dataset) - train_size
@@ -51,13 +51,13 @@ train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
-# --- MODÈLE ---
+# --- MODEL ---
 model = MyCustomCNN(num_classes).to(DEVICE)
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS) 
 
-# --- ENTRAÎNEMENT ---
+# --- TRAINING ---
 print("\n🔥 Démarrage de l'entraînement...")
 
 for epoch in range(EPOCHS):
@@ -82,11 +82,11 @@ for epoch in range(EPOCHS):
         correct += (predicted == labels).sum().item()
         loop.set_postfix(loss=loss.item())
 
-    print(f"   --> Train Accuracy: {100 * correct / total:.2f}%")
+    print(f" --> Train Accuracy: {100 * correct / total:.2f}%")
     scheduler.step()
 
-# --- SAUVEGARDE ---
+# --- SAVE ---
 pth_path = os.path.join(WEIGHTS_DIR, "building_cnn.pth")
-print(f"\n💾 Sauvegarde du modèle dans '{pth_path}'...")
+print(f"\nSauvegarde du modèle dans '{pth_path}'...")
 torch.save(model.state_dict(), pth_path)
-print("✅ Terminé !")
+print("Terminé !")

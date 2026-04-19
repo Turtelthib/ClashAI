@@ -1,17 +1,17 @@
 # scripts/rl/train_rl_v3.py
-# Boucle d'entraînement V3 pour ClashAI — IA réactive mid-combat.
+# V3 training loop for ClashAI — reactive mid-combat AI.
 #
-# Changements vs V2 :
-#   - L'agent opère en 2 phases (deploy + combat)
-#   - Logs enrichis avec stats combat (abilities, combat steps)
-#   - Compatible avec les checkpoints V2 (chargement partiel)
+# Changes vs V2:
+# - Agent operates in 2 phases (deploy + combat)
+# - Enriched logs with combat stats (abilities, combat steps)
+# - Compatible with V2 checkpoints (partial loading)
 #
-# Usage :
-#   python scripts/rl/train_rl_v3.py                     (RL)
-#   python scripts/rl/train_rl_v3.py --heuristic          (baseline)
-#   python scripts/rl/train_rl_v3.py --resume              (reprendre)
-#   python scripts/rl/train_rl_v3.py --episodes 50
-#   python scripts/rl/train_rl_v3.py --from-v2 weights/rl_v2/agent_v2_best.pth
+# Usage:
+# python scripts/rl/train_rl_v3.py (RL)
+# python scripts/rl/train_rl_v3.py --heuristic (baseline)
+# python scripts/rl/train_rl_v3.py --resume (resume)
+# python scripts/rl/train_rl_v3.py --episodes 50
+# python scripts/rl/train_rl_v3.py --from-v2 weights/rl_v2/agent_v2_best.pth
 
 import os
 import time
@@ -31,7 +31,7 @@ from clashai.combat.agent import (
 
 
 # =============================================================================
-#                         CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
 DEFAULT_EPISODES = 100
@@ -46,7 +46,7 @@ LOG_PATH = os.path.join(RL_DIR, 'training_log_v3.json')
 
 
 # =============================================================================
-#                        LOGGING
+# LOGGING
 # =============================================================================
 
 class TrainingLogger:
@@ -64,16 +64,16 @@ class TrainingLogger:
                 self.episodes = data.get('episodes', [])
                 self.updates = data.get('updates', [])
                 self.best_reward = data.get('best_reward', -float('inf'))
-                print(f"📊 Log chargé : {len(self.episodes)} épisodes, "
+                print(f"Log chargé : {len(self.episodes)} épisodes, "
                       f"best reward = {self.best_reward:.0f}")
             except (json.JSONDecodeError, Exception) as e:
-                print(f"⚠️  Log corrompu ({e}), nouveau log")
+                print(f"WARNING: Log corrompu ({e}), nouveau log")
 
     def start(self):
         self.start_time = time.time()
 
     def log_episode(self, ep_num, info):
-        """Log un épisode. Retourne True si c'est un nouveau record."""
+        """Logs an episode. Returns True if it is a new record."""
         entry = {
             'episode': ep_num,
             'timestamp': datetime.now().isoformat(),
@@ -100,7 +100,7 @@ class TrainingLogger:
         return is_best
 
     def log_update(self, stats):
-        """Log une PPO update."""
+        """Logs a PPO update."""
         entry = {
             'update': stats['update'],
             'timestamp': datetime.now().isoformat(),
@@ -125,7 +125,7 @@ class TrainingLogger:
         os.replace(tmp_path, self.log_path)
 
     def print_summary(self, last_n=10):
-        """Affiche un résumé des derniers épisodes."""
+        """Displays a summary of the last episodes."""
         recent = self.episodes[-last_n:]
         if not recent:
             return
@@ -136,66 +136,66 @@ class TrainingLogger:
         abilities = [e.get('abilities_used', 0) for e in recent]
         combat_steps = [e.get('combat_steps', 0) for e in recent]
 
-        print(f"\n   📈 Derniers {len(recent)} épisodes :")
-        print(f"      Reward moyen  : {np.mean(rewards):.0f} "
+        print(f"\n Derniers {len(recent)} épisodes :")
+        print(f" Reward moyen : {np.mean(rewards):.0f} "
               f"(min={min(rewards):.0f}, max={max(rewards):.0f})")
-        print(f"      Stars         : {dict(zip(*np.unique(stars, return_counts=True)))}")
-        print(f"      Destruction   : {np.mean(pcts):.1f}%")
-        print(f"      Abilities/ep  : {np.mean(abilities):.1f}")
-        print(f"      Combat steps  : {np.mean(combat_steps):.1f}")
-        print(f"      Best all-time : {self.best_reward:.0f}")
+        print(f" Stars : {dict(zip(*np.unique(stars, return_counts=True)))}")
+        print(f" Destruction : {np.mean(pcts):.1f}%")
+        print(f" Abilities/ep : {np.mean(abilities):.1f}")
+        print(f" Combat steps : {np.mean(combat_steps):.1f}")
+        print(f" Best all-time : {self.best_reward:.0f}")
 
 
 # =============================================================================
-#                       MAIN TRAINING LOOP
+# MAIN TRAINING LOOP
 # =============================================================================
 
 def train(num_episodes=DEFAULT_EPISODES, mode='rl', resume=False,
           from_v2=None):
     """
-    Boucle principale d'entraînement V3.
-    
+    Main V3 training loop.
+
     Args:
-        num_episodes: nombre d'épisodes à jouer
-        mode: 'rl' ou 'heuristic'
-        resume: reprendre depuis le checkpoint V3
-        from_v2: chemin vers un checkpoint V2 (chargement partiel)
+        num_episodes: number of episodes to play
+        mode: 'rl' or 'heuristic'
+        resume: resume from the V3 checkpoint
+        from_v2: path to a V2 checkpoint (partial loading)
     """
     os.makedirs(RL_DIR, exist_ok=True)
 
     print(f"\n{'='*60}")
-    print(f"  ClashAI V3 — Entraînement {mode.upper()}")
-    print(f"  {num_episodes} épisodes")
+    print(f" ClashAI V3 — Entraînement {mode.upper()}")
+    print(f" {num_episodes} épisodes")
     print(f"{'='*60}\n")
 
-    # 1. Charger les modèles de perception
-    print("📦 Chargement des modèles de perception...")
+    # 1. Load perception models
+    print("Chargement des modèles de perception...")
     from clashai.navigation import game_loop
     models = game_loop.load_models()
 
-    # 2. Créer l'environnement V3
+    # 2. Create the V3 environment
     env = ClashEnvV3(models=models, verbose=True)
 
-    # 3. Créer l'agent V3
+    # 3. Create the V3 agent
     agent = PPOAgentV3()
 
     if resume:
         if agent.load(CHECKPOINT_PATH):
-            print("✅ Reprise depuis le checkpoint V3")
+            print("Reprise depuis le checkpoint V3")
         else:
-            print("⚠️  Pas de checkpoint V3, démarrage from scratch")
+            print("WARNING: Pas de checkpoint V3, démarrage from scratch")
     elif from_v2:
         if agent.load(from_v2):
-            print(f"✅ Chargement partiel depuis V2 : {from_v2}")
+            print(f"Chargement partiel depuis V2 : {from_v2}")
         else:
-            print("⚠️  Chargement V2 échoué, démarrage from scratch")
+            print("WARNING: Chargement V2 échoué, démarrage from scratch")
 
     # 4. Logger
     logger = TrainingLogger()
     logger.start()
     start_episode = len(logger.episodes)
 
-    print(f"\n🚀 Début V3 (épisode {start_episode+1} → "
+    print(f"\nDébut V3 (épisode {start_episode+1} → "
           f"{start_episode+num_episodes})\n")
 
     try:
@@ -204,7 +204,7 @@ def train(num_episodes=DEFAULT_EPISODES, mode='rl', resume=False,
             ep_start = time.time()
 
             print(f"\n{'='*60}")
-            print(f"  ÉPISODE #{ep_num} ({mode})")
+            print(f" ÉPISODE #{ep_num} ({mode})")
             print(f"{'='*60}")
 
             # Reset
@@ -214,10 +214,10 @@ def train(num_episodes=DEFAULT_EPISODES, mode='rl', resume=False,
             if mode == 'rl':
                 agent.buffer.start_episode()
 
-            # --- Boucle de décisions (deploy + combat) ---
+            # --- Decision loop (deploy + combat) ---
             if mode == 'heuristic':
                 heuristic_actions = env.get_heuristic_sequence()
-                print(f"   🧠 Heuristique : {len(heuristic_actions)} actions")
+                print(f" Heuristique : {len(heuristic_actions)} actions")
 
                 for action in heuristic_actions:
                     obs, mask, reward, done, info = env.step(action)
@@ -225,7 +225,7 @@ def train(num_episodes=DEFAULT_EPISODES, mode='rl', resume=False,
                     if done:
                         break
             else:
-                # RL : l'agent décide dans les deux phases
+                # RL: the agent decides in both phases
                 for step in range(MAX_STEPS_PER_EPISODE):
                     action, log_prob, value = agent.select_action(
                         grid, vector, mask
@@ -238,13 +238,13 @@ def train(num_episodes=DEFAULT_EPISODES, mode='rl', resume=False,
                     if done:
                         break
 
-                # Terminer l'épisode
+                # End the episode
                 combat_reward = info.get('combat_reward', reward)
                 step_rewards = env.get_step_rewards()
                 agent.buffer.end_episode(combat_reward, step_rewards)
                 agent.total_episodes += 1
 
-            # --- Logger ---
+            # --- Logging ---
             is_best = logger.log_episode(ep_num, info)
             ep_duration = time.time() - ep_start
 
@@ -258,22 +258,22 @@ def train(num_episodes=DEFAULT_EPISODES, mode='rl', resume=False,
                 combat_str = (f" | combat={info['combat_steps']}steps"
                              f" abilities={info.get('abilities_used', 0)}")
 
-            best_marker = " 🏆 RECORD !" if is_best else ""
+            best_marker = " RECORD !" if is_best else ""
 
-            print(f"\n   📊 Ep #{ep_num}: "
-                  f"{info.get('stars', 0)}⭐ {info.get('percentage', 0)}% "
+            print(f"\n Ep #{ep_num}: "
+                  f"{info.get('stars', 0)}* {info.get('percentage', 0)}% "
                   f"reward={info.get('reward', 0):.0f}{shaping_str}"
                   f"{combat_str}"
                   f" ({ep_duration:.0f}s){best_marker}")
 
             # --- PPO Update ---
             if mode == 'rl' and agent.buffer_ready():
-                print(f"\n   🔄 PPO Update "
+                print(f"\n PPO Update "
                       f"({agent.buffer.total_steps()} steps)...")
                 stats = agent.update()
                 if stats:
                     logger.log_update(stats)
-                    print(f"   ✅ Update #{stats['update']}: "
+                    print(f" Update #{stats['update']}: "
                           f"policy={stats['policy_loss']:.4f} "
                           f"value={stats['value_loss']:.4f} "
                           f"entropy={stats['entropy']:.4f}")
@@ -284,42 +284,42 @@ def train(num_episodes=DEFAULT_EPISODES, mode='rl', resume=False,
                 if is_best:
                     agent.save(BEST_PATH)
 
-            # --- Résumé périodique ---
+            # --- Periodic summary ---
             if ep_num % 10 == 0:
                 logger.print_summary()
 
     except KeyboardInterrupt:
-        print("\n\n⛔ Arrêt demandé (Ctrl+C)")
+        print("\n\nArrêt demandé (Ctrl+C)")
         if mode == 'rl':
             agent.save(CHECKPOINT_PATH)
-            print("💾 Checkpoint sauvegardé")
+            print("Checkpoint sauvegardé")
 
     finally:
         env.close()
 
-    # Résumé final
+    # Final summary
     logger.print_summary(last_n=20)
-    print("\n✅ Entraînement V3 terminé !")
-    print(f"   Épisodes     : {num_episodes}")
-    print(f"   Best reward  : {logger.best_reward:.0f}")
-    print(f"   Checkpoint   : {CHECKPOINT_PATH}")
-    print(f"   Best agent   : {BEST_PATH}")
-    print(f"   Logs         : {LOG_PATH}")
+    print("\nEntraînement V3 terminé !")
+    print(f" Épisodes : {num_episodes}")
+    print(f" Best reward : {logger.best_reward:.0f}")
+    print(f" Checkpoint : {CHECKPOINT_PATH}")
+    print(f" Best agent : {BEST_PATH}")
+    print(f" Logs : {LOG_PATH}")
 
 
 # =============================================================================
-#                        MAIN
+# MAIN
 # =============================================================================
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ClashAI V3 Training")
     parser.add_argument('--episodes', type=int, default=DEFAULT_EPISODES)
     parser.add_argument('--heuristic', action='store_true',
-                        help="Mode heuristique (baseline)")
+                        help="Heuristic mode (baseline)")
     parser.add_argument('--resume', action='store_true',
-                        help="Reprendre depuis le checkpoint V3")
+                        help="Resume from the V3 checkpoint")
     parser.add_argument('--from-v2', type=str, default=None,
-                        help="Charger un checkpoint V2 (partiel)")
+                        help="Load a V2 checkpoint (partial)")
 
     args = parser.parse_args()
 

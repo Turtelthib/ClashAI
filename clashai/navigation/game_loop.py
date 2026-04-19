@@ -1,8 +1,8 @@
 # scripts/game_loop.py
-# Boucle principale de l'IA ClashAI
-# Usage :
-#   Mode test (images statiques) : python scripts/game_loop.py --test test_img/mon_screen.png
-#   Mode live (ADB)              : python scripts/game_loop.py --live
+# Main loop of the ClashAI agent
+# Usage:
+# Test mode (static images): python scripts/game_loop.py --test test_img/my_screen.png
+# Live mode (ADB): python scripts/game_loop.py --live
 
 import os
 import sys
@@ -23,7 +23,7 @@ from clashai.perception.screen_classifier import MyCustomCNN
 
 
 # =============================================================================
-#                           CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
 from clashai.paths import PROJECT_ROOT, WEIGHTS_DIR
@@ -31,33 +31,33 @@ from clashai.paths import PROJECT_ROOT, WEIGHTS_DIR
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Seuils de confiance
-SCREEN_CONFIDENCE_THRESHOLD = 0.60   # Minimum pour accepter un état d'écran
-BUILDING_CONFIDENCE_THRESHOLD = 0.50 # Minimum pour accepter un bâtiment
+SCREEN_CONFIDENCE_THRESHOLD = 0.60
+BUILDING_CONFIDENCE_THRESHOLD = 0.50
 YOLO_CONF = 0.25
-YOLO_IOU = 0.50  # NMS quasi-désactivé (bâtiments collés dans CoC)
+YOLO_IOU = 0.50
 
-# Délais ADB (en secondes)
-ADB_DELAY_TAP = 0.1          # Pause après un tap
-ADB_DELAY_SCREENSHOT = 0.2   # Pause entre chaque capture
-ADB_DELAY_NAVIGATION = 1.0   # Pause après une navigation de menu
-ADB_DELAY_MATCHMAKING = 3.0  # Pause pendant la recherche d'adversaire
+# ADB delays (in seconds)
+ADB_DELAY_TAP = 0.1
+ADB_DELAY_SCREENSHOT = 0.2
+ADB_DELAY_NAVIGATION = 1.0
+ADB_DELAY_MATCHMAKING = 3.0
 
 
 # =============================================================================
-#                       CHARGEMENT DES MODÈLES
+# MODEL LOADING
 # =============================================================================
 
 def load_models():
-    """Charge les 3 modèles : CNN écran, YOLO, CNN bâtiments."""
+    """Loads the 3 models: screen CNN, YOLO, building CNN."""
     models = {}
 
-    # --- 1) CNN État d'écran ---
-    print("🖥️  Chargement du CNN état d'écran...")
+    # --- 1) Screen state CNN ---
+    print(" Loading screen state CNN...")
     screen_classes_path = os.path.join(WEIGHTS_DIR, 'screen_classes.json')
     screen_weights_path = os.path.join(WEIGHTS_DIR, 'screen_cnn.pth')
 
     if not os.path.exists(screen_classes_path) or not os.path.exists(screen_weights_path):
-        print("❌ ERREUR : screen_cnn.pth ou screen_classes.json introuvable !")
+        print("ERROR: ERREUR : screen_cnn.pth ou screen_classes.json introuvable !")
         print("👉 Lancez d'abord 'python scripts/train_screen_cnn.py'")
         sys.exit(1)
 
@@ -68,28 +68,28 @@ def load_models():
     screen_cnn.load_state_dict(torch.load(screen_weights_path, map_location=DEVICE))
     screen_cnn.eval()
     models['screen_cnn'] = screen_cnn
-    print(f"   ✅ {len(models['screen_classes'])} états chargés : {models['screen_classes']}")
+    print(f" {len(models['screen_classes'])} états chargés : {models['screen_classes']}")
 
-    # --- 2) YOLO Détection ---
-    print("🔍 Chargement de YOLO11...")
+    # --- 2) YOLO Detection ---
+    print("Loading YOLO11...")
     yolo_path = os.path.join(WEIGHTS_DIR, 'best.pt')
     if not os.path.exists(yolo_path):
-        # Fallback : chercher dans runs/
+        # Fallback: look in runs/
         yolo_path = os.path.join(PROJECT_ROOT, 'runs', 'detect', 'FinishedTrain', 'weights', 'best.pt')
     if not os.path.exists(yolo_path):
-        print("❌ ERREUR : best.pt introuvable !")
+        print("ERROR: ERREUR : best.pt introuvable !")
         sys.exit(1)
 
     models['yolo'] = YOLO(yolo_path)
-    print("   ✅ YOLO chargé")
+    print(" YOLO chargé")
 
-    # --- 3) CNN Bâtiments ---
-    print("🏰 Chargement du CNN bâtiments...")
+    # --- 3) Building CNN ---
+    print("Loading building CNN...")
     building_classes_path = os.path.join(WEIGHTS_DIR, 'classes.json')
     building_weights_path = os.path.join(WEIGHTS_DIR, 'building_cnn.pth')
 
     if not os.path.exists(building_classes_path) or not os.path.exists(building_weights_path):
-        print("❌ ERREUR : building_cnn.pth ou classes.json introuvable !")
+        print("ERROR: ERREUR : building_cnn.pth ou classes.json introuvable !")
         sys.exit(1)
 
     with open(building_classes_path) as f:
@@ -99,14 +99,14 @@ def load_models():
     building_cnn.load_state_dict(torch.load(building_weights_path, map_location=DEVICE))
     building_cnn.eval()
     models['building_cnn'] = building_cnn
-    print(f"   ✅ {len(models['building_classes'])} classes de bâtiments chargées")
+    print(f" {len(models['building_classes'])} building classes loaded")
 
-    print(f"\n🧠 Tous les modèles sont chargés sur {DEVICE}\n")
+    print(f"\nTous les modèles sont chargés sur {DEVICE}\n")
     return models
 
 
 # =============================================================================
-#                          TRANSFORMS
+# TRANSFORMS
 # =============================================================================
 
 screen_transform = transforms.Compose([
@@ -123,13 +123,13 @@ building_transform = transforms.Compose([
 
 
 # =============================================================================
-#                     FONCTIONS D'ANALYSE
+# ANALYSIS FUNCTIONS
 # =============================================================================
 
 def classify_screen(img_pil, models):
     """
-    Détermine l'état actuel de l'écran.
-    Retourne (état, confiance).
+    Determines the current screen state.
+    Returns (state, confidence).
     """
     tensor = screen_transform(img_pil).unsqueeze(0).to(DEVICE)
     with torch.no_grad():
@@ -144,10 +144,10 @@ def classify_screen(img_pil, models):
 
 def analyze_village(img_pil, models):
     """
-    Détecte et classifie tous les bâtiments sur l'image.
-    Retourne une liste de dictionnaires {class, confidence, bbox, center}.
+    Detects and classifies all buildings in the image.
+    Returns a list of dicts {class, confidence, bbox, center}.
     """
-    # YOLO détection
+    # YOLO detection
     img_np = np.array(img_pil)
     results = models['yolo'].predict(img_np, conf=YOLO_CONF, iou=YOLO_IOU, verbose=False)
     
@@ -160,7 +160,7 @@ def analyze_village(img_pil, models):
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(w, x2), min(h, y2)
 
-        # Crop et classification CNN
+        # Crop and CNN classification
         crop = img_pil.crop((x1, y1, x2, y2))
         tensor = building_transform(crop).unsqueeze(0).to(DEVICE)
 
@@ -172,7 +172,7 @@ def analyze_village(img_pil, models):
 
         label = models['building_classes'][idx]
 
-        # Filtrer les classes inutiles et confiance trop basse
+        # Filter out useless classes and low confidence
         if label in ('useless', 'ignore'):
             continue
         if confidence < BUILDING_CONFIDENCE_THRESHOLD:
@@ -189,12 +189,12 @@ def analyze_village(img_pil, models):
 
 
 def get_village_summary(buildings):
-    """Résumé lisible des bâtiments détectés."""
+    """Human-readable summary of detected buildings."""
     counts = {}
     for b in buildings:
         counts[b['class']] = counts.get(b['class'], 0) + 1
 
-    # Trier par type : défenses d'abord, puis ressources, puis autres
+    # Sort by type: defenses first, then resources, then others
     defenses = ['hdv', 'tour_enfer_mono', 'tour_enfer_multiple', 'aigle_artilleur',
                 'catapulte_erratique', 'arcX_sol', 'arcX_sol_air', 'monolithe',
                 'tour_archere', 'canon', 'mortier', 'multi_mortier', 'tour_sorcier',
@@ -217,38 +217,38 @@ def get_village_summary(buildings):
 
 
 def adb_check_connection():
-    """Vérifie que ADB est connecté à un appareil."""
+    """Checks that ADB is connected to a device."""
     try:
         result = subprocess.run(
             ["adb", "devices"],
             capture_output=True, text=True, timeout=5
         )
-        output = result.stdout.replace('\r', '')  # Fix Windows \r\n
+        output = result.stdout.replace('\r', '')
         lines = output.strip().split('\n')
-        # Chercher les lignes contenant "device" mais pas "devices" (header)
-        devices = [l.strip() for l in lines if '\tdevice' in l or '  device' in l]
+        # Look for lines containing "device" but not "devices" (header)
+        devices = [l.strip() for l in lines if '\tdevice' in l or ' device' in l]
         if devices:
             device_name = devices[0].split()[0]
             print(f"📱 ADB connecté : {device_name}")
             return True
         else:
-            print("❌ Aucun appareil ADB détecté.")
-            print(f"   (sortie adb: {repr(result.stdout[:200])})")
+            print("ERROR: Aucun appareil ADB détecté.")
+            print(f" (sortie adb: {repr(result.stdout[:200])})")
             print("👉 Lancez le Developer Emulator et exécutez : adb connect localhost:6520")
             return False
     except FileNotFoundError:
-        print("❌ ADB n'est pas installé ou pas dans le PATH.")
+        print("ERROR: ADB n'est pas installé ou pas dans le PATH.")
         return False
     except subprocess.TimeoutExpired:
-        print("❌ ADB ne répond pas (timeout).")
+        print("ERROR: ADB ne répond pas (timeout).")
         return False
 
 
 def adb_screenshot():
-    """Capture l'écran via ADB et retourne une image PIL.
-    Utilise le format raw pour plus de rapidité."""
+    """Captures the screen via ADB and returns a PIL image.
+    Uses raw format for better speed."""
     try:
-        # Format PNG (plus lent mais plus fiable)
+        # PNG format (slower but more reliable)
         result = subprocess.run(
             ["adb", "exec-out", "screencap", "-p"],
             capture_output=True, timeout=5
@@ -257,18 +257,18 @@ def adb_screenshot():
             return None
         return Image.open(io.BytesIO(result.stdout)).convert("RGB")
     except Exception as e:
-        print(f"⚠️  Erreur capture : {e}")
+        print(f"WARNING: Erreur capture : {e}")
         return None
 
 
 def adb_tap(x, y):
-    """Effectue un tap à la position (x, y)."""
+    """Performs a tap at position (x, y)."""
     subprocess.run(["adb", "shell", f"input tap {x} {y}"], timeout=5)
     time.sleep(ADB_DELAY_TAP)
 
 
 def adb_swipe(x1, y1, x2, y2, duration_ms=300):
-    """Effectue un swipe."""
+    """Performs a swipe."""
     subprocess.run(
         ["adb", "shell", f"input swipe {x1} {y1} {x2} {y2} {duration_ms}"],
         timeout=5
@@ -283,47 +283,47 @@ def adb_key(keycode):
 
 
 # =============================================================================
-#                    LOGIQUE DE NAVIGATION
+# NAVIGATION LOGIC
 # =============================================================================
-# Coordonnées calibrées pour Google Play Games Developer Emulator
-# Résolution : 1920x1080 (adb shell wm size)
+# Coordinates calibrated for Google Play Games Developer Emulator
+# Resolution: 1920x1080 (adb shell wm size)
 
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1080
 
-# Coordonnées des boutons (calibrées sur captures réelles)
+# Button coordinates (calibrated on real captures)
 BUTTONS = {
-    # Village principal (village_home)
-    'attaquer':             (80, 950),     # Bouton "Attaquer" en bas à gauche
+    # Main village (village_home)
+    'attaquer': (80, 950),
 
-    # Menu de sélection d'attaque (recherche_adversaire)
-    'trouver_partie':       (235, 780),    # Bouton jaune "Trouver une partie 1200"
+    # Attack selection menu (recherche_adversaire)
+    'trouver_partie': (235, 780),
 
-    # Écran préparation armée (prep_attaque)
-    'lancer_attaque':       (1630, 930),   # Bouton vert "Combat" en bas à droite
-    'fermer_prep':          (1355, 95),    # Croix rouge X pour fermer
+    # Army preparation screen (prep_attaque)
+    'lancer_attaque': (1630, 930),
+    'fermer_prep': (1355, 95),
 
-    # Scout village ennemi (phase_attaque — avant déploiement)
-    'suivant':              (1640, 850),   # Bouton "Suivant" (skip l'adversaire)
-    'terminer_bataille':    (75, 650),     # Bouton rouge "Terminer la bataille"
+    # Scout enemy village (phase_attaque — before deployment)
+    'suivant': (1640, 850),
+    'terminer_bataille': (75, 650),
 
-    # Résultats d'attaque
-    'fin_combat':           (960, 800),    # Bouton pour quitter l'écran résultats
+    # Attack results
+    'fin_combat': (960, 800),
 
-    # Navigation générale
-    'retour':               (50, 50),      # Coin haut-gauche (retour/fermer)
-    'centre_ecran':         (960, 540),    # Centre de l'écran (fermer popups)
+    # General navigation
+    'retour': (50, 50),
+    'centre_ecran': (960, 540),
 }
 
 
 def handle_state(state, confidence, models, img_pil=None):
     """
-    Décide quoi faire en fonction de l'état détecté.
-    
-    Flow du jeu :
-    village_home → [tap Attaquer] → recherche_adversaire → [tap Trouver une partie]
-    → prep_attaque → [tap Attaquer vert] → chargement → phase_attaque (scout)
-    → [analyser village, RL décide] → resultats_attaque → [tap fermer] → village_home
+    Decides what to do based on the detected state.
+
+    Game flow:
+    village_home → [tap Attack] → recherche_adversaire → [tap Find a match]
+    → prep_attaque → [tap green Attack] → chargement → phase_attaque (scout)
+    → [analyze village, RL decides] → resultats_attaque → [tap close] → village_home
     """
     result = {
         'state': state,
@@ -334,51 +334,51 @@ def handle_state(state, confidence, models, img_pil=None):
     }
 
     if state == 'village_home':
-        # → On est chez nous. Ouvrir le menu d'attaque.
+        # → We are home. Open the attack menu.
         result['action'] = 'tap_attaquer'
-        print("🏠 Village principal détecté → Ouverture du menu attaque")
+        print("Village principal détecté → Ouverture du menu attaque")
 
     elif state == 'recherche_adversaire':
-        # → Menu Combat / Combat classé. Lancer la recherche.
+        # → Combat / Ranked combat menu. Start matchmaking.
         result['action'] = 'tap_trouver_partie'
-        print("🔍 Menu attaque détecté → Recherche d'un adversaire")
+        print("Menu attaque détecté → Recherche d'un adversaire")
 
     elif state == 'prep_attaque':
-        # → Écran armée avec le bouton vert Attaquer. Lancer !
+        # → Army screen with the green Attack button. Launch!
         result['action'] = 'tap_lancer_attaque'
-        print("⚔️  Préparation armée détectée → Lancement de l'attaque")
+        print("⚔ Préparation armée détectée → Lancement de l'attaque")
 
     elif state == 'phase_attaque':
         if img_pil is not None:
-            print("🎯 Village ennemi en vue → Attente 3s (décorations)...")
+            print("Village ennemi en vue → Attente 3s (décorations)...")
             time.sleep(3)
-            # Reprendre une capture fraîche après l'attente
+            # Take a fresh capture after the wait
             fresh_img = adb_screenshot()
             if fresh_img is not None:
                 img_pil = fresh_img
-            print("🎯 Analyse des bâtiments...")
+            print("Analyse des bâtiments...")
             buildings = analyze_village(img_pil, models)
             summary = get_village_summary(buildings)
             result['buildings'] = buildings
             result['summary'] = summary
             result['action'] = 'analyze_village'
 
-            print(f"   🏰 {summary['total']} bâtiments détectés")
-            print(f"   ⚔️  {summary['defenses']} défenses")
-            print(f"   💰 {summary['ressources']} bâtiments de ressources")
+            print(f" {summary['total']} bâtiments détectés")
+            print(f" ⚔ {summary['defenses']} défenses")
+            print(f" 💰 {summary['ressources']} bâtiments de ressources")
 
             for cls, count in sorted(summary['details'].items()):
-                print(f"      {cls}: {count}")
+                print(f" {cls}: {count}")
 
-            # → Plus tard : l'agent RL décidera ici (attaquer ou Suivant)
+            # → Later: the RL agent will decide here (attack or Next)
         else:
             result['action'] = 'need_screenshot'
 
     elif state == 'resultats_attaque':
-        # → Combat terminé. Fermer et retourner au village.
+        # → Combat over. Close and return to village.
         result['action'] = 'tap_fin_combat'
-        print("⭐ Résultats d'attaque détectés → Retour au village")
-        # → Plus tard : extraire étoiles/% pour la récompense RL
+        print("* Résultats d'attaque détectés → Retour au village")
+        # → Later: extract stars/% for the RL reward
 
     elif state == 'chargement':
         result['action'] = 'wait'
@@ -404,27 +404,27 @@ def run_test(image_path, models):
     Fait exactement ce que fera le mode live, mais sans ADB.
     """
     print(f"\n{'='*60}")
-    print(f"  MODE TEST — Analyse de : {image_path}")
+    print(f" MODE TEST — Analyse de : {image_path}")
     print(f"{'='*60}\n")
 
     if not os.path.exists(image_path):
-        print(f"❌ Image introuvable : {image_path}")
+        print(f"ERROR: Image introuvable : {image_path}")
         return
 
     img_cv = cv2.imread(image_path)
     if img_cv is None:
-        print(f"❌ Impossible de lire : {image_path}")
+        print(f"ERROR: Impossible de lire : {image_path}")
         return
 
     img_rgb = cv2.cvtColor(img_cv, cv2.COLOR_BGR2RGB)
     img_pil = Image.fromarray(img_rgb)
 
     state, confidence = classify_screen(img_pil, models)
-    print(f"📍 État détecté : {state} ({confidence:.1%})")
+    print(f"État détecté : {state} ({confidence:.1%})")
 
     if confidence < SCREEN_CONFIDENCE_THRESHOLD:
-        print(f"⚠️  Confiance trop basse ({confidence:.1%} < {SCREEN_CONFIDENCE_THRESHOLD:.0%})")
-        print("   L'IA n'est pas sûre de l'état d'écran.")
+        print(f"WARNING: Confiance trop basse ({confidence:.1%} < {SCREEN_CONFIDENCE_THRESHOLD:.0%})")
+        print(" L'IA n'est pas sûre de l'état d'écran.")
 
     result = handle_state(state, confidence, models, img_pil)
 
@@ -441,10 +441,10 @@ def run_test(image_path, models):
 
         output_path = "GameLoop_Result.jpg"
         cv2.imwrite(output_path, annotated)
-        print(f"\n🖼️  Image annotée sauvegardée : {output_path}")
+        print(f"\n🖼 Image annotée sauvegardée : {output_path}")
 
     print(f"\n{'='*60}")
-    print(f"  RÉSULTAT : état={state} | action={result['action']}")
+    print(f" RÉSULTAT : état={state} | action={result['action']}")
     print(f"{'='*60}")
 
     return result
@@ -452,17 +452,17 @@ def run_test(image_path, models):
 
 def run_live(models):
     """
-    Mode live : boucle autonome avec ADB.
-    Capture l'écran → Analyse → Décision → Action → Répète.
+    Live mode: autonomous ADB loop.
+    Capture screen → Analyze → Decide → Act → Repeat.
     """
     print(f"\n{'='*60}")
-    print("  MODE LIVE — Boucle autonome ADB")
+    print(" MODE LIVE — Boucle autonome ADB")
     print(f"{'='*60}\n")
 
     print("📱 Connexion à Google Play Games Developer Emulator...")
     connect_result = subprocess.run(["adb", "connect", "localhost:6520"],
                                     capture_output=True, text=True, timeout=5)
-    print(f"   → {connect_result.stdout.strip()}")
+    print(f" → {connect_result.stdout.strip()}")
     time.sleep(1)
 
     if not adb_check_connection():
@@ -477,7 +477,7 @@ def run_live(models):
     except:
         pass
 
-    print("\n🚀 Démarrage de la boucle... (Ctrl+C pour arrêter)\n")
+    print("\nDémarrage de la boucle... (Ctrl+C pour arrêter)\n")
 
     frame_count = 0
     try:
@@ -487,12 +487,12 @@ def run_live(models):
 
             img_pil = adb_screenshot()
             if img_pil is None:
-                print("⚠️  Capture échouée, retry...")
+                print("WARNING: Capture échouée, retry...")
                 time.sleep(1)
                 continue
 
             state, confidence = classify_screen(img_pil, models)
-            print(f"📍 État : {state} ({confidence:.1%})")
+            print(f"État : {state} ({confidence:.1%})")
 
             result = handle_state(state, confidence, models, img_pil)
 
@@ -511,13 +511,13 @@ def run_live(models):
                 time.sleep(ADB_DELAY_MATCHMAKING)
 
             elif action == 'analyze_village':
-                # Plus tard : l'agent RL décidera ici (attaquer ou skip)
-                print("   → Analyse terminée. Skip pour l'instant...")
+                # Later: the RL agent will decide here (attack or skip)
+                print(" → Analyse terminée. Skip pour l'instant...")
                 adb_tap(*BUTTONS['suivant'])
                 time.sleep(ADB_DELAY_NAVIGATION)
 
             elif action == 'tap_fin_combat':
-                # Résultats → retour au village
+                # Results → return to village
                 adb_tap(*BUTTONS['fin_combat'])
                 time.sleep(ADB_DELAY_NAVIGATION)
 
@@ -534,12 +534,12 @@ def run_live(models):
                 time.sleep(ADB_DELAY_SCREENSHOT)
 
     except KeyboardInterrupt:
-        print(f"\n\n🛑 Arrêt demandé. {frame_count} frames traitées.")
+        print(f"\n\nArrêt demandé. {frame_count} frames traitées.")
         print("Au revoir !")
 
 
 # =============================================================================
-#                           MAIN
+# MAIN
 # =============================================================================
 
 def main():
@@ -555,16 +555,16 @@ def main():
 
     args = parser.parse_args()
 
-    # Si aucun argument, afficher l'aide
+    # If no argument provided, show help
     if not args.test and not args.live:
         parser.print_help()
-        print("\n💡 Exemples :")
-        print("   python scripts/game_loop.py --test test_img/village.png")
-        print("   python scripts/game_loop.py --test test_img/*.png")
-        print("   python scripts/game_loop.py --live")
+        print("\nExemples :")
+        print(" python scripts/game_loop.py --test test_img/village.png")
+        print(" python scripts/game_loop.py --test test_img/*.png")
+        print(" python scripts/game_loop.py --live")
         sys.exit(0)
 
-    # Charger les modèles
+    # Load models
     models = load_models()
 
     if args.test:

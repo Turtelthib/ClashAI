@@ -1,15 +1,15 @@
 # clashai/combat/agent_v4.py
-# Agent PPO V4 pour ClashAI.
+# PPO Agent V4 for ClashAI.
 #
-# Changements vs V3 :
-#   - 37 actions au lieu de 289 (rôle × secteur + sorts auto-ciblés)
-#   - Observation compactée : role_counts(5) au lieu de troop_counts(14)
-#   - Réseau plus petit → entraînement plus rapide
-#   - Même architecture CNN + MLP → shared → actor/critic
+# Changes vs V3 :
+# - 37 actions instead of 289 (role × sector + auto-targeted spells)
+# - Compacted observation : role_counts(5) instead of troop_counts(14)
+# - Smaller network → faster training
+# - Same architecture CNN + MLP → shared → actor/critic
 #
 # Usage :
-#   agent = PPOAgentV4()
-#   action, log_prob, value = agent.select_action(grid, vector, mask)
+# agent = PPOAgentV4()
+# action, log_prob, value = agent.select_action(grid, vector, mask)
 
 import numpy as np
 import torch
@@ -26,59 +26,59 @@ from clashai.combat.combat_observer import COMBAT_FEATURES_SIZE
 
 
 # =============================================================================
-#                         OBSERVATION SPACE
+# OBSERVATION SPACE
 # =============================================================================
 
 GRID_CHANNELS = 12
 GRID_SIZE = 40
-VILLAGE_FEATURES = 20       # identique V3
+VILLAGE_FEATURES = 20
 
-# V4 : vecteur compacté
-ROLE_FEATURES = NUM_ROLES           # 5 (tank, ranged, melee, hero, siege)
-SPELL_FEATURES = len(SPELL_NAMES)   # 3 (soin, rage, gel)
-SECTOR_MAP_SIZE = NUM_SECTORS       # 5 (deploy density par secteur)
+# V4 : compacted vector
+ROLE_FEATURES = NUM_ROLES
+SPELL_FEATURES = len(SPELL_NAMES)
+SECTOR_MAP_SIZE = NUM_SECTORS
 STEP_FEATURES = 1
-HERO_STATUS_SIZE = NUM_HEROES       # 5
-PHASE_SIZE = 0                      # V4.2: phases fusionnées, plus d'indicateur binaire
+HERO_STATUS_SIZE = NUM_HEROES
+PHASE_SIZE = 0
 
 VECTOR_SIZE = (VILLAGE_FEATURES + ROLE_FEATURES + SPELL_FEATURES
                + SECTOR_MAP_SIZE + STEP_FEATURES
                + COMBAT_FEATURES_SIZE + HERO_STATUS_SIZE)
 # 20 + 5 + 3 + 5 + 1 + 15 + 5 = 54
 # Note: checkpoints V4.1 incompatibles (nn.Linear(55→54)).
-# Les anciens checkpoints dans weights/rl/ seront inutilisables.
+# Old checkpoints in weights/rl/ will be unusable.
 
-# PPO Hyperparamètres
+# PPO Hyperparameters
 GAMMA = 0.99
 GAE_LAMBDA = 0.95
 CLIP_EPSILON = 0.2
-ENTROPY_COEF = 0.02          # V4.1: réduit de 0.04 (trop d'exploration)
+ENTROPY_COEF = 0.02
 VALUE_COEF = 0.5
 MAX_GRAD_NORM = 0.5
-LEARNING_RATE = 3e-4          # Légèrement plus élevé (réseau plus petit)
+LEARNING_RATE = 3e-4
 PPO_EPOCHS = 4
 BATCH_SIZE = 8
 
 
 # =============================================================================
-#                     RÉSEAU ACTOR-CRITIC V4
+# ACTOR-CRITIC NETWORK V4
 # =============================================================================
 
 class ActorCriticV4(nn.Module):
     """
-    Réseau Actor-Critic V4.
+    Actor-Critic Network V4.
 
-    Plus compact que V3 :
-        - Vecteur 54 dims (vs 76) — V4.2: 55→54, phase fusionnée
+    More compact than V3 :
+        - 54-dim vector (vs 76) — V4.2: 55→54, merged phase
         - Actor output 37 actions (vs 289)
-        - Backbone partagé 192 dims (vs 256)
-        - ~400K paramètres (vs 1.2M)
+        - 192-dim shared backbone (vs 256)
+        - ~400K parameters (vs 1.2M)
     """
 
     def __init__(self):
         super().__init__()
 
-        # CNN pour la grille du village
+        # CNN for the village grid
         self.grid_cnn = nn.Sequential(
             nn.Conv2d(GRID_CHANNELS, 32, kernel_size=3, padding=1),
             nn.BatchNorm2d(32),
@@ -102,7 +102,7 @@ class ActorCriticV4(nn.Module):
             nn.ReLU(),
         )
 
-        # MLP pour le vecteur
+        # MLP for the vector
         self.vector_fc = nn.Sequential(
             nn.Linear(VECTOR_SIZE, 96),
             nn.ReLU(),
@@ -110,7 +110,7 @@ class ActorCriticV4(nn.Module):
             nn.ReLU(),
         )
 
-        # Fusion → backbone partagé
+        # Fusion → shared backbone
         # 192 (grid) + 64 (vector) = 256
         self.shared = nn.Sequential(
             nn.Linear(256, 192),
@@ -123,7 +123,7 @@ class ActorCriticV4(nn.Module):
         self.actor = nn.Sequential(
             nn.Linear(192, 128),
             nn.ReLU(),
-            nn.Linear(128, TOTAL_ACTIONS),  # 37
+            nn.Linear(128, TOTAL_ACTIONS),
         )
 
         # Critic head
@@ -149,7 +149,7 @@ class ActorCriticV4(nn.Module):
         Args:
             grid: (batch, 12, 40, 40)
             vector: (batch, 54)
-            action_mask: (batch, 37) — 1.0 = valide
+            action_mask: (batch, 37) — 1.0 = valid
         """
         g = self.grid_cnn(grid)
         g = self.grid_fc(g)
@@ -168,11 +168,11 @@ class ActorCriticV4(nn.Module):
 
 
 # =============================================================================
-#                         ROLLOUT BUFFER
+# ROLLOUT BUFFER
 # =============================================================================
 
 class RolloutBuffer:
-    """Buffer PPO pour stocker les trajectoires."""
+    """PPO buffer for storing trajectories."""
 
     def __init__(self):
         self.episodes = []
@@ -267,16 +267,16 @@ class RolloutBuffer:
 
 
 # =============================================================================
-#                         AGENT PPO V4
+# AGENT PPO V4
 # =============================================================================
 
 class PPOAgentV4:
     """
-    Agent PPO V4 — action space simplifié.
+    PPO Agent V4 — simplified action space.
 
-    37 actions au lieu de 289.
-    ~400K paramètres au lieu de 1.2M.
-    Convergence estimée ~10× plus rapide.
+    37 actions instead of 289.
+    ~400K parameters instead of 1.2M.
+    Estimated convergence ~10× faster.
     """
 
     def __init__(self, device=None, lr=LEARNING_RATE):
@@ -294,15 +294,15 @@ class PPOAgentV4:
         self.total_episodes = 0
 
         n_params = sum(p.numel() for p in self.network.parameters())
-        print("🤖 Agent PPO V4 initialisé")
-        print(f"   Device      : {self.device}")
-        print(f"   Actions     : {TOTAL_ACTIONS} "
+        print("Agent PPO V4 initialisé")
+        print(f" Device : {self.device}")
+        print(f" Actions : {TOTAL_ACTIONS} "
               f"({NUM_ROLES}×{NUM_SECTORS} deploy + "
               f"{len(SPELL_NAMES)} sorts + "
               f"{NUM_HEROES} abilities + observe + 3 ctrl)")
-        print(f"   Vector      : {VECTOR_SIZE} dims")
-        print(f"   Paramètres  : {n_params:,}")
-        print(f"   Batch size  : {BATCH_SIZE} épisodes")
+        print(f" Vector : {VECTOR_SIZE} dims")
+        print(f" Parameters : {n_params:,}")
+        print(f" Batch size : {BATCH_SIZE} episodes")
 
     def select_action(self, grid, vector, action_mask):
         """
@@ -396,7 +396,7 @@ class PPOAgentV4:
         return stats
 
     # -----------------------------------------------------------------
-    #  Behavioral Cloning (V4.1 — imitation learning)
+    # Behavioral Cloning (V4.1 — imitation learning)
     # -----------------------------------------------------------------
 
     def pretrain_bc(self, demonstrations, epochs=10, lr=1e-3,
@@ -420,12 +420,12 @@ class PPOAgentV4:
         """
         n = len(demonstrations)
         if n == 0:
-            print("   ⚠️ Aucune démonstration, BC ignoré")
+            print(" WARNING: Aucune démonstration, BC ignoré")
             return 0.0
 
         print(f"\n{'='*60}")
-        print(f"  🎓 Behavioral Cloning — {n} démonstrations")
-        print(f"  Epochs: {epochs} | LR: {lr} | Batch: {mini_batch_size}")
+        print(f" Behavioral Cloning — {n} démonstrations")
+        print(f" Epochs: {epochs} | LR: {lr} | Batch: {mini_batch_size}")
         print(f"{'='*60}")
 
         grids = torch.FloatTensor(
@@ -441,7 +441,7 @@ class PPOAgentV4:
             np.array([d[3] for d in demonstrations])
         ).to(self.device)
 
-        # Optimizer séparé pour le BC (lr plus élevé)
+        # Separate optimizer for BC (higher lr)
         bc_optimizer = optim.Adam(
             self.network.parameters(), lr=lr, eps=1e-5
         )
@@ -476,7 +476,7 @@ class PPOAgentV4:
                 total_loss += loss.item()
                 num_batches += 1
 
-            # Accuracy sur tout le dataset
+            # Accuracy over the full dataset
             self.network.eval()
             with torch.no_grad():
                 logits, _ = self.network(grids, vectors, masks)
@@ -486,16 +486,16 @@ class PPOAgentV4:
             avg_loss = total_loss / max(num_batches, 1)
             best_accuracy = max(best_accuracy, accuracy)
 
-            print(f"   Epoch {epoch+1:2d}/{epochs}: "
+            print(f" Epoch {epoch+1:2d}/{epochs}: "
                   f"loss={avg_loss:.4f} accuracy={accuracy:.1%}")
 
-        # Réinitialiser l'optimizer PPO après le BC
-        # (les moments Adam du BC ne sont pas pertinents pour PPO)
+        # Reset the PPO optimizer after BC
+        # (Adam moments from BC are not relevant for PPO)
         self.optimizer = optim.Adam(
             self.network.parameters(), lr=LEARNING_RATE, eps=1e-5
         )
 
-        print(f"\n   ✅ BC terminé — accuracy finale: {best_accuracy:.1%}")
+        print(f"\n BC terminé — accuracy finale: {best_accuracy:.1%}")
         return best_accuracy
 
     def save(self, path):
@@ -505,7 +505,7 @@ class PPOAgentV4:
             'update_count': self.update_count,
             'total_episodes': self.total_episodes,
         }, path)
-        print(f"💾 Agent V4 sauvegardé → {path}")
+        print(f"Agent V4 sauvegardé → {path}")
 
     def load(self, path):
         checkpoint = torch.load(path, map_location=self.device, weights_only=True)
@@ -513,16 +513,16 @@ class PPOAgentV4:
         self.optimizer.load_state_dict(checkpoint['optimizer'])
         self.update_count = checkpoint.get('update_count', 0)
         self.total_episodes = checkpoint.get('total_episodes', 0)
-        print(f"📦 Agent V4 chargé ← {path}")
-        print(f"   Updates: {self.update_count}, Episodes: {self.total_episodes}")
+        print(f"Agent V4 chargé ← {path}")
+        print(f" Updates: {self.update_count}, Episodes: {self.total_episodes}")
 
 
 # =============================================================================
-#                         TEST
+# TEST
 # =============================================================================
 
 if __name__ == "__main__":
-    print("🧪 Test Agent V4\n")
+    print("Test Agent V4\n")
 
     agent = PPOAgentV4()
 
@@ -532,8 +532,8 @@ if __name__ == "__main__":
 
     action, log_prob, value = agent.select_action(grid, vector, mask)
     action_type, idx1, idx2 = decode_action(action)
-    print(f"\n   Action: {action} → {action_type} {idx1} {idx2}")
-    print(f"   Log prob: {log_prob:.4f}")
-    print(f"   Value: {value:.4f}")
+    print(f"\n Action: {action} → {action_type} {idx1} {idx2}")
+    print(f" Log prob: {log_prob:.4f}")
+    print(f" Value: {value:.4f}")
 
-    print("\n✅ Agent V4 OK")
+    print("\nAgent V4 OK")

@@ -1,26 +1,26 @@
 # scripts/rl/gdc_navigator.py
-# Navigation automatique en Guerre de Clans (GdC) pour ClashAI.
+# Automatic navigation in Clan War (CW) for ClashAI.
 #
-# Ce module orchestre une attaque GdC complète :
-#   1. Depuis le village → ouvrir le menu clan → onglet GdC
-#   2. Passer sur la carte ennemie
-#   3. Scroller jusqu'à la cible n°X
-#   4. Sélectionner la cible → scouter → confirmer l'attaque
-#   5. L'agent V3 prend le relais pour le combat
-#   6. Retour au village après le combat
+# This module orchestrates a complete CW attack:
+# 1. From the village → open clan menu → CW tab
+# 2. Switch to the enemy map
+# 3. Scroll to target n°X
+# 4. Select the target → scout → confirm attack
+# 5. Agent V3 takes over for combat
+# 6. Return to village after combat
 #
-# Usage :
-#   navigator = GdCNavigator(models)
-#   success = navigator.attack_target(3)  # Attaquer le n°3 ennemi
+# Usage:
+# navigator = GdCNavigator(models)
+# success = navigator.attack_target(3) # Attack enemy n°3
 #
-# Usage avec l'agent V3 :
-#   navigator = GdCNavigator(models)
-#   success = navigator.navigate_to_target(3)  # Juste naviguer
-#   if success:
-#       # L'agent V3 gère l'attaque via environment_v3
-#       env = ClashEnvV3(models)
-#       obs, mask = env.reset()  # Reprend depuis phase_attaque
-#       ...
+# Usage with agent V3:
+# navigator = GdCNavigator(models)
+# success = navigator.navigate_to_target(3) # Just navigate
+# if success:
+# # Agent V3 handles the attack via environment_v3
+# env = ClashEnvV3(models)
+# obs, mask = env.reset() # Resumes from phase_attaque
+# ...
 
 import os
 import time
@@ -33,15 +33,15 @@ from PIL import Image
 
 
 # =============================================================================
-#                         CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
 ADB_WIDTH = 1920
 ADB_HEIGHT = 1080
 
-# --- Positions des boutons UI ---
-# Chargées dynamiquement depuis ui_positions.json
-# Calibrées via : python scripts/rl/calibrate_ui.py
+# --- UI button positions ---
+# Loaded dynamically from ui_positions.json
+# Calibrated via : python scripts/rl/calibrate_ui.py
 def _get_ui_pos(name):
     try:
         from clashai.navigation.calibrate_ui import get_position
@@ -68,8 +68,8 @@ def _get_ui_pos(name):
         }
         return defaults.get(name, (960, 400))
 
-# Zone où les numéros de cibles ennemies apparaissent
-# (la liste des ennemis avec leur #)
+# Zone where enemy target numbers appear
+# (the enemy list with their #)
 TARGET_LIST_ZONE = {
     'left': 100,
     'right': 1820,
@@ -77,15 +77,15 @@ TARGET_LIST_ZONE = {
     'bottom': 850,
 }
 
-# Positions Y approximatives des cibles visibles à l'écran
-# (environ 5-6 cibles visibles à la fois dans la liste GdC)
+# Approximate Y positions of visible targets on screen
+# (approximately 5-6 targets visible at a time in the CW list)
 VISIBLE_TARGETS_PER_SCREEN = 5
 
-# Vitesse de scroll pour naviguer dans la liste
-SCROLL_DISTANCE = 400  # pixels par swipe
-SCROLL_DURATION = 300   # ms
+# Scroll speed for navigating the list
+SCROLL_DISTANCE = 400
+SCROLL_DURATION = 300
 
-# Temps d'attente entre les actions
+# Wait time between actions
 WAIT_NAVIGATION = 1.5
 WAIT_MENU_LOAD = 2.0
 WAIT_SCROLL = 1.0
@@ -96,7 +96,7 @@ MAX_RETRIES = 15
 
 
 # =============================================================================
-#                    FONCTIONS ADB
+# ADB FUNCTIONS
 # =============================================================================
 
 def _adb_screenshot():
@@ -127,18 +127,18 @@ def _adb_swipe(x1, y1, x2, y2, duration_ms=300):
 
 
 # =============================================================================
-#                    DÉTECTION DE NUMÉRO OCR
+# OCR NUMBER DETECTION
 # =============================================================================
 
 def _detect_target_numbers(screenshot_pil):
     """
-    Détecte les numéros de cibles visibles sur l'écran GdC ennemi.
-    
-    Dans CoC, chaque ennemi a un numéro (#1, #2, ..., #50) affiché
-    à côté de son nom dans la liste de guerre.
-    
+    Detects visible target numbers on the enemy CW screen.
+
+    In CoC, each enemy has a number (#1, #2, ..., #50) displayed
+    next to their name in the war list.
+
     Returns:
-        targets: dict {numéro: (x_center, y_center)} des cibles visibles
+        targets: dict {number: (x_center, y_center)} of visible targets
     """
     try:
         from clashai.social.clan_chat_monitor import _init_ocr
@@ -161,13 +161,13 @@ def _detect_target_numbers(screenshot_pil):
         for (bbox, text, conf) in results:
             if conf < 0.3:
                 continue
-            # Chercher des numéros (#1, #2, 1., 2., etc.)
+            # Look for numbers (#1, #2, 1., 2., etc.)
             import re
             match = re.search(r'#?(\d{1,2})', text)
             if match:
                 num = int(match.group(1))
                 if 1 <= num <= 50:
-                    # Position au centre de la bbox
+                    # Position at the center of the bbox
                     cx = int((bbox[0][0] + bbox[2][0]) / 2) + TARGET_LIST_ZONE['left']
                     cy = int((bbox[0][1] + bbox[2][1]) / 2) + TARGET_LIST_ZONE['top']
                     targets[num] = (cx, cy)
@@ -191,25 +191,25 @@ def _detect_target_numbers(screenshot_pil):
 
 
 # =============================================================================
-#                    GDC NAVIGATOR
+# GDC NAVIGATOR
 # =============================================================================
 
 class GdCNavigator:
     """
-    Navigue dans l'interface de Guerre de Clans et sélectionne une cible.
+    Navigates the Clan War interface and selects a target.
     """
 
     def __init__(self, models, verbose=True):
         self.models = models
         self.verbose = verbose
 
-        # Imports de game_loop
+        # Imports from game_loop
         from clashai.navigation import game_loop as gl
         self._classify_screen = gl.classify_screen
         self._adb_screenshot_gl = gl.adb_screenshot
 
     def _get_screen_state(self):
-        """Retourne (state, confidence, img_pil)."""
+        """Returns (state, confidence, img_pil)."""
         img = self._adb_screenshot_gl()
         if img is None:
             return None, 0.0, None
@@ -217,7 +217,7 @@ class GdCNavigator:
         return state, conf, img
 
     def _navigate_to_state(self, target, max_retries=MAX_RETRIES):
-        """Navigation générique vers un état."""
+        """Generic navigation toward a target state."""
         for attempt in range(max_retries):
             state, conf, img = self._get_screen_state()
             if state is None:
@@ -225,17 +225,17 @@ class GdCNavigator:
                 continue
 
             if self.verbose and attempt % 3 == 0:
-                print(f"   📍 GdC nav: {state} ({conf:.0%}) → cible: {target}")
+                print(f" GdC nav: {state} ({conf:.0%}) → target: {target}")
 
             if state == target:
                 return True, img
 
-            # Navigation contextuelle
+            # Contextual navigation
             if state == 'village_home':
                 _adb_tap(*_get_ui_pos('gdc_open'))
                 time.sleep(WAIT_MENU_LOAD)
             elif state == 'chat_clan':
-                # Fermer le chat puis ouvrir le clan
+                # Close the chat then open the clan menu
                 _adb_tap(*_get_ui_pos('chat_close_tap'))
                 time.sleep(0.5)
                 _adb_tap(*_get_ui_pos('gdc_open'))
@@ -269,7 +269,7 @@ class GdCNavigator:
             elif state == 'profil':
                 _adb_tap(*_get_ui_pos('close_profil'))
                 time.sleep(0.5)
-                _adb_tap(1800, 500)  # Tap bord droit (safety)
+                _adb_tap(1800, 500)
                 time.sleep(WAIT_NAVIGATION)
             elif state == 'menu_boutique':
                 _adb_tap(*_get_ui_pos('close_menu'))
@@ -287,63 +287,62 @@ class GdCNavigator:
 
     def navigate_to_war_map(self):
         """
-        Depuis n'importe quel écran, navigue jusqu'à la carte
-        ennemie de la GdC.
-        
-        Gère l'écran "guerre terminée" qui apparaît quand la dernière
-        GdC est finie — clique sur "Voir la carte" automatiquement.
-        
+        From any screen, navigates to the enemy CW map.
+
+        Handles the "war ended" screen that appears when the last
+        CW is over — automatically clicks "View map".
+
         Returns:
             success: bool
         """
         if self.verbose:
-            print("\n🗺️  Navigation vers la carte GdC ennemie...")
+            print("\n🗺 Navigation vers la carte GdC ennemie...")
 
-        # Étape 1 : Aller au village si pas déjà sur un écran GdC
+        # Step 1: Go to village if not already on a CW screen
         state, _, _ = self._get_screen_state()
         if state not in ('village_home', 'gdc_ally', 'gdc_enemy', 'gdc_ended'):
             success, _ = self._navigate_to_state('village_home')
             if not success:
                 if self.verbose:
-                    print("   ❌ Impossible de revenir au village")
+                    print(" ERROR: Unable to return to village")
                 return False
 
-        # Étape 2 : Ouvrir le menu GdC depuis le village
+        # Step 2: Open the CW menu from the village
         state, _, _ = self._get_screen_state()
         if state == 'village_home':
             if self.verbose:
-                print("   📋 Ouverture du menu GdC...")
+                print(" Opening CW menu...")
             _adb_tap(*_get_ui_pos('gdc_open'))
             time.sleep(WAIT_MENU_LOAD)
 
-        # Étape 3 : Gérer les écrans possibles après l'ouverture
+        # Step 3: Handle possible screens after opening
         for attempt in range(MAX_RETRIES):
             state, conf, img = self._get_screen_state()
             
             if self.verbose and attempt % 2 == 0:
-                print(f"   📍 GdC nav: {state} ({conf:.0%}) → cible: gdc_enemy")
+                print(f" GdC nav: {state} ({conf:.0%}) → target: gdc_enemy")
 
             if state == 'gdc_enemy':
                 if self.verbose:
-                    print("   ✅ Carte ennemie GdC atteinte")
+                    print(" Enemy CW map reached")
                 return True
 
             elif state == 'gdc_ally':
-                # Sur la carte alliée → basculer vers ennemis
+                # On the ally map → switch to enemies
                 if self.verbose:
-                    print("   🔄 Carte alliée → passage aux ennemis")
+                    print(" Ally map → switching to enemies")
                 _adb_tap(*_get_ui_pos('gdc_enemy_map'))
                 time.sleep(WAIT_NAVIGATION)
 
             elif state == 'chat_clan':
-                # Le chat s'est ouvert au lieu du menu GdC
+                # Chat opened instead of the CW menu
                 _adb_tap(*_get_ui_pos('chat_close_tap'))
                 time.sleep(0.5)
                 _adb_tap(*_get_ui_pos('gdc_open'))
                 time.sleep(WAIT_MENU_LOAD)
 
             elif state == 'village_home':
-                # Retour au village inattendu → réessayer
+                # Unexpected return to village → retry
                 _adb_tap(*_get_ui_pos('gdc_open'))
                 time.sleep(WAIT_MENU_LOAD)
 
@@ -351,52 +350,52 @@ class GdCNavigator:
                 time.sleep(2)
 
             elif state == 'gdc_ended':
-                # Écran "guerre terminée" → cliquer sur "Voir la carte"
+                # "War ended" screen → click "View map"
                 if self.verbose:
-                    print("   📋 Guerre terminée → clic 'Voir la carte'")
+                    print(" War ended → click 'View map'")
                 _adb_tap(*_get_ui_pos('gdc_war_ended_see_map'))
                 time.sleep(WAIT_NAVIGATION)
 
             else:
-                # État inconnu → tenter le bouton "Voir la carte" en fallback
+                # Unknown state → try the "View map" button as fallback
                 if self.verbose:
-                    print(f"   ❓ État inconnu ({state} {conf:.0%}) "
-                          f"→ tentative bouton 'Voir la carte'")
+                    print(f" ❓ Unknown state ({state} {conf:.0%}) "
+                          f"→ trying 'View map' button")
                 _adb_tap(*_get_ui_pos('gdc_war_ended_see_map'))
                 time.sleep(WAIT_NAVIGATION)
 
         if self.verbose:
-            print("   ❌ Navigation GdC échouée après max retries")
+            print(" ERROR: CW navigation failed after max retries")
         return False
 
     def select_target(self, target_number):
         """
-        Sélectionne la cible n°X sur la carte ennemie.
-        
-        Méthode fiable sans OCR :
-        1. Tape sur un village pour ouvrir un popup
-        2. Appuie sur "précédent" (←) plein de fois → arrive au #1
-        3. Appuie sur "suivant" (→) exactement (N-1) fois → arrive au #N
-        
-        Pas d'OCR = pas d'erreur de lecture.
-        
+        Selects target #X on the enemy map.
+
+        Reliable OCR-free method:
+        1. Tap on a village to open a popup
+        2. Press "previous" (←) many times → arrives at #1
+        3. Press "next" (→) exactly (N-1) times → arrives at #N
+
+        No OCR = no reading errors.
+
         Args:
             target_number: int (1-50)
-            
+
         Returns:
             success: bool
         """
         if self.verbose:
-            print(f"\n🎯 Recherche de la cible #{target_number}...")
+            print(f"\nRecherche de la cible #{target_number}...")
 
-        # On doit être sur gdc_enemy
+        # We must be on gdc_enemy
         state, _, _ = self._get_screen_state()
         if state != 'gdc_enemy':
             if self.verbose:
-                print(f"   ⚠️  Pas sur la carte ennemie (état: {state})")
+                print(f" WARNING: Not on the enemy map (state: {state})")
             return False
 
-        # --- Étape 1 : Ouvrir un popup en tapant sur un village ---
+        # --- Step 1: Open a popup by tapping on a village ---
         village_tap_positions = [
             (700, 450), (500, 400), (900, 500),
             (600, 350), (800, 550), (960, 400),
@@ -414,15 +413,15 @@ class GdCNavigator:
 
         if not popup_opened:
             if self.verbose:
-                print("   ❌ Impossible d'ouvrir un popup de village")
+                print(" ERROR: Unable to open a village popup")
             return False
 
-        # --- Étape 2 : Aller au village #1 (tout à gauche) ---
-        # Appuyer sur "précédent" suffisamment de fois
-        # Max 30 villages en GdC classique, 15 en ligue
+        # --- Step 2: Go to village #1 (all the way left) ---
+        # Press "previous" enough times
+        # Max 30 villages in classic CW, 15 in league
         max_prev = 30
         if self.verbose:
-            print(f"   ⬅️  Retour au village #1 ({max_prev}x prev)...")
+            print(f" ⬅ Returning to village #1 ({max_prev}x prev)...")
         
         for i in range(max_prev):
             _adb_tap(*_get_ui_pos('gdc_village_prev'))
@@ -430,38 +429,38 @@ class GdCNavigator:
         
         time.sleep(0.5)
 
-        # --- Étape 3 : Avancer de (N-1) villages ---
+        # --- Step 3: Advance (N-1) villages ---
         steps_needed = target_number - 1
         
         if steps_needed > 0:
             if self.verbose:
-                print(f"   ➡️  Navigation : {steps_needed}x next → cible #{target_number}")
+                print(f" ➡ Navigation: {steps_needed}x next → target #{target_number}")
             
             for i in range(steps_needed):
                 _adb_tap(*_get_ui_pos('gdc_village_next'))
                 time.sleep(0.4)
                 
-                # Log de progression tous les 5 villages
+                # Log progress every 5 villages
                 if self.verbose and (i + 1) % 5 == 0:
-                    print(f"      #{i + 2}...")
+                    print(f" #{i + 2}...")
         
         time.sleep(0.5)
 
-        # Vérifier qu'on a toujours un popup ouvert
+        # Verify that a popup is still open
         img = _adb_screenshot()
         if img is not None and self._check_attack_popup(img):
             if self.verbose:
-                print(f"   ✅ Cible #{target_number} sélectionnée !")
+                print(f" Target #{target_number} selected!")
             return True
         else:
             if self.verbose:
-                print("   ⚠️  Popup perdu après navigation")
+                print(" WARNING: Popup lost after navigation")
             return False
 
     def _check_attack_popup(self, img_pil):
         """
-        Vérifie si le popup de sélection de cible est affiché.
-        Détecte le bouton vert "Attaquer" dans la moitié basse de l'écran.
+        Checks whether the target selection popup is displayed.
+        Detects the green "Attack" button in the lower half of the screen.
         """
         import cv2
         import numpy as np
@@ -472,7 +471,7 @@ class GdCNavigator:
         roi = img_cv[h // 2:, :, :]
         hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
 
-        # Bouton vert "Attaquer"
+        # Green "Attack" button
         mask = cv2.inRange(hsv, (35, 100, 100), (85, 255, 255))
         green_pixels = cv2.countNonZero(mask)
 
@@ -480,13 +479,13 @@ class GdCNavigator:
 
     def _read_popup_number(self, img_pil):
         """
-        Lit le numéro de la cible dans le popup de sélection.
-        
-        Le popup affiche "3. NomDuJoueur" ou "3. ほりほり" en haut.
-        On cherche un nombre au début d'une ligne dans la zone du popup.
-        
+        Reads the target number from the selection popup.
+
+        The popup shows "3. PlayerName" or "3. ほりほり" at the top.
+        We look for a number at the start of a line in the popup area.
+
         Returns:
-            int ou None
+            int or None
         """
         import cv2
         import numpy as np
@@ -495,8 +494,8 @@ class GdCNavigator:
         img_cv = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
         h, w = img_cv.shape[:2]
 
-        # Zone serrée : juste la ligne titre du popup
-        # Le titre "N. Joueur" apparaît à ~64-74% de la hauteur, centré
+        # Tight zone: just the popup title line
+        # The title "N. Player" appears at ~64-74% of the height, centered
         popup_zone = img_cv[int(h * 0.64):int(h * 0.74),
                             int(w * 0.25):int(w * 0.60)]
 
@@ -512,12 +511,12 @@ class GdCNavigator:
                     if conf < 0.2:
                         continue
                     text = text.strip()
-                    # Patterns possibles :
+                    # Possible patterns:
                     # "3. ほりほり" → "3."
                     # "3.ほりほり" → "3."
                     # "#3" → "#3"
-                    # "3 . nom" → "3"
-                    # On cherche juste un nombre de 1-2 chiffres
+                    # "3 . name" → "3"
+                    # We just look for a 1-2 digit number
                     match = re.match(r'#?(\d{1,2})', text)
                     if match:
                         num = int(match.group(1))
@@ -537,49 +536,49 @@ class GdCNavigator:
 
         except Exception as e:
             if self.verbose:
-                print(f"   ⚠️  Erreur OCR popup: {e}")
+                print(f" WARNING: OCR popup error: {e}")
 
         return None
 
     def launch_attack(self):
         """
-        Depuis l'écran avec le popup de cible, lance l'attaque.
+        From the screen with the target popup, launches the attack.
         """
         if self.verbose:
-            print("   ⚔️  Lancement de l'attaque GdC...")
+            print(" ⚔ Lancement de l'attaque GdC...")
 
         for attempt in range(15):
-            # D'abord : vérifier l'état via CNN
+            # First: check state via CNN
             img = _adb_screenshot()
             state, conf, _ = self._get_screen_state()
 
             if self.verbose:
-                print(f"   📍 Attaque: {state} ({conf:.0%})")
+                print(f" Attaque: {state} ({conf:.0%})")
 
             if state == 'phase_attaque':
                 if self.verbose:
-                    print("   ✅ Phase d'attaque atteinte")
+                    print(" Attack phase reached")
                 return True
 
             elif state == 'prep_attaque':
-                # Écran de préparation → cliquer sur le gros "Attaquer"
+                # Preparation screen → click the big "Attack" button
                 if self.verbose:
-                    print("   📋 Préparation → clic Attaquer")
+                    print(" Preparation → click Attack")
                 _adb_tap(*_get_ui_pos('start_attack'))
                 time.sleep(WAIT_MATCHMAKING)
 
             elif state == 'gdc_enemy':
-                # Encore sur la carte → vérifier si popup visible
+                # Still on the map → check if popup is visible
                 if img is not None and self._check_attack_popup(img):
                     atk_pos = _get_ui_pos('gdc_attack_target')
                     if self.verbose:
-                        print(f"   📍 Popup visible → clic Attaquer "
-                              f"à ({atk_pos[0]}, {atk_pos[1]})")
+                        print(f" Popup visible → click Attack "
+                              f"at ({atk_pos[0]}, {atk_pos[1]})")
                     _adb_tap(*atk_pos)
                     time.sleep(WAIT_NAVIGATION)
                 else:
                     if self.verbose:
-                        print("   ⚠️  Pas de popup, tap village")
+                        print(" WARNING: No popup, tapping village")
                     _adb_tap(700, 450)
                     time.sleep(1.0)
 
@@ -588,75 +587,75 @@ class GdCNavigator:
 
             else:
                 if self.verbose:
-                    print(f"   ❓ État {state}, tap confirmation")
+                    print(f" ❓ State {state}, tap confirmation")
                 _adb_tap(960, 600)
                 time.sleep(WAIT_NAVIGATION)
 
         if self.verbose:
-            print("   ❌ Impossible d'atteindre la phase d'attaque")
+            print(" ERROR: Unable to reach the attack phase")
         return False
 
         if self.verbose:
-            print("   ❌ Impossible d'atteindre la phase d'attaque")
+            print(" ERROR: Unable to reach the attack phase")
         return False
 
     def attack_target(self, target_number):
         """
-        Séquence complète : naviguer → sélectionner → attaquer.
-        
-        Note : cette méthode amène jusqu'à phase_attaque.
-        L'agent V3 (environment_v3) doit prendre le relais pour
-        le deploy + combat.
-        
+        Full sequence: navigate → select → attack.
+
+        Note: this method leads up to phase_attaque.
+        The V3 agent (environment_v3) must take over for
+        deploy + combat.
+
         Args:
             target_number: int (1-50)
-            
+
         Returns:
-            success: bool (True si prêt à attaquer)
+            success: bool (True if ready to attack)
         """
         if self.verbose:
             print(f"\n{'='*50}")
-            print(f"  GdC : Attaque cible #{target_number}")
+            print(f" CW: Attack target #{target_number}")
             print(f"{'='*50}")
 
-        # 1. Naviguer vers la carte ennemie
+        # 1. Navigate to the enemy map
         if not self.navigate_to_war_map():
             return False
 
-        # 2. Sélectionner la cible
+        # 2. Select the target
         if not self.select_target(target_number):
-            # Retour au village en cas d'échec
+            # Return to village on failure
             self._navigate_to_state('village_home')
             return False
 
-        # 3. Lancer l'attaque
+        # 3. Launch the attack
         if not self.launch_attack():
             self._navigate_to_state('village_home')
             return False
 
         if self.verbose:
-            print(f"\n   ✅ Prêt à attaquer la cible #{target_number} !")
-            print("   → L'agent V3 prend le relais pour le combat")
+            print(f"\n Ready to attack target #{target_number}!")
+            print(" → V3 agent takes over for combat")
 
         return True
 
     def return_to_village(self):
-        """Retour au village après une attaque GdC."""
+        """Return to village after a CW attack."""
         return self._navigate_to_state('village_home')
 
 
 # =============================================================================
-#                    ORCHESTRATEUR GDC
+# GDC ORCHESTRATOR
 # =============================================================================
 
 class GdCOrchestrator:
     """
-    Orchestre une attaque GdC complète :
-    chat monitor → navigation GdC → agent V3 → retour village.
-    
-    Usage :
+    Orchestrates a complete CW attack:
+    chat monitor → CW navigation → V3 agent → return to village.
+
+    Usage:
         orchestrator = GdCOrchestrator(models)
-        orchestrator.run()  # Boucle infinie : surveille le chat et attaque
+        orchestrator.run() # Infinite loop: monitors chat and attacks
     """
 
     def __init__(self, models, bot_name='mini_pekka', verbose=True):
@@ -669,38 +668,38 @@ class GdCOrchestrator:
 
     def handle_command(self, command):
         """
-        Exécute une commande reçue du chat.
-        
+        Executes a command received from the chat.
+
         Args:
             command: dict {'type': 'attack', 'target': 3, ...}
         """
         if command['type'] == 'attack':
             target = command['target']
             if self.verbose:
-                print(f"\n🎯 Commande reçue : attaquer #{target} en GdC")
+                print(f"\nCommand received: attack #{target} in CW")
 
             success = self._navigator.attack_target(target)
 
             if success:
-                # On est en phase_attaque → lancer l'agent V3
+                # We are in phase_attaque → launch the V3 agent
                 self._run_attack()
             else:
                 if self.verbose:
-                    print(f"   ❌ Navigation vers cible #{target} échouée")
+                    print(f" ERROR: Navigation to target #{target} failed")
 
-            # Retour au village dans tous les cas
+            # Return to village in all cases
             self._navigator.return_to_village()
 
         elif command['type'] == 'status':
             if self.verbose:
-                print("   📊 Status demandé (pas d'action)")
+                print(" Status requested (no action)")
 
     def _run_attack(self):
         """
-        Lance l'agent V4 pour une attaque depuis phase_attaque.
+        Launches the V4 agent for an attack from phase_attaque.
         """
         if self.verbose:
-            print("\n   🤖 Lancement de l'attaque V4...")
+            print("\n Launching V4 attack...")
 
         try:
             from clashai.combat.environment_v4 import ClashEnvV4
@@ -709,7 +708,7 @@ class GdCOrchestrator:
 
             env = ClashEnvV4(models=self.models, verbose=self.verbose)
 
-            # L'agent : charger le meilleur checkpoint
+            # Agent: load the best checkpoint
             agent = PPOAgentV4()
             weights_dir = os.path.join(
                 os.path.dirname(os.path.dirname(
@@ -729,13 +728,13 @@ class GdCOrchestrator:
                         break
                     except RuntimeError:
                         if self.verbose:
-                            print(f"   ⚠️  Checkpoint incompatible, mode heuristique")
+                            print(f" WARNING: Incompatible checkpoint, heuristic mode")
 
-            # Reset (reprend depuis phase_attaque)
+            # Reset (resumes from phase_attaque)
             obs, mask = env.reset()
             grid, vector = obs
 
-            # Heuristique ou RL selon si on a un checkpoint
+            # Heuristic or RL depending on whether a checkpoint exists
             heuristic_mode = not os.path.exists(best_path) and not os.path.exists(checkpoint_path)
 
             if heuristic_mode:
@@ -755,28 +754,28 @@ class GdCOrchestrator:
             if self.verbose:
                 stars = info.get('stars', '?')
                 pct = info.get('percentage', '?')
-                print(f"\n   📊 Résultat GdC : {stars}⭐ {pct}%")
+                print(f"\n CW result: {stars}* {pct}%")
 
             env.close()
 
         except Exception as e:
             if self.verbose:
-                print(f"   ❌ Erreur attaque V3 : {e}")
+                print(f" ERROR: V3 attack error: {e}")
                 import traceback
                 traceback.print_exc()
 
     def run(self, monitor_interval=30):
         """
-        Boucle principale : surveille le chat et exécute les commandes.
-        
+        Main loop: monitors the chat and executes commands.
+
         Args:
-            monitor_interval: secondes entre chaque check du chat
+            monitor_interval: seconds between each chat check
         """
         if self.verbose:
             print(f"\n{'='*50}")
-            print("  ClashAI GdC Orchestrator")
-            print(f"  Bot: @{self._chat_monitor.bot_name}")
-            print(f"  Interval: {monitor_interval}s")
+            print(" ClashAI GdC Orchestrator")
+            print(f" Bot: @{self._chat_monitor.bot_name}")
+            print(f" Interval: {monitor_interval}s")
             print(f"{'='*50}\n")
 
         self._chat_monitor.monitor_loop(
@@ -788,7 +787,7 @@ class GdCOrchestrator:
 
 
 # =============================================================================
-#                            MAIN
+# MAIN
 # =============================================================================
 
 if __name__ == "__main__":
@@ -796,17 +795,17 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="ClashAI GdC Navigator")
     parser.add_argument('--attack', type=int,
-                        help="Attaquer la cible n°X en GdC")
+                        help="Attack target n°X in CW")
     parser.add_argument('--navigate', type=int,
-                        help="Naviguer vers la cible sans attaquer")
+                        help="Navigate to target without attacking")
     parser.add_argument('--monitor', action='store_true',
-                        help="Lancer le monitoring du chat")
+                        help="Start chat monitoring")
     parser.add_argument('--bot-name', type=str, default='mini_pekka')
     parser.add_argument('--interval', type=int, default=30)
 
     args = parser.parse_args()
 
-    # Charger les modèles
+    # Load models
     current_dir = os.path.dirname(os.path.abspath(__file__))
         
     from clashai.navigation import game_loop
@@ -816,27 +815,27 @@ if __name__ == "__main__":
         nav = GdCNavigator(models)
         success = nav.attack_target(args.attack)
         if success:
-            print("✅ Phase d'attaque atteinte — l'agent V3 peut prendre le relais")
+            print("Attack phase reached — V3 agent can take over")
         else:
-            print("❌ Navigation échouée")
+            print("ERROR: Navigation failed")
 
     elif args.navigate:
         nav = GdCNavigator(models)
         if nav.navigate_to_war_map():
             success = nav.select_target(args.navigate)
             if success:
-                print(f"✅ Cible #{args.navigate} sélectionnée")
+                print(f"Target #{args.navigate} selected")
             else:
-                print(f"❌ Cible #{args.navigate} non trouvée")
+                print(f"ERROR: Target #{args.navigate} not found")
 
     elif args.monitor:
         orchestrator = GdCOrchestrator(models, bot_name=args.bot_name)
         orchestrator.run(monitor_interval=args.interval)
 
     else:
-        print("Usage :")
-        print("  --attack 3      Attaquer la cible #3 en GdC")
-        print("  --navigate 5    Naviguer vers la cible #5 (sans attaquer)")
-        print("  --monitor       Surveiller le chat et exécuter les commandes")
-        print("  --bot-name X    Nom du bot (défaut: mini_pekka)")
-        print("  --interval N    Intervalle de monitoring en secondes")
+        print("Usage:")
+        print(" --attack 3 Attack target #3 in CW")
+        print(" --navigate 5 Navigate to target #5 (without attacking)")
+        print(" --monitor Monitor chat and execute commands")
+        print(" --bot-name X Bot name (default: mini_pekka)")
+        print(" --interval N Monitoring interval in seconds")

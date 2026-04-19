@@ -1,26 +1,26 @@
 # clashai/social/clan_castle.py
-# Gestion automatique du château de clan pour ClashAI V4.1.
+# Automatic clan castle management for ClashAI V4.1.
 #
-# Demande des troupes de renfort avant chaque attaque,
-# comme tout joueur humain le ferait.
+# Requests reinforcement troops before each attack,
+# as any human player would do.
 #
-# Flow :
-#   1. YOLO bâtiments localise le château de clan dans le village
-#   2. Check si "PLEIN" est affiché au-dessus
-#   3. Si pas plein : tap CC → template matching bouton "Demande"
-#      dans la barre du bas → tap "Envoyer" (position calibrée)
-#   4. Cooldown 15 min entre chaque demande
+# Flow:
+# 1. YOLO buildings locates the clan castle in the village
+# 2. Check if "FULL" is displayed above it
+# 3. If not full: tap CC → template matching "Request" button
+# in the bottom bar → tap "Send" (calibrated position)
+# 4. 15-min cooldown between each request
 #
-# Setup :
-#   1. uv run python -m clashai.social.clan_castle --capture
-#      → Capture la barre et crop le bouton "Demande"
-#      → Sauvegarder dans templates/clan_castle/request.png
-#   2. uv run python -m clashai.navigation.calibrate_ui
-#      → Calibrer la position cdc_confirmation (bouton vert "Envoyer")
+# Setup:
+# 1. uv run python -m clashai.social.clan_castle --capture
+# → Captures the bar and crops the "Request" button
+# → Save in templates/clan_castle/request.png
+# 2. uv run python -m clashai.navigation.calibrate_ui
+# → Calibrate the cdc_confirmation position (green "Send" button)
 #
-# Usage :
-#   manager = ClanCastleManager(building_detector)
-#   manager.request_if_needed(screenshot_fn, tap_fn)
+# Usage:
+# manager = ClanCastleManager(building_detector)
+# manager.request_if_needed(screenshot_fn, tap_fn)
 
 import os
 import time
@@ -33,48 +33,48 @@ from clashai.paths import PROJECT_ROOT
 
 
 # =============================================================================
-#                         CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
-# Dossier des templates
+# Templates directory
 CC_TEMPLATES_DIR = os.path.join(PROJECT_ROOT, 'templates', 'clan_castle')
 
-# Cooldown entre deux demandes (secondes)
-REQUEST_COOLDOWN = 15 * 60  # 15 minutes
+# Cooldown between two requests (seconds)
+REQUEST_COOLDOWN = 15 * 60
 
-# Délais ADB (secondes)
-DELAY_AFTER_TAP_CC = 1.5       # Attendre la barre d'options
-DELAY_AFTER_TAP_REQUEST = 1.0  # Attendre le popup "Demander des renforts"
-DELAY_AFTER_CONFIRM = 0.8      # Attendre après "Envoyer"
+# ADB delays (seconds)
+DELAY_AFTER_TAP_CC = 1.5
+DELAY_AFTER_TAP_REQUEST = 1.0
+DELAY_AFTER_CONFIRM = 0.8
 DELAY_CLOSE = 0.5
 
-# Template matching (barre du bas — position instable)
+# Template matching (bottom bar — unstable position)
 MATCH_THRESHOLD = 0.60
 MATCH_SCALES = [1.0, 0.9, 1.1, 0.85, 1.15]
 
-# Zone de la barre d'options du bâtiment (bas de l'écran)
+# Building options bar zone (bottom of screen)
 BAR_TOP = 880
 BAR_BOTTOM = 1080
 BAR_LEFT = 0
 BAR_RIGHT = 1920
 
-# Zone au-dessus du château pour détecter "PLEIN"
+# Zone above the castle to detect "FULL"
 FULL_TEXT_OFFSET_Y = -80
 FULL_TEXT_ZONE_W = 140
 FULL_TEXT_ZONE_H = 40
 FULL_TEXT_WHITE_THRESHOLD = 200
 
-# Fallback position pour "Envoyer" (si pas calibré)
-# Estimé depuis le screenshot : bouton vert centré-droit du popup
+# Fallback position for "Send" (if not calibrated)
+# Estimated from screenshot: green button center-right of the popup
 FALLBACK_CONFIRM_POS = (850, 575)
 
 
 # =============================================================================
-#                    TEMPLATE MATCHING
+# TEMPLATE MATCHING
 # =============================================================================
 
 def _load_template(name):
-    """Charge un template depuis templates/clan_castle/."""
+    """Loads a template from templates/clan_castle/."""
     for ext in ('.png', '.jpg', '.bmp'):
         path = os.path.join(CC_TEMPLATES_DIR, f'{name}{ext}')
         if os.path.exists(path):
@@ -87,10 +87,10 @@ def _load_template(name):
 def _find_template(screenshot_cv, template_cv, region=None,
                    threshold=MATCH_THRESHOLD):
     """
-    Cherche un template dans un screenshot avec multi-scale matching.
+    Searches for a template in a screenshot using multi-scale matching.
 
     Returns:
-        (x, y, confidence) position ADB du centre, ou None
+        (x, y, confidence) ADB position of the center, or None
     """
     if region:
         top, bottom, left, right = region
@@ -142,8 +142,8 @@ def _find_template(screenshot_cv, template_cv, region=None,
 
 def _get_confirm_position():
     """
-    Position du bouton "Envoyer" dans le popup de confirmation.
-    Popup centré → position stable → calibrate_ui.
+    Position of the "Send" button in the confirmation popup.
+    Centered popup → stable position → calibrate_ui.
     """
     try:
         from clashai.navigation.calibrate_ui import get_position
@@ -153,17 +153,17 @@ def _get_confirm_position():
 
 
 # =============================================================================
-#                    CLAN CASTLE MANAGER
+# CLAN CASTLE MANAGER
 # =============================================================================
 
 class ClanCastleManager:
     """
-    Gère les demandes de troupes du château de clan.
+    Manages clan castle troop requests.
 
-    - analyze_village (YOLO + CNN) → localise le CC dans le village
-    - Template matching → trouve le bouton "Demande" (barre instable)
-    - calibrate_ui → bouton "Envoyer" (popup stable)
-    - Cooldown 15 min entre chaque demande
+    - analyze_village (YOLO + CNN) → locates the CC in the village
+    - Template matching → finds the "Request" button (unstable bar)
+    - calibrate_ui → "Send" button (stable popup)
+    - 15-min cooldown between each request
     """
 
     def __init__(self, models=None, verbose=True):
@@ -172,22 +172,22 @@ class ClanCastleManager:
         self._last_request_time = 0
         self._total_requests = 0
 
-        # Template pour le bouton "Demande" dans la barre du bas
+        # Template for the "Request" button in the bottom bar
         self._tmpl_request = _load_template('request')
 
         if verbose:
             status = "ok" if self._tmpl_request is not None else "MANQUANT"
             models_ok = "ok" if models is not None else "MANQUANT"
-            print(f"   🏰 CC Manager — models: {models_ok} | template request: {status}")
+            print(f" CC Manager — models: {models_ok} | template request: {status}")
             if self._tmpl_request is None:
-                print(f"      → uv run python -m clashai.social.clan_castle --capture")
+                print(f" → uv run python -m clashai.social.clan_castle --capture")
 
     # -----------------------------------------------------------------
-    #  API principale
+    # API principale
     # -----------------------------------------------------------------
 
     def request_if_needed(self, screenshot_fn, tap_fn):
-        """Demande des troupes si cooldown passé et CC pas plein."""
+        """Requests troops if the cooldown has passed and the CC is not full."""
         if self._tmpl_request is None:
             return False
         if not self._cooldown_ready():
@@ -200,12 +200,12 @@ class ClanCastleManager:
         cc_pos = self._find_clan_castle(img)
         if cc_pos is None:
             if self.verbose:
-                print("   ⚠️ Château de clan non trouvé")
+                print(" WARNING: Château de clan non trouvé")
             return False
 
         if self._is_castle_full(img, cc_pos):
             if self.verbose:
-                print("   🏰 CC PLEIN — pas de demande")
+                print(" CC FULL — no request")
             return False
 
         return self._do_request(cc_pos, tap_fn, screenshot_fn)
@@ -215,7 +215,7 @@ class ClanCastleManager:
         return max(0, REQUEST_COOLDOWN - elapsed)
 
     # -----------------------------------------------------------------
-    #  Cooldown
+    # Cooldown
     # -----------------------------------------------------------------
 
     def _cooldown_ready(self):
@@ -226,11 +226,11 @@ class ClanCastleManager:
             return True
         if self.verbose:
             remaining = (REQUEST_COOLDOWN - elapsed) / 60
-            print(f"   ⏳ CC cooldown: encore {remaining:.0f}min")
+            print(f" ⏳ CC cooldown: encore {remaining:.0f}min")
         return False
 
     # -----------------------------------------------------------------
-    #  Localisation du château de clan (YOLO)
+    # Clan castle location (YOLO)
     # -----------------------------------------------------------------
 
     def _find_clan_castle(self, screenshot_pil):
@@ -243,21 +243,21 @@ class ClanCastleManager:
                 if b['class'] == 'clan_castle':
                     cx, cy = b['center']
                     if self.verbose:
-                        print(f"   🏰 CC à ({cx}, {cy}) conf={b['confidence']:.2f}")
+                        print(f" CC à ({cx}, {cy}) conf={b['confidence']:.2f}")
                     return (cx, cy)
         except Exception as e:
             if self.verbose:
-                print(f"   ⚠️ Erreur détection CC: {e}")
+                print(f" WARNING: Erreur détection CC: {e}")
         return None
 
     # -----------------------------------------------------------------
-    #  Détection "PLEIN"
+    # "FULL" detection
     # -----------------------------------------------------------------
 
     def _is_castle_full(self, screenshot_pil, cc_pos):
         """
-        Vérifie si le texte "PLEIN" est affiché au-dessus du CC.
-        En cas de doute, retourne False (on essaie de demander).
+        Checks whether the "FULL" text is displayed above the CC.
+        If in doubt, returns False (we attempt to request anyway).
         """
         try:
             img_cv = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
@@ -271,36 +271,36 @@ class ClanCastleManager:
                 return False
             zone = img_cv[y1:y2, x1:x2]
             gray = cv2.cvtColor(zone, cv2.COLOR_BGR2GRAY)
-            # Seuil élevé (230) pour cibler uniquement le texte blanc "PLEIN"
-            # ratio > 0.30 pour éviter les faux positifs (reflets, UI)
+            # High threshold (230) to target only the white "FULL" text
+            # ratio > 0.30 to avoid false positives (reflections, UI)
             ratio = np.sum(gray > 230) / max(gray.size, 1)
             if ratio > 0.30:
                 if self.verbose:
-                    print(f"   🔍 'PLEIN' détecté (ratio: {ratio:.1%})")
+                    print(f" 'PLEIN' détecté (ratio: {ratio:.1%})")
                 return True
         except Exception as e:
             if self.verbose:
-                print(f"   ⚠️ Erreur détection PLEIN: {e}")
+                print(f" WARNING: Erreur détection PLEIN: {e}")
         return False
 
     # -----------------------------------------------------------------
-    #  Exécution de la demande
+    # Request execution
     # -----------------------------------------------------------------
 
     def _do_request(self, cc_pos, tap_fn, screenshot_fn):
         """
-        1. Tap CC → barre d'options
-        2. Template matching → bouton "Demande" (barre instable)
-        3. Tap "Envoyer" (popup stable → calibrate_ui)
+        1. Tap CC → options bar
+        2. Template matching → "Request" button (unstable bar)
+        3. Tap "Send" (stable popup → calibrate_ui)
         """
         if self.verbose:
-            print(f"   🏰 Demande de troupes CC...")
+            print(f" Requesting CC troops...")
 
-        # 1. Tap sur le château de clan
+        # 1. Tap on the clan castle
         tap_fn(cc_pos[0], cc_pos[1])
         time.sleep(DELAY_AFTER_TAP_CC)
 
-        # 2. Screenshot + template matching "Demande" dans la barre
+        # 2. Screenshot + template matching "Request" in the bar
         img = screenshot_fn()
         if img is None:
             self._close_menu(tap_fn)
@@ -314,42 +314,42 @@ class ClanCastleManager:
 
         if result is None:
             if self.verbose:
-                print("   ⚠️ Bouton 'Demande' non trouvé dans la barre")
+                print(" WARNING: Bouton 'Demande' non trouvé dans la barre")
             self._close_menu(tap_fn)
             return False
 
         req_x, req_y, conf = result
         if self.verbose:
-            print(f"   🔍 'Demande' à ({req_x}, {req_y}) conf={conf:.2f}")
+            print(f" 'Demande' à ({req_x}, {req_y}) conf={conf:.2f}")
 
-        # 3. Tap "Demande" → popup "Demander des renforts"
+        # 3. Tap "Request" → "Request Reinforcements" popup
         tap_fn(req_x, req_y)
         time.sleep(DELAY_AFTER_TAP_REQUEST)
 
-        # 4. Tap "Envoyer" (position calibrée — popup stable)
+        # 4. Tap "Send" (calibrated position — stable popup)
         confirm_pos = _get_confirm_position()
         tap_fn(confirm_pos[0], confirm_pos[1])
         time.sleep(DELAY_AFTER_CONFIRM)
 
         if self.verbose:
-            print(f"   📤 'Envoyer' à ({confirm_pos[0]}, {confirm_pos[1]})")
+            print(f" 📤 'Envoyer' à ({confirm_pos[0]}, {confirm_pos[1]})")
 
-        # 5. Fermer + cooldown
+        # 5. Close + cooldown
         self._close_menu(tap_fn)
         self._last_request_time = time.time()
         self._total_requests += 1
 
         if self.verbose:
-            print(f"   ✅ Troupes demandées ! (total: {self._total_requests})")
+            print(f" Troupes demandées ! (total: {self._total_requests})")
         return True
 
     def _close_menu(self, tap_fn):
-        tap_fn(30, 540)  # bord gauche — évite d'ouvrir un bâtiment
+        tap_fn(30, 540)
         time.sleep(DELAY_CLOSE)
 
 
 # =============================================================================
-#                            SETUP & TEST
+# SETUP & TEST
 # =============================================================================
 
 if __name__ == "__main__":
@@ -359,23 +359,23 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="ClashAI CC Manager")
     parser.add_argument('--capture', action='store_true',
-                        help="Capture la barre du CC pour créer le template")
+                        help="Capture the CC bar to create the template")
     parser.add_argument('--test', action='store_true',
-                        help="Test le template matching sur l'écran actuel")
+                        help="Test template matching on the current screen")
     args = parser.parse_args()
 
     if args.capture:
-        print("📸 Capture de la barre du château de clan\n")
-        print("   1. Tap sur ton château de clan en jeu")
-        print("   2. Attends que la barre apparaisse en bas")
-        input("\n   → Entrée quand c'est prêt...")
+        print("📸 Capture of the clan castle bar\n")
+        print(" 1. Tap your clan castle in-game")
+        print(" 2. Wait for the bar to appear at the bottom")
+        input("\n → Press Enter when ready...")
 
         result = subprocess.run(
             ["adb", "exec-out", "screencap", "-p"],
             capture_output=True, timeout=5
         )
         if result.returncode != 0:
-            print("   ❌ Erreur ADB")
+            print(" ERROR: ADB error")
         else:
             img = Image.open(io.BytesIO(result.stdout)).convert("RGB")
             img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
@@ -387,22 +387,22 @@ if __name__ == "__main__":
             full_path = os.path.join(CC_TEMPLATES_DIR, '_screenshot.png')
             cv2.imwrite(full_path, img_cv)
 
-            print(f"\n   ✅ Barre → {bar_path}")
-            print(f"   ✅ Screenshot → {full_path}")
-            print(f"\n   Maintenant :")
-            print(f"   1. Ouvre {bar_path}")
-            print(f"   2. Crop le bouton 'Demande' → request.png")
-            print(f"   3. Sauvegarde dans {CC_TEMPLATES_DIR}/")
-            print(f"\n   Puis calibrer le bouton 'Envoyer' :")
-            print(f"   uv run python -m clashai.navigation.calibrate_ui")
-            print(f"   → ajouter cdc_confirmation (bouton vert 'Envoyer')")
+            print(f"\n Bar → {bar_path}")
+            print(f" Screenshot → {full_path}")
+            print(f"\n Now:")
+            print(f" 1. Open {bar_path}")
+            print(f" 2. Crop the 'Request' button → request.png")
+            print(f" 3. Save in {CC_TEMPLATES_DIR}/")
+            print(f"\n Then calibrate the 'Send' button:")
+            print(f" uv run python -m clashai.navigation.calibrate_ui")
+            print(f" → add cdc_confirmation (green 'Send' button)")
 
     elif args.test:
-        print("🧪 Test template matching CC\n")
+        print("Test template matching CC\n")
         mgr = ClanCastleManager(building_detector=None)
         if mgr._tmpl_request is None:
-            print("   ❌ Template 'request' manquant")
-            print(f"   → uv run python -m clashai.social.clan_castle --capture")
+            print(" ERROR: Template 'request' missing")
+            print(f" → uv run python -m clashai.social.clan_castle --capture")
         else:
             result = subprocess.run(
                 ["adb", "exec-out", "screencap", "-p"],
@@ -415,22 +415,22 @@ if __name__ == "__main__":
                 region=(BAR_TOP, BAR_BOTTOM, BAR_LEFT, BAR_RIGHT),
             )
             if match:
-                print(f"   ✅ Bouton 'Demande' à ({match[0]}, {match[1]}) "
+                print(f" 'Request' button at ({match[0]}, {match[1]}) "
                       f"conf={match[2]:.3f}")
             else:
-                print("   ❌ Bouton non trouvé (ouvre d'abord le menu CC)")
+                print(" ERROR: Button not found (open the CC menu first)")
 
             confirm = _get_confirm_position()
-            print(f"   📍 Position 'Envoyer' : {confirm}")
+            print(f" 'Send' position: {confirm}")
 
     else:
-        print("🏰 ClashAI CC Manager")
-        print("  --capture   Capture la barre pour le template")
-        print("  --test      Test le template matching")
-        print(f"\nTemplates : {CC_TEMPLATES_DIR}")
+        print("ClashAI CC Manager")
+        print(" --capture Capture the bar for the template")
+        print(" --test Test template matching")
+        print(f"\nTemplates: {CC_TEMPLATES_DIR}")
         req = _load_template('request')
-        print(f"  request.png : {'✅' if req is not None else '❌ manquant'}")
+        print(f" request.png: {'' if req is not None else 'ERROR: missing'}")
         confirm = _get_confirm_position()
         is_fallback = confirm == FALLBACK_CONFIRM_POS
-        tag = "⚠️ fallback" if is_fallback else "✅ calibré"
-        print(f"  cdc_confirmation : {confirm} ({tag})")
+        tag = "WARNING: fallback" if is_fallback else "calibrated"
+        print(f" cdc_confirmation: {confirm} ({tag})")

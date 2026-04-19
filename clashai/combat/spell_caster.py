@@ -1,24 +1,24 @@
-# scripts/rl/spell_caster.py
-# SpellCaster V2 — ciblage intelligent des sorts mid-combat.
+# clashai/combat/spell_caster.py
+# SpellCaster V2 — intelligent spell targeting mid-combat.
 #
-# V2 changements :
-#   - GEL : cible la tour d'enfer/eagle la plus proche des troupes
-#           (utilise les positions YOLO pré-attaque)
-#   - SOIN : cible le cluster de troupes BLESSÉES (barres rouges/oranges)
-#            au lieu du cluster principal
-#   - RAGE : inchangé (devant les troupes, direction du centre village)
+# V2 changes:
+# - FREEZE: targets the inferno tower / eagle artillery closest to troops
+#   (uses pre-attack YOLO positions)
+# - HEAL: targets the cluster of INJURED troops (red/orange health bars)
+#   instead of the main cluster
+# - RAGE: unchanged (in front of troops, toward village center)
 #
-# Méthode :
-#   1. Au reset, on reçoit les positions des bâtiments dangereux (YOLO)
-#   2. Mid-combat, screenshot → détection barres de vie → clustering
-#   3. Gel → inferno le plus proche du cluster principal
-#   4. Soin → cluster de barres rouges/oranges (troupes blessées)
-#   5. Rage → 50px devant les troupes vers le centre du village
+# Method:
+# 1. On reset, receive dangerous building positions from YOLO
+# 2. Mid-combat, screenshot -> health bar detection -> clustering
+# 3. Freeze -> nearest inferno to the main cluster
+# 4. Heal -> cluster of red/orange bars (injured troops)
+# 5. Rage -> 50px in front of troops toward village center
 #
-# Usage :
-#   caster = SpellCaster()
-#   caster.set_defense_positions(buildings)  # Depuis YOLO pré-attaque
-#   targets = caster.analyze_battlefield(screenshot_pil, village_center)
+# Usage:
+# caster = SpellCaster()
+# caster.set_defense_positions(buildings)  # From pre-attack YOLO
+# targets = caster.analyze_battlefield(screenshot_pil, village_center)
 
 import cv2
 import numpy as np
@@ -26,19 +26,19 @@ from PIL import Image
 
 
 # =============================================================================
-#                         CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
 ADB_WIDTH = 1920
 ADB_HEIGHT = 1080
 
-# --- Détection des barres de vie vertes (troupes saines) ---
+# --- Green health bars (healthy troops) ---
 HP_BAR_H_MIN = 45
 HP_BAR_H_MAX = 85
 HP_BAR_S_MIN = 100
 HP_BAR_V_MIN = 120
 
-# --- Détection des barres de vie rouges/oranges (troupes blessées) ---
+# --- Red/orange health bars (injured troops) ---
 HP_RED_H_MIN = 0
 HP_RED_H_MAX = 10
 HP_RED_S_MIN = 120
@@ -49,26 +49,26 @@ HP_ORANGE_H_MAX = 25
 HP_ORANGE_S_MIN = 100
 HP_ORANGE_V_MIN = 120
 
-# --- Taille des barres de vie ---
+# --- Health bar size ---
 HP_BAR_MIN_AREA = 30
 HP_BAR_MAX_AREA = 800
 HP_BAR_MIN_RATIO = 1.5
 
-# --- Zones à ignorer (UI) ---
+# --- UI exclusion zones ---
 UI_EXCLUSION_Y = 0.60
 UI_EXCLUSION_TOP = 0.08
 
-# --- Classes de défenses à cibler avec le gel ---
+# --- Defense classes to target with freeze ---
 FREEZE_PRIORITY_CLASSES = [
-    'tour_enfer_mono',        # Priorité 1 : inferno single target
-    'tour_enfer_multiple',    # Priorité 1 : inferno multi target
-    'aigle_artilleur',        # Priorité 2 : eagle artillery
-    'catapulte_erratique',    # Priorité 3 : scattershot
-    'arcX_sol', 'arcX_sol_air',  # Priorité 4 : X-Bow
-    'monolithe',              # Priorité 5 : monolith
+    'tour_enfer_mono',
+    'tour_enfer_multiple',
+    'aigle_artilleur',
+    'catapulte_erratique',
+    'arcX_sol', 'arcX_sol_air',
+    'monolithe',
 ]
 
-# Poids de priorité (plus haut = plus prioritaire pour le gel)
+# Priority weights (higher = higher priority for freeze)
 FREEZE_PRIORITY_WEIGHTS = {
     'tour_enfer_mono': 10.0,
     'tour_enfer_multiple': 10.0,
@@ -79,24 +79,24 @@ FREEZE_PRIORITY_WEIGHTS = {
     'monolithe': 6.0,
 }
 
-# Distance max pour considérer qu'une défense menace les troupes (pixels ADB)
+# Max distance to consider a defense threatening to troops (ADB pixels)
 FREEZE_MAX_RANGE = 600
 
 
 # =============================================================================
-#                    DÉTECTION DES TROUPES
+# TROOP DETECTION
 # =============================================================================
 
 def detect_health_bars(img_cv, color='green'):
     """
-    Détecte les barres de vie sur un screenshot de combat.
+    Detects health bars on a combat screenshot.
 
     Args:
-        img_cv: image BGR
-        color: 'green' (saines), 'red' (blessées), 'all' (les deux)
+        img_cv: BGR image
+        color: 'green' (healthy), 'red' (injured), 'all' (both)
 
     Returns:
-        positions: liste de (x, y) — centres des barres détectées
+        positions: list of (x, y) — centers of detected bars
     """
     hsv = cv2.cvtColor(img_cv, cv2.COLOR_BGR2HSV)
     h, w = img_cv.shape[:2]
@@ -110,7 +110,7 @@ def detect_health_bars(img_cv, color='green'):
                            (HP_BAR_H_MIN, HP_BAR_S_MIN, HP_BAR_V_MIN),
                            (HP_BAR_H_MAX, 255, 255))
     elif color == 'red':
-        # Rouge
+        # Red
         mask1 = cv2.inRange(roi_hsv,
                             (HP_RED_H_MIN, HP_RED_S_MIN, HP_RED_V_MIN),
                             (HP_RED_H_MAX, 255, 255))
@@ -123,7 +123,7 @@ def detect_health_bars(img_cv, color='green'):
                             (HP_ORANGE_H_MAX, 255, 255))
         mask = cv2.bitwise_or(mask1, mask2)
         mask = cv2.bitwise_or(mask, mask3)
-    else:  # 'all'
+    else:
         mask_g = cv2.inRange(roi_hsv,
                              (HP_BAR_H_MIN, HP_BAR_S_MIN, HP_BAR_V_MIN),
                              (HP_BAR_H_MAX, 255, 255))
@@ -165,11 +165,11 @@ def detect_health_bars(img_cv, color='green'):
 
 def cluster_positions(positions, min_cluster_size=2, cluster_radius=150):
     """
-    Regroupe les positions proches en clusters.
+    Groups nearby positions into clusters.
 
     Returns:
-        clusters: liste de {'center': (x,y), 'size': n, 'points': [...]}
-                  triée par taille décroissante
+        clusters: list of {'center': (x,y), 'size': n, 'points': [...]}
+                  sorted by descending size
     """
     if not positions:
         return []
@@ -211,32 +211,31 @@ def cluster_positions(positions, min_cluster_size=2, cluster_radius=150):
 
 
 # =============================================================================
-#                      SPELL CASTER V2
+# SPELL CASTER V2
 # =============================================================================
 
 class SpellCaster:
     """
-    Ciblage intelligent des sorts V2.
-    
-    Nouveautés V2 :
-    - Gel ciblé sur les tours d'enfer / eagle les plus proches des troupes
-    - Soin ciblé sur les troupes blessées (barres rouges/oranges)
-    - Utilise les positions YOLO pré-attaque pour le ciblage
+    Intelligent spell targeting V2.
+
+    V2 additions:
+    - Freeze targeted at the inferno tower / eagle closest to troops
+    - Heal targeted at injured troops (red/orange health bars)
+    - Uses pre-attack YOLO positions for targeting
     """
 
     def __init__(self, verbose=True):
         self.verbose = verbose
-        self._defense_targets = []  # [(x_adb, y_adb, class_name, priority)]
+        self._defense_targets = []
 
     def set_defense_positions(self, buildings):
         """
-        Enregistre les positions des défenses dangereuses depuis
-        la détection YOLO pré-attaque.
-        
-        À appeler une fois au reset(), avant le combat.
-        
+        Registers dangerous defense positions from pre-attack YOLO detection.
+
+        Call once at reset(), before combat starts.
+
         Args:
-            buildings: liste de dicts [{class, confidence, bbox, center}, ...]
+            buildings: list of dicts [{class, confidence, bbox, center}, ...]
         """
         self._defense_targets = []
 
@@ -247,22 +246,22 @@ class SpellCaster:
                 priority = FREEZE_PRIORITY_WEIGHTS[cls_name]
                 self._defense_targets.append((cx, cy, cls_name, priority))
 
-        # Trier par priorité décroissante
+        # Sort by descending priority
         self._defense_targets.sort(key=lambda t: t[3], reverse=True)
 
         if self.verbose and self._defense_targets:
-            print(f"      🎯 SpellCaster V2 : {len(self._defense_targets)} "
-                  f"cibles gel enregistrées")
+            print(f" SpellCaster V2 : {len(self._defense_targets)} "
+                  f"freeze targets registered")
             for x, y, name, prio in self._defense_targets[:5]:
-                print(f"         {name} à ({x}, {y}) prio={prio:.0f}")
+                print(f" {name} at ({x}, {y}) prio={prio:.0f}")
 
     def analyze_battlefield(self, screenshot_pil, village_center_adb=None):
         """
-        Analyse un screenshot mid-combat et retourne les cibles des sorts.
+        Analyzes a mid-combat screenshot and returns spell targets.
 
         Args:
-            screenshot_pil: PIL Image du combat en cours
-            village_center_adb: (x, y) centre du village en ADB
+            screenshot_pil: PIL Image of the ongoing combat
+            village_center_adb: (x, y) village center in ADB coordinates
 
         Returns:
             targets: dict {
@@ -270,7 +269,7 @@ class SpellCaster:
                 'heal': (x, y),
                 'rage': (x, y),
                 'freeze': (x, y),
-                'freeze_target_name': str ou None,
+                'freeze_target_name': str or None,
                 'num_troops': int,
                 'num_hurt': int,
                 'num_clusters': int,
@@ -282,17 +281,17 @@ class SpellCaster:
         scale_x = ADB_WIDTH / img_w
         scale_y = ADB_HEIGHT / img_h
 
-        # 1. Détecter les barres de vie vertes (troupes saines)
+        # 1. Detect green health bars (healthy troops)
         green_bars = detect_health_bars(img_cv, 'green')
 
-        # 2. Détecter les barres rouges/oranges (troupes blessées)
+        # 2. Detect red/orange bars (injured troops)
         hurt_bars = detect_health_bars(img_cv, 'red')
 
         if self.verbose:
-            print(f"      🎯 Barres de vie détectées : "
-                  f"{len(green_bars)} saines, {len(hurt_bars)} blessées")
+            print(f" Health bars detected: "
+                  f"{len(green_bars)} healthy, {len(hurt_bars)} injured")
 
-        # Fallback si rien détecté
+        # Fallback if nothing detected
         all_bars = green_bars + hurt_bars
         if not all_bars:
             fallback = village_center_adb or (ADB_WIDTH // 2, ADB_HEIGHT // 2 - 50)
@@ -307,38 +306,38 @@ class SpellCaster:
                 'num_clusters': 0,
             }
 
-        # 3. Convertir en ADB
+        # 3. Convert to ADB coordinates
         all_adb = [(int(x * scale_x), int(y * scale_y)) for x, y in all_bars]
         hurt_adb = [(int(x * scale_x), int(y * scale_y)) for x, y in hurt_bars]
 
-        # 4. Clustering de toutes les troupes
+        # 4. Cluster all troops
         clusters = cluster_positions(all_adb, min_cluster_size=2, cluster_radius=150)
 
         if self.verbose and clusters:
-            print(f"      📍 {len(clusters)} cluster(s), "
-                  f"principal: {clusters[0]['size']} troupes "
-                  f"à ({clusters[0]['center'][0]}, {clusters[0]['center'][1]})")
+            print(f" {len(clusters)} cluster(s), "
+                  f"main: {clusters[0]['size']} troops "
+                  f"at ({clusters[0]['center'][0]}, {clusters[0]['center'][1]})")
 
         main_cluster = (clusters[0]['center'] if clusters
                         else all_adb[len(all_adb) // 2])
 
-        # ===== SOIN V2 : cibler les troupes blessées =====
+        # ===== HEAL V2: target injured troops =====
         if hurt_adb:
             hurt_clusters = cluster_positions(hurt_adb, min_cluster_size=1,
                                               cluster_radius=200)
             if hurt_clusters:
-                # Soin sur le plus gros cluster de blessés
+                # Heal on the largest injured cluster
                 heal_target = hurt_clusters[0]['center']
                 if self.verbose:
-                    print(f"      💚 Soin → cluster blessés "
-                          f"({hurt_clusters[0]['size']} troupes) "
-                          f"à {heal_target}")
+                    print(f" Heal -> injured cluster "
+                          f"({hurt_clusters[0]['size']} troops) "
+                          f"at {heal_target}")
             else:
                 heal_target = main_cluster
         else:
             heal_target = main_cluster
 
-        # ===== RAGE : devant les troupes =====
+        # ===== RAGE: in front of troops =====
         if village_center_adb:
             dx = village_center_adb[0] - main_cluster[0]
             dy = village_center_adb[1] - main_cluster[1]
@@ -352,7 +351,7 @@ class SpellCaster:
         else:
             rage_target = main_cluster
 
-        # ===== GEL V2 : cibler la défense dangereuse la plus proche =====
+        # ===== FREEZE V2: target the nearest dangerous defense =====
         freeze_target, freeze_name = self._find_freeze_target(main_cluster)
 
         return {
@@ -368,25 +367,25 @@ class SpellCaster:
 
     def analyze_from_yolo(self, raw_data, village_center_adb=None):
         """
-        Analyse les cibles de sorts à partir des données YOLO du CombatObserver.
-        
-        Même interface de retour que analyze_battlefield, mais utilise les
-        détections YOLO (positions exactes par classe) au lieu des barres HSV.
-        
+        Analyzes spell targets from CombatObserver YOLO data.
+
+        Same return interface as analyze_battlefield, but uses YOLO detections
+        (exact positions by class) instead of HSV health bars.
+
         Args:
-            raw_data: dict retourné par CombatObserver._observe_yolo()
+            raw_data: dict returned by CombatObserver._observe_yolo()
             village_center_adb: (x, y)
-            
+
         Returns:
-            targets: même format que analyze_battlefield
+            targets: same format as analyze_battlefield
         """
         clusters = raw_data.get('clusters', [])
         all_pos = raw_data.get('green_positions', [])
         hurt_adb = raw_data.get('hurt_positions', [])
         hero_named = raw_data.get('hero_positions_named', {})
-        
+
         fallback = village_center_adb or (ADB_WIDTH // 2, ADB_HEIGHT // 2 - 50)
-        
+
         if not all_pos and not hurt_adb:
             return {
                 'troop_cluster': fallback, 'heal': fallback,
@@ -395,18 +394,18 @@ class SpellCaster:
                 'num_troops': 0, 'num_hurt': 0, 'num_clusters': 0,
                 'hero_positions': hero_named,
             }
-        
+
         main_cluster = clusters[0]['center'] if clusters else fallback
-        
-        # Soin : cluster de blessés
+
+        # Heal: injured cluster
         if hurt_adb:
             from clashai.combat.combat_observer import _cluster_positions
             hurt_clusters = _cluster_positions(hurt_adb, radius=200, min_size=1)
             heal_target = hurt_clusters[0]['center'] if hurt_clusters else main_cluster
         else:
             heal_target = main_cluster
-        
-        # Rage : devant les troupes (vers le centre village)
+
+        # Rage: in front of troops (toward village center)
         if village_center_adb:
             dx = village_center_adb[0] - main_cluster[0]
             dy = village_center_adb[1] - main_cluster[1]
@@ -417,10 +416,10 @@ class SpellCaster:
                            max(60, min(ADB_HEIGHT - 200, rage_y)))
         else:
             rage_target = main_cluster
-        
-        # Gel : défense dangereuse la plus proche
+
+        # Freeze: nearest dangerous defense
         freeze_target, freeze_name = self._find_freeze_target(main_cluster)
-        
+
         return {
             'troop_cluster': main_cluster,
             'heal': heal_target,
@@ -435,24 +434,23 @@ class SpellCaster:
 
     def _find_freeze_target(self, troop_center):
         """
-        Trouve la meilleure cible pour le sort de gel.
-        
-        Logique : parmi les défenses dangereuses détectées par YOLO,
-        trouver celle qui est le plus proche des troupes ET a la plus
-        haute priorité. On utilise un score combiné :
+        Finds the best target for the freeze spell.
+
+        Logic: among dangerous defenses detected by YOLO, find the one
+        closest to troops AND with the highest priority. Uses a combined score:
             score = priority / (distance + 100)
-        
-        Plus la priorité est haute et la distance faible, meilleur le score.
-        
+
+        Higher priority and lower distance gives a better score.
+
         Args:
-            troop_center: (x, y) centre du cluster de troupes
-            
+            troop_center: (x, y) center of the troop cluster
+
         Returns:
-            (target_pos, target_name) ou (troop_center, None) si aucune cible
+            (target_pos, target_name) or (troop_center, None) if no target found
         """
         if not self._defense_targets:
             if self.verbose:
-                print("      🧊 Gel → pas de cibles YOLO, fallback sur troupes")
+                print(" Freeze -> no YOLO targets, fallback to troops")
             return troop_center, None
 
         best_score = -1
@@ -464,11 +462,11 @@ class SpellCaster:
         for dx, dy, cls_name, priority in self._defense_targets:
             dist = np.sqrt((dx - tx) ** 2 + (dy - ty) ** 2)
 
-            # Ignorer les défenses trop loin des troupes
+            # Skip defenses too far from troops
             if dist > FREEZE_MAX_RANGE:
                 continue
 
-            # Score combiné : priorité haute + distance faible = bon score
+            # Combined score: high priority + low distance = good score
             score = priority / (dist + 100)
 
             if score > best_score:
@@ -480,23 +478,23 @@ class SpellCaster:
             if self.verbose:
                 dist = np.sqrt((best_target[0] - tx) ** 2 +
                                (best_target[1] - ty) ** 2)
-                print(f"      🧊 Gel → {best_name} à {best_target} "
+                print(f" Freeze -> {best_name} at {best_target} "
                       f"(dist={dist:.0f}px, score={best_score:.3f})")
             return best_target, best_name
         else:
             if self.verbose:
-                print("      🧊 Gel → aucune défense à portée, "
-                      "fallback devant troupes")
+                print(" Freeze -> no defense in range, "
+                      "fallback in front of troops")
             return troop_center, None
 
 
 # =============================================================================
-#                            TEST
+# TEST
 # =============================================================================
 
 def test_spell_caster(image_path=None):
-    """Test du SpellCaster V2 sur un screenshot."""
-    print("🧪 Test du SpellCaster V2\n")
+    """Test SpellCaster V2 on a screenshot."""
+    print("Test SpellCaster V2\n")
 
     if image_path:
         img_pil = Image.open(image_path).convert("RGB")
@@ -510,7 +508,7 @@ def test_spell_caster(image_path=None):
 
     caster = SpellCaster(verbose=True)
 
-    # Simuler des défenses détectées par YOLO
+    # Simulate YOLO-detected defenses
     fake_buildings = [
         {'class': 'tour_enfer_mono', 'confidence': 0.98,
          'bbox': (800, 300, 850, 350), 'center': (825, 325)},
@@ -525,14 +523,14 @@ def test_spell_caster(image_path=None):
 
     targets = caster.analyze_battlefield(img_pil, village_center_adb=(960, 500))
 
-    print("\n📊 Résultats V2 :")
-    print(f"   Troupes détectées : {targets['num_troops']} "
-          f"(dont {targets['num_hurt']} blessées)")
-    print(f"   Clusters          : {targets['num_clusters']}")
-    print(f"   Cluster principal : {targets['troop_cluster']}")
-    print(f"   Soin → {targets['heal']}")
-    print(f"   Rage → {targets['rage']}")
-    print(f"   Gel  → {targets['freeze']} "
+    print("\nV2 results:")
+    print(f" Troops detected: {targets['num_troops']} "
+          f"(including {targets['num_hurt']} injured)")
+    print(f" Clusters: {targets['num_clusters']}")
+    print(f" Main cluster: {targets['troop_cluster']}")
+    print(f" Heal -> {targets['heal']}")
+    print(f" Rage -> {targets['rage']}")
+    print(f" Freeze -> {targets['freeze']} "
           f"({targets['freeze_target_name'] or 'fallback'})")
 
     # Debug image
@@ -549,7 +547,7 @@ def test_spell_caster(image_path=None):
         cv2.putText(img_cv, label, (ix + 30, iy),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
 
-    # Dessiner les cibles de gel
+    # Draw freeze targets
     for dx, dy, name, prio in caster._defense_targets:
         ix, iy = int(dx * sx), int(dy * sy)
         cv2.circle(img_cv, (ix, iy), 15, (0, 0, 255), 2)
@@ -557,7 +555,7 @@ def test_spell_caster(image_path=None):
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
 
     cv2.imwrite('debug_spells_v2.png', img_cv)
-    print("\n🖼️  Debug sauvegardé: debug_spells_v2.png")
+    print("\nDebug image saved: debug_spells_v2.png")
 
 
 if __name__ == "__main__":

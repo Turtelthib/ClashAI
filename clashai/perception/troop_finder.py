@@ -1,22 +1,22 @@
 # scripts/rl/troop_finder.py
-# Détecte et sélectionne les troupes dans la barre du bas via template matching.
-# Robuste : fonctionne quel que soit l'ordre des slots, les héros manquants,
-# les troupes d'événement, etc.
+# Detects and selects troops in the bottom bar via template matching.
+# Robust: works regardless of slot order, missing heroes,
+# event troops, etc.
 #
-# v2 : Multi-scale matching + scroll de la barre si des troupes manquent
+# v2: Multi-scale matching + bar scroll if troops are missing
 #
-# Setup (une seule fois) :
-#   1. python scripts/rl/troop_finder.py --extract
-#      → Capture la barre de troupes et la sauvegarde
-#   2. Ouvre troop_templates/_barre_complete.png dans un éditeur
-#   3. Découpe chaque icône et sauvegarde avec le bon nom :
-#      golem.png, pekka.png, sorcier.png, etc.
+# Setup (once):
+# 1. python scripts/rl/troop_finder.py --extract
+# → Captures the troop bar and saves it
+# 2. Open troop_templates/_barre_complete.png in an image editor
+# 3. Cut out each icon and save with the correct name:
+# golem.png, pekka.png, sorcier.png, etc.
 #
-# Utilisation dans le code :
-#   finder = TroopFinder()
-#   finder.update(screenshot_pil)   # Analyse la barre actuelle
-#   finder.select("golem")          # Clique sur le golem
-#   finder.select("rage")           # Clique sur le sort de rage
+# Usage in code:
+# finder = TroopFinder()
+# finder.update(screenshot_pil) # Analyze the current bar
+# finder.select("golem") # Click on the golem
+# finder.select("rage") # Click on the rage spell
 
 import os
 import sys
@@ -30,28 +30,28 @@ from PIL import Image
 
 
 # =============================================================================
-#                         CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
 from clashai.paths import TROOP_TEMPLATES_DIR
 
 TEMPLATES_DIR = TROOP_TEMPLATES_DIR
 
-# Zone de la barre de troupes dans l'écran (1920x1080)
+# Troop bar zone in the screen (1920x1080)
 BAR_TOP = 950
 BAR_BOTTOM = 1080
 BAR_LEFT = 0
 BAR_RIGHT = 1920
 
-# Seuil de confiance pour le template matching
-MATCH_THRESHOLD = 0.45  # Abaissé de 0.50 à 0.45 pour attraper plus de troupes
+# Confidence threshold for template matching
+MATCH_THRESHOLD = 0.45
 
-# Multi-scale : échelles à tester si le match direct échoue
+# Multi-scale: scales to try if the direct match fails
 MATCH_SCALES = [1.0, 0.9, 1.1, 0.85, 1.15]
 
 
 # =============================================================================
-#                         FONCTIONS ADB
+# ADB FUNCTIONS
 # =============================================================================
 
 def adb_tap(x, y, delay=0.05):
@@ -71,7 +71,7 @@ def adb_swipe(x1, y1, x2, y2, duration_ms=300):
 
 
 def adb_screenshot():
-    """Capture l'écran et retourne une image PIL."""
+    """Captures the screen and returns a PIL image."""
     try:
         result = subprocess.run(
             ["adb", "exec-out", "screencap", "-p"],
@@ -81,38 +81,38 @@ def adb_screenshot():
             return None
         return Image.open(io.BytesIO(result.stdout)).convert("RGB")
     except Exception as e:
-        print(f"⚠️  Erreur capture : {e}")
+        print(f"WARNING: Capture error: {e}")
         return None
 
 
 # =============================================================================
-#                      TROOP FINDER
+# TROOP FINDER
 # =============================================================================
 
 class TroopFinder:
     """
-    Trouve et sélectionne les troupes dans la barre du bas
-    en utilisant le template matching d'OpenCV.
+    Finds and selects troops in the bottom bar
+    using OpenCV template matching.
     """
 
     def __init__(self, templates_dir=TEMPLATES_DIR):
         self.templates_dir = templates_dir
-        self.templates = {}       # nom → image template (numpy array)
-        self.positions = {}       # nom → (x, y, confidence)
+        self.templates = {}
+        self.positions = {}
         self._load_templates()
 
     def _load_templates(self):
-        """Charge tous les templates depuis le dossier troop_templates/."""
+        """Loads all templates from the troop_templates/ folder."""
         if not os.path.exists(self.templates_dir):
-            print(f"⚠️  Dossier templates introuvable : {self.templates_dir}")
-            print("   Lancez d'abord : python scripts/rl/troop_finder.py --extract")
+            print(f"WARNING: Templates folder not found: {self.templates_dir}")
+            print(" Run first: python scripts/rl/troop_finder.py --extract")
             return
 
         count = 0
         for filename in os.listdir(self.templates_dir):
             if not filename.endswith('.png'):
                 continue
-            if filename.startswith('_'):  # Ignorer _barre_complete.png
+            if filename.startswith('_'):
                 continue
 
             name = os.path.splitext(filename)[0]
@@ -124,14 +124,14 @@ class TroopFinder:
                 count += 1
 
         if count > 0:
-            print(f"📦 {count} templates de troupes chargés : {sorted(self.templates.keys())}")
+            print(f"{count} troop templates loaded: {sorted(self.templates.keys())}")
         else:
-            print(f"⚠️  Aucun template trouvé dans {self.templates_dir}")
+            print(f"WARNING: No template found in {self.templates_dir}")
 
     def _match_template_multiscale(self, bar_region, template):
         """
-        Template matching multi-échelle.
-        Retourne (max_val, max_loc, best_scale) ou (0, None, None) si rien.
+        Multi-scale template matching.
+        Returns (max_val, max_loc, best_scale) or (0, None, None) if no match.
         """
         best_val = 0
         best_loc = None
@@ -164,11 +164,11 @@ class TroopFinder:
 
     def update(self, screenshot_pil):
         """
-        Analyse la barre de troupes actuelle et trouve la position de chaque troupe.
-        Utilise le multi-scale matching pour plus de robustesse.
+        Analyzes the current troop bar and finds the position of each troop.
+        Uses multi-scale matching for greater robustness.
 
         Args:
-            screenshot_pil: image PIL de l'écran complet
+            screenshot_pil: PIL image of the full screen
         """
         screen = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
         bar_region = screen[BAR_TOP:BAR_BOTTOM, BAR_LEFT:BAR_RIGHT]
@@ -186,31 +186,31 @@ class TroopFinder:
 
         found = len(self.positions)
         total = len(self.templates)
-        print(f"🔍 Troupes détectées : {found}/{total}")
+        print(f"Troops detected: {found}/{total}")
 
         for name, (x, y, conf) in sorted(self.positions.items(), key=lambda item: item[1][0]):
-            print(f"   {name:<25s} → ({x:4d}, {y:4d})  conf: {conf:.2f}")
+            print(f" {name:<25s} → ({x:4d}, {y:4d}) conf: {conf:.2f}")
 
-        # Lister les troupes manquantes
+        # List missing troops
         missing = set(self.templates.keys()) - set(self.positions.keys())
         if missing:
-            print(f"   ⚠️  Non trouvées : {sorted(missing)}")
+            print(f" WARNING: Not found: {sorted(missing)}")
 
     def update_with_scroll(self, scroll_attempts=2):
         """
-        Comme update() mais scrolle la barre si des troupes manquent.
-        Utile quand l'armée a beaucoup de types différents.
+        Like update() but scrolls the bar if troops are missing.
+        Useful when the army has many different types.
 
         Args:
-            scroll_attempts: nombre de scrolls à essayer
+            scroll_attempts: number of scrolls to try
         """
-        # Premier scan sans scroll
+        # First scan without scroll
         img = adb_screenshot()
         if img is None:
             return
         self.update(img)
 
-        # Si toutes les troupes sont trouvées, on arrête
+        # If all troops are found, stop
         if len(self.positions) >= len(self.templates):
             return
 
@@ -218,10 +218,10 @@ class TroopFinder:
         if not missing:
             return
 
-        # Scroller la barre vers la droite et rescanner
+        # Scroll the bar to the right and rescan
         for attempt in range(scroll_attempts):
-            print(f"   📜 Scroll de la barre (tentative {attempt+1})...")
-            # Swipe de droite à gauche dans la barre pour voir les troupes cachées
+            print(f" 📜 Scroll de la barre (tentative {attempt+1})...")
+            # Swipe right to left in the bar to reveal hidden troops
             adb_swipe(1400, 1020, 600, 1020, 300)
             time.sleep(0.5)
 
@@ -232,7 +232,7 @@ class TroopFinder:
             screen = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
             bar_region = screen[BAR_TOP:BAR_BOTTOM, BAR_LEFT:BAR_RIGHT]
 
-            # Scanner uniquement les troupes manquantes
+            # Scan only missing troops
             newly_found = 0
             for name in list(missing):
                 if name not in self.templates:
@@ -247,27 +247,27 @@ class TroopFinder:
                     self.positions[name] = (match_x, match_y, best_val)
                     missing.discard(name)
                     newly_found += 1
-                    print(f"   ✅ Trouvé après scroll : {name} ({best_val:.2f})")
+                    print(f" Found after scroll: {name} ({best_val:.2f})")
 
             if not missing:
                 break
 
-        # Rescroller au début pour remettre la barre en position initiale
+        # Scroll back to the beginning to reset the bar to initial position
         if scroll_attempts > 0:
             adb_swipe(600, 1020, 1400, 1020, 300)
             time.sleep(0.3)
 
-        print(f"🔍 Total après scroll : {len(self.positions)}/{len(self.templates)}")
+        print(f"Total after scroll: {len(self.positions)}/{len(self.templates)}")
 
     def select(self, troop_name, delay=0.15):
         """
-        Sélectionne une troupe en cliquant sur sa position.
+        Selects a troop by clicking on its position.
 
         Returns:
-            True si trouvée et cliquée, False sinon.
+            True if found and clicked, False otherwise.
         """
         if troop_name not in self.positions:
-            # Ne pas spammer les warnings
+            # Do not spam warnings
             return False
 
         x, y, conf = self.positions[troop_name]
@@ -275,33 +275,33 @@ class TroopFinder:
         return True
 
     def get_position(self, troop_name):
-        """Retourne (x, y) d'une troupe ou None."""
+        """Returns (x, y) of a troop or None."""
         if troop_name in self.positions:
             x, y, _ = self.positions[troop_name]
             return (x, y)
         return None
 
     def is_available(self, troop_name):
-        """Vérifie si une troupe est visible dans la barre."""
+        """Checks if a troop is visible in the bar."""
         return troop_name in self.positions
 
 
 # =============================================================================
-#                 EXTRACTION DES TEMPLATES
+# TEMPLATE EXTRACTION
 # =============================================================================
 
 def extract_bar():
     """
-    Capture la barre de troupes et la sauvegarde.
-    L'utilisateur découpe ensuite les icônes manuellement.
+    Captures the troop bar and saves it.
+    The user then cuts out the icons manually.
     """
-    print("📸 Extraction de la barre de troupes...")
-    print("   Assure-toi d'être sur l'écran d'un village ennemi")
-    print("   (avec la barre de troupes visible en bas)\n")
+    print("📸 Extracting the troop bar...")
+    print(" Make sure you are on an enemy village screen")
+    print(" (with the troop bar visible at the bottom)\n")
 
     img_pil = adb_screenshot()
     if img_pil is None:
-        print("❌ Impossible de capturer l'écran")
+        print("ERROR: Unable to capture screen")
         return
 
     screen = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
@@ -315,24 +315,24 @@ def extract_bar():
     full_path = os.path.join(TEMPLATES_DIR, '_screenshot_complet.png')
     cv2.imwrite(full_path, screen)
 
-    print(f"✅ Barre sauvegardée : {bar_path}")
-    print(f"✅ Screenshot complet : {full_path}")
+    print(f"Bar saved: {bar_path}")
+    print(f"Full screenshot: {full_path}")
     print()
-    print("📝 PROCHAINE ÉTAPE :")
-    print(f"   1. Ouvre {bar_path} dans un éditeur d'images")
-    print("   2. Découpe chaque icône de troupe séparément")
-    print(f"   3. Sauvegarde chaque icône dans {TEMPLATES_DIR}/ avec le bon nom :")
-    print("      golem.png, pekka.png, sorcier.png, sorciere.png,")
-    print("      archere.png, lance_buche.png, roi.png, reine.png,")
-    print("      grand_gardien.png, championne.png, rage.png, soin.png, gel.png")
-    print("   4. Supprime les fichiers commençant par _ (référence)")
+    print("📝 NEXT STEP:")
+    print(f" 1. Open {bar_path} in an image editor")
+    print(" 2. Cut out each troop icon separately")
+    print(f" 3. Save each icon in {TEMPLATES_DIR}/ with the correct name:")
+    print(" golem.png, pekka.png, sorcier.png, sorciere.png,")
+    print(" archere.png, lance_buche.png, roi.png, reine.png,")
+    print(" grand_gardien.png, championne.png, rage.png, soin.png, gel.png")
+    print(" 4. Delete files starting with _ (reference files)")
 
 
 def auto_crop_bar():
-    """Découpe automatiquement la barre en slots réguliers."""
+    """Automatically crops the bar into regular slots."""
     bar_path = os.path.join(TEMPLATES_DIR, '_barre_complete.png')
     if not os.path.exists(bar_path):
-        print("❌ Barre non trouvée. Lance --extract d'abord.")
+        print("ERROR: Bar not found. Run --extract first.")
         return
 
     bar = cv2.imread(bar_path)
@@ -342,7 +342,7 @@ def auto_crop_bar():
     spacing = 85
     icon_w = 75
 
-    print(f"✂️  Découpage automatique de la barre ({w}x{h})")
+    print(f"✂ Auto-cropping the bar ({w}x{h})")
 
     slot = 0
     x = start_x
@@ -352,55 +352,55 @@ def auto_crop_bar():
             filename = f"slot_{slot:02d}.png"
             path = os.path.join(TEMPLATES_DIR, filename)
             cv2.imwrite(path, icon)
-            print(f"   Slot {slot:2d} → {filename} (x={x})")
+            print(f" Slot {slot:2d} → {filename} (x={x})")
             slot += 1
         x += spacing
 
-    print(f"\n✅ {slot} slots extraits.")
-    print("   Renomme chaque slot_XX.png avec le vrai nom de la troupe.")
+    print(f"\n{slot} slots extracted.")
+    print(" Rename each slot_XX.png with the actual troop name.")
 
 
 # =============================================================================
-#                              TEST
+# TEST
 # =============================================================================
 
 def test_finder():
-    """Test le TroopFinder sur un screenshot actuel."""
-    print("🧪 Test du TroopFinder...\n")
+    """Tests the TroopFinder on a live screenshot."""
+    print("TroopFinder Test...\n")
 
     finder = TroopFinder()
     if not finder.templates:
-        print("❌ Pas de templates. Lance --extract et découpe les icônes d'abord.")
+        print("ERROR: No templates. Run --extract and cut icons first.")
         return
 
     img_pil = adb_screenshot()
     if img_pil is None:
-        print("❌ Impossible de capturer l'écran")
+        print("ERROR: Unable to capture screen")
         return
 
-    # D'abord un scan normal
+    # First a normal scan
     finder.update(img_pil)
 
-    # Puis avec scroll si des troupes manquent
+    # Then with scroll if troops are missing
     if len(finder.positions) < len(finder.templates):
-        print("\n📜 Tentative avec scroll de la barre...")
+        print("\n📜 Trying with bar scroll...")
         finder.update_with_scroll()
 
     if not finder.positions:
-        print("\n❌ Aucune troupe détectée.")
+        print("\nERROR: No troop detected.")
         return
 
-    print("\n🎯 Test de sélection (Entrée pour cliquer, 'q' pour quitter) :")
+    print("\nSelection test (Enter to click, 'q' to quit):")
     for name in sorted(finder.positions.keys()):
-        response = input(f"   Sélectionner '{name}' ? [Entrée/q] ")
+        response = input(f" Select '{name}'? [Enter/q] ")
         if response.lower() == 'q':
             break
         finder.select(name)
-        print(f"   → Tap envoyé sur {name}")
+        print(f" → Tap sent to {name}")
 
 
 # =============================================================================
-#                              MAIN
+# MAIN
 # =============================================================================
 
 if __name__ == "__main__":
@@ -411,9 +411,9 @@ if __name__ == "__main__":
     elif '--test' in sys.argv:
         test_finder()
     else:
-        print("TroopFinder — Détection visuelle des troupes dans la barre")
+        print("TroopFinder — Visual troop detection in the bar")
         print()
-        print("Usage :")
-        print("  python scripts/rl/troop_finder.py --extract     Capturer la barre de troupes")
-        print("  python scripts/rl/troop_finder.py --auto-crop   Découper automatiquement en slots")
-        print("  python scripts/rl/troop_finder.py --test        Tester la détection")
+        print("Usage:")
+        print(" python scripts/rl/troop_finder.py --extract Capture the troop bar")
+        print(" python scripts/rl/troop_finder.py --auto-crop Auto-crop into slots")
+        print(" python scripts/rl/troop_finder.py --test Test detection")

@@ -17,7 +17,7 @@ LEARNING_RATE = 0.001
 EPOCHS = 30
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-print("🖥️  Entraînement du CNN de classification d'écran")
+print(" Entraînement du CNN de classification d'écran")
 print(f"Matériel : {DEVICE}")
 
 # --- DATASET ---
@@ -31,13 +31,13 @@ full_dataset = datasets.ImageFolder(root=DATA_DIR, transform=transform)
 classes = full_dataset.classes
 num_classes = len(classes)
 
-# Sauvegarde des classes d'écran
+# Save screen classes
 json_path = os.path.join(WEIGHTS_DIR, 'screen_classes.json')
 with open(json_path, 'w') as f:
     json.dump(classes, f)
 
-print(f"📂 {num_classes} états d'écran trouvés : {classes}")
-print(f"📊 {len(full_dataset)} images au total")
+print(f"{num_classes} états d'écran trouvés : {classes}")
+print(f"{len(full_dataset)} images au total")
 
 train_size = int(0.8 * len(full_dataset))
 val_size = len(full_dataset) - train_size
@@ -46,13 +46,13 @@ train_set, val_set = random_split(full_dataset, [train_size, val_size])
 train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True)
 val_loader = DataLoader(val_set, batch_size=BATCH_SIZE, shuffle=False)
 
-# --- MODÈLE ---
+# --- MODEL ---
 model = MyCustomCNN(num_classes).to(DEVICE)
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
 
-# --- ENTRAÎNEMENT ---
+# --- TRAINING ---
 print(f"\n🔥 Démarrage de l'entraînement ({EPOCHS} epochs)...")
 
 best_val_acc = 0.0
@@ -76,9 +76,9 @@ for epoch in range(EPOCHS):
         loop.set_postfix(loss=loss.item())
 
     train_acc = 100 * correct / total
-    print(f"   --> Train Accuracy: {train_acc:.2f}%")
+    print(f" --> Train Accuracy: {train_acc:.2f}%")
 
-    # Validation à chaque epoch
+    # Validation at each epoch
     model.eval()
     val_correct, val_total = 0, 0
     with torch.no_grad():
@@ -90,15 +90,15 @@ for epoch in range(EPOCHS):
             val_correct += (predicted == labels).sum().item()
 
     val_acc = 100 * val_correct / val_total
-    print(f"   --> Val Accuracy:   {val_acc:.2f}%")
+    print(f" --> Val Accuracy: {val_acc:.2f}%")
 
-    # Sauvegarde du meilleur modèle
+    # Save the best model
     if val_acc > best_val_acc:
         best_val_acc = val_acc
         torch.save(model.state_dict(), os.path.join(WEIGHTS_DIR, "screen_cnn.pth"))
-        print(f"   💾 Nouveau meilleur modèle sauvegardé ({val_acc:.2f}%)")
+        print(f" Nouveau meilleur modèle sauvegardé ({val_acc:.2f}%)")
 
     scheduler.step()
 
-print(f"\n✅ Entraînement terminé ! Meilleure Val Accuracy : {best_val_acc:.2f}%")
-print("💾 Modèle sauvegardé : weights/screen_cnn.pth")
+print(f"\nEntraînement terminé ! Meilleure Val Accuracy : {best_val_acc:.2f}%")
+print("Modèle sauvegardé : weights/screen_cnn.pth")

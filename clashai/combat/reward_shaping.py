@@ -1,24 +1,24 @@
 # clashai/combat/reward_shaping.py
-# Reward shaping pour ClashAI V4.
+# Reward shaping for ClashAI V4.
 #
-# Toute la logique de reward est centralisée ici.
-# L'environnement appelle compute_step_reward() et compute_final_reward().
+# All reward logic is centralized here.
+# The environment calls compute_step_reward() and compute_final_reward().
 
 
 from clashai.combat.action_space import DEPLOY_ROLES
 
 
 # =============================================================================
-#                         CONSTANTES
+# CONSTANTS
 # =============================================================================
 
-# Reward finaux (basés sur les résultats de l'attaque)
+# Final rewards (based on attack results)
 REWARD_PER_STAR = 100
 REWARD_FIRST_STAR_BONUS = 50
 REWARD_ZERO_STAR_PENALTY = -50
 REWARD_THREE_STAR_BONUS = 50
 
-# Reward shaping deploy
+# Deploy reward shaping
 REWARD_TANK_FIRST = 5.0
 REWARD_HERO_BEFORE_TANK = -3.0
 REWARD_SPELL_TOO_EARLY = -8.0
@@ -27,42 +27,42 @@ REWARD_SPREAD = -1.0
 REWARD_WAIT_AFTER_TANK = 3.0
 REWARD_LEFTOVER_TROOPS = -2.0
 
-# Reward shaping combat
+# Combat reward shaping
 REWARD_ABILITY_GOOD_TIMING = 3.0
 REWARD_ABILITY_BAD_TIMING = -2.0
 REWARD_GG_CLUTCH = 5.0
 REWARD_SPELL_IN_COMBAT = 1.0
 REWARD_OVER_OBSERVE = -0.5
-REWARD_LEFTOVER_SPELLS = -5.0   # Malus par sort non utilisé en fin de combat
+REWARD_LEFTOVER_SPELLS = -5.0
 
-# Reward shaping avancé (V4.2)
-REWARD_SPELL_RAGE_GOOD = 2.0    # rage quand troupes en vie
-REWARD_SPELL_RAGE_BAD = 0.0     # rage quand plus personne
-REWARD_SPELL_SOIN_GOOD = 3.0    # soin quand blessés
-REWARD_SPELL_SOIN_WASTED = 0.5  # soin alors que tout le monde est sain
-REWARD_SPELL_GEL = 1.5          # gel (SpellCaster cible bien, toujours utile)
-REWARD_COMBO_CLUTCH_HEAL = 2.0  # soin clutch quand hurt_ratio > 0.5
-REWARD_HERO_SURVIVAL = 5.0      # par héros encore en vie en fin de combat
+# Advanced reward shaping (V4.2)
+REWARD_SPELL_RAGE_GOOD = 2.0
+REWARD_SPELL_RAGE_BAD = 0.0
+REWARD_SPELL_SOIN_GOOD = 3.0
+REWARD_SPELL_SOIN_WASTED = 0.5
+REWARD_SPELL_GEL = 1.5
+REWARD_COMBO_CLUTCH_HEAL = 2.0
+REWARD_HERO_SURVIVAL = 5.0
 
 
 # =============================================================================
-#                     STEP REWARD (pendant l'épisode)
+# STEP REWARD (during episode)
 # =============================================================================
 
 def compute_deploy_reward(action_type, role_idx, sector_idx,
                           tanks_deployed, troops_deployed,
                           last_sector, combat_features):
     """
-    Reward shaping pour la phase deploy.
+    Reward shaping for the deploy phase.
 
     Args:
         action_type: 'deploy', 'wait_short', 'wait_long', 'done'
-        role_idx: index du rôle (0-4) si deploy
-        sector_idx: index du secteur (0-4) si deploy
+        role_idx: role index (0-4) if deploy
+        sector_idx: sector index (0-4) if deploy
         tanks_deployed: int
         troops_deployed: int
-        last_sector: int ou None
-        combat_features: array ou None
+        last_sector: int or None
+        combat_features: array or None
 
     Returns:
         reward: float
@@ -72,15 +72,15 @@ def compute_deploy_reward(action_type, role_idx, sector_idx,
     if action_type == 'deploy' and role_idx is not None:
         role_name = DEPLOY_ROLES[role_idx]
 
-        # Règle 1 : tanks d'abord
+        # Rule 1: tanks first
         if role_name == 'tank' and troops_deployed < 4:
             reward += REWARD_TANK_FIRST
 
-        # Règle 2 : héros pas avant les tanks
+        # Rule 2: heroes not before tanks
         if role_name == 'hero' and tanks_deployed == 0:
             reward += REWARD_HERO_BEFORE_TANK
 
-        # Règle 3 : concentration des troupes
+        # Rule 3: troop concentration
         if sector_idx is not None and last_sector is not None:
             dist = abs(sector_idx - last_sector)
             if dist <= 1:
@@ -89,13 +89,13 @@ def compute_deploy_reward(action_type, role_idx, sector_idx,
                 reward += REWARD_SPREAD
 
     elif action_type == 'wait_long':
-        # Règle 4 : attente stratégique après les tanks
+        # Rule 4: strategic wait after tanks
         if tanks_deployed > 0 and troops_deployed < 6:
             reward += REWARD_WAIT_AFTER_TANK
 
     elif action_type == 'done':
-        # Pas de pénalité ici — la pénalité pour troupes restantes
-        # est calculée dans compute_leftover_penalty()
+        # No penalty here — leftover troop penalty
+        # is computed in compute_leftover_penalty()
         pass
 
     return reward
@@ -105,13 +105,13 @@ def compute_combat_reward(action_type, spell_name, hero_idx,
                           combat_features, combat_step_count,
                           hero_names):
     """
-    Reward shaping pour la phase combat.
+    Reward shaping for the combat phase.
 
     Args:
         action_type: 'spell', 'ability', 'observe', 'wait_short', etc.
-        spell_name: str ou None
-        hero_idx: int ou None
-        combat_features: array (15,) du CombatObserver
+        spell_name: str or None
+        hero_idx: int or None
+        combat_features: array (15,) from CombatObserver
         combat_step_count: int
         hero_names: list[str]
 
@@ -154,7 +154,7 @@ def compute_combat_reward(action_type, spell_name, hero_idx,
 
         elif spell_name == 'soin':
             if hurt_ratio > 0.5:
-                # Combo clutch : soin d'urgence
+                # Clutch combo: emergency heal
                 reward += REWARD_SPELL_SOIN_GOOD + REWARD_COMBO_CLUTCH_HEAL
             elif hurt_ratio > 0.3:
                 reward += REWARD_SPELL_SOIN_GOOD
@@ -176,23 +176,23 @@ def compute_combat_reward(action_type, spell_name, hero_idx,
 
 def compute_hero_survival_bonus(combat_features):
     """
-    Bonus de fin d'épisode basé sur les héros encore en vie.
+    End-of-episode bonus based on heroes still alive.
 
     Args:
-        combat_features: array (15,) du dernier observe, ou None
+        combat_features: array (15,) from the last observe, or None
 
     Returns:
-        reward: float (0.0 si pas d'observation disponible)
+        reward: float (0.0 if no observation available)
     """
     if combat_features is None:
         return 0.0
-    heroes_alive_ratio = combat_features[4]  # num_heroes_alive / 5.0
+    heroes_alive_ratio = combat_features[4]
     num_alive = round(heroes_alive_ratio * 5)
     return REWARD_HERO_SURVIVAL * num_alive
 
 
 def compute_leftover_penalty(remaining_troops, troop_types):
-    """Pénalité pour les troupes non déployées à la fin du deploy."""
+    """Penalty for troops not deployed at the end of deploy phase."""
     count = sum(
         int(remaining_troops[i])
         for i, t in enumerate(troop_types)
@@ -202,7 +202,7 @@ def compute_leftover_penalty(remaining_troops, troop_types):
 
 
 def compute_spell_leftover_penalty(remaining_troops, troop_types):
-    """Malus pour les sorts non utilisés en fin de combat."""
+    """Penalty for spells unused at the end of combat."""
     count = sum(
         int(remaining_troops[i])
         for i, t in enumerate(troop_types)
@@ -212,12 +212,12 @@ def compute_spell_leftover_penalty(remaining_troops, troop_types):
 
 
 # =============================================================================
-#                     FINAL REWARD (fin d'épisode)
+# FINAL REWARD (end of episode)
 # =============================================================================
 
 def compute_final_reward(stars, percentage):
     """
-    Reward final basé sur le résultat de l'attaque.
+    Final reward based on the attack result.
 
     Args:
         stars: int (0-3)

@@ -2,21 +2,21 @@ from ultralytics import YOLO
 import os
 import shutil
 
-# --- 1. CONFIGURATION DES CHEMINS ---
-# On récupère le dossier où est ce script (scripts/)
-# On remonte d'un cran pour trouver la racine (COCProj/)
+# --- 1. PATH CONFIGURATION ---
+# Get the folder where this script lives (scripts/)
+# Go up one level to find the root (COCProj/)
 from clashai.paths import PROJECT_ROOT as project_root
 
-# On définit les chemins absolus
+# Define absolute paths
 yaml_path = os.path.join(project_root, 'configs', 'coc.yaml')
 weights_dir = os.path.join(project_root, 'weights')
 
-# --- 2. ENTRAÎNEMENT ---
-# Charge un modèle pré-entraîné
+# --- 2. TRAINING ---
+# Load a pre-trained model
 model = YOLO('yolo11n.pt')
 
-print("🚀 Lancement de l'entraînement YOLO...")
-print(f"📂 Configuration : {yaml_path}")
+print("Lancement de l'entraînement YOLO...")
+print(f"Configuration : {yaml_path}")
 
 results = model.train(
     data=yaml_path,
@@ -39,6 +39,6 @@ dest_best = os.path.join(weights_dir, 'best.pt')
 
 if os.path.exists(source_best):
     shutil.copy(source_best, dest_best)
-    print(f"✅ Modèle sauvegardé dans : {dest_best}")
+    print(f"Modèle sauvegardé dans : {dest_best}")
 else:
-    print("⚠️ Attention : Le fichier best.pt n'a pas été trouvé.")
+    print("WARNING: Attention : Le fichier best.pt n'a pas été trouvé.")

@@ -1,28 +1,28 @@
 # scripts/rl/train_yolo_troops.py
-# Entraînement YOLO11 pour la détection des troupes en combat.
+# YOLO11 training for troop detection in combat.
 #
-# Même approche que pour les bâtiments, mais adapté aux troupes :
-# - Les troupes bougent (contrairement aux bâtiments statiques)
-# - Les troupes sont plus petites (sorciers, archères)
-# - Les troupes se chevauchent souvent (pack de sorcières)
-# - Le fond change (différents villages)
+# Same approach as for buildings, but adapted for troops:
+# - Troops move (unlike static buildings)
+# - Troops are smaller (wizards, archers)
+# - Troops often overlap (witch packs)
+# - Background changes (different villages)
 #
-# Structure attendue du dataset :
-#   dataset_troops/
-#   ├── images/
-#   │   ├── train/    # 80% des images
-#   │   └── val/      # 20% des images
-#   ├── labels/
-#   │   ├── train/    # Labels YOLO (.txt)
-#   │   └── val/
-#   └── coc_troops.yaml
+# Expected dataset structure:
+# dataset_troops/
+# ├── images/
+# │ ├── train/ # 80% of images
+# │ └── val/ # 20% of images
+# ├── labels/
+# │ ├── train/ # YOLO labels (.txt)
+# │ └── val/
+# └── coc_troops.yaml
 #
-# Usage :
-#   python scripts/rl/train_yolo_troops.py
-#   python scripts/rl/train_yolo_troops.py --epochs 150 --batch 8
-#   python scripts/rl/train_yolo_troops.py --resume
-#   python scripts/rl/train_yolo_troops.py --test
-#   python scripts/rl/train_yolo_troops.py --test --image combat_captures/combat_001.png
+# Usage:
+# python scripts/rl/train_yolo_troops.py
+# python scripts/rl/train_yolo_troops.py --epochs 150 --batch 8
+# python scripts/rl/train_yolo_troops.py --resume
+# python scripts/rl/train_yolo_troops.py --test
+# python scripts/rl/train_yolo_troops.py --test --image combat_captures/combat_001.png
 
 import os
 import argparse
@@ -31,56 +31,56 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 
 
 # =============================================================================
-#                         CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
 DATASET_YAML = os.path.join(project_root, 'coc_troops.yaml')
 WEIGHTS_DIR = os.path.join(project_root, 'weights', 'yolo_troops')
 BEST_WEIGHTS = os.path.join(WEIGHTS_DIR, 'best.pt')
 
-# Hyperparamètres par défaut
+# Default hyperparameters
 DEFAULT_EPOCHS = 100
-DEFAULT_BATCH = 16      # RTX 5070 8Go → 16 devrait passer
-DEFAULT_IMG_SIZE = 640   # Standard YOLO, bon compromis vitesse/précision
-DEFAULT_MODEL = 'yolo11m.pt'  # Medium — bon équilibre pour 10 classes
+DEFAULT_BATCH = 16
+DEFAULT_IMG_SIZE = 640
+DEFAULT_MODEL = 'yolo11m.pt'
 
 
 # =============================================================================
-#                         ENTRAÎNEMENT
+# TRAINING
 # =============================================================================
 
 def train(epochs=DEFAULT_EPOCHS, batch=DEFAULT_BATCH, img_size=DEFAULT_IMG_SIZE,
           model=DEFAULT_MODEL, resume=False, data=None):
-    """Entraîne le modèle YOLO11 pour détecter les troupes en combat."""
+    """Trains the YOLO11 model to detect troops in combat."""
     from ultralytics import YOLO
 
     data_yaml = data or DATASET_YAML
 
     if not os.path.exists(data_yaml):
-        print(f"❌ Dataset non trouvé : {data_yaml}")
-        print("   Crée le dataset avec capture_combat.py + annotation LabelMe")
-        print("   Puis convertis en format YOLO avec convert_labelme.py")
+        print(f"ERROR: Dataset non trouvé : {data_yaml}")
+        print(" Crée le dataset avec capture_combat.py + annotation LabelMe")
+        print(" Puis convertis en format YOLO avec convert_labelme.py")
         return
 
     print(f"\n{'='*60}")
-    print("  🎯 ClashAI — Entraînement YOLO Troupes")
+    print(" ClashAI — Entraînement YOLO Troupes")
     print(f"{'='*60}")
-    print(f"  Dataset  : {data_yaml}")
-    print(f"  Modèle   : {model}")
-    print(f"  Epochs   : {epochs}")
-    print(f"  Batch    : {batch}")
-    print(f"  Img size : {img_size}")
-    print(f"  Resume   : {resume}")
+    print(f" Dataset : {data_yaml}")
+    print(f" Modèle : {model}")
+    print(f" Epochs : {epochs}")
+    print(f" Batch : {batch}")
+    print(f" Img size : {img_size}")
+    print(f" Resume : {resume}")
     print(f"{'='*60}\n")
 
     if resume and os.path.exists(BEST_WEIGHTS):
-        print(f"📦 Reprise depuis {BEST_WEIGHTS}")
+        print(f"Reprise depuis {BEST_WEIGHTS}")
         yolo = YOLO(BEST_WEIGHTS)
     else:
-        print(f"📦 Chargement du modèle pré-entraîné {model}")
+        print(f"Chargement du modèle pré-entraîné {model}")
         yolo = YOLO(model)
 
-    # Entraînement
+    # Training
     results = yolo.train(
         data=data_yaml,
         epochs=epochs,
@@ -89,65 +89,66 @@ def train(epochs=DEFAULT_EPOCHS, batch=DEFAULT_BATCH, img_size=DEFAULT_IMG_SIZE,
         project=WEIGHTS_DIR,
         name='train',
         exist_ok=True,
-        patience=20,        # Early stopping si pas d'amélioration
+        patience=20,
         save=True,
-        save_period=10,      # Checkpoint tous les 10 epochs
+        save_period=10,
         verbose=True,
-        plots=True,          # Générer les courbes de training
+        plots=True,
 
-        # Optimiseur
+        # Optimizer
         optimizer='AdamW',
         lr0=0.001,
         lrf=0.01,
         weight_decay=0.0005,
 
         # Loss weights
-        box=7.5,             # Poids de la loss bbox
-        cls=1.0,             # Poids de la loss classification
-        dfl=1.5,             # Distribution focal loss
 
-        # Augmentation (défini dans le yaml, mais on peut override ici)
+        box=7.5,
+        cls=1.0,
+        dfl=1.5,
+
+        # Augmentation (defined in the yaml, but can be overridden here)
         mosaic=1.0,
         mixup=0.15,
         copy_paste=0.15,
     )
 
-    # Copier le best vers un emplacement fixe
+    # Copy the best weights to a fixed location
     best_src = os.path.join(WEIGHTS_DIR, 'train', 'weights', 'best.pt')
     if os.path.exists(best_src):
         import shutil
         shutil.copy2(best_src, BEST_WEIGHTS)
-        print(f"\n✅ Meilleur modèle copié vers : {BEST_WEIGHTS}")
+        print(f"\nMeilleur modèle copié vers : {BEST_WEIGHTS}")
 
-    print(f"\n📊 Résultats dans : {os.path.join(WEIGHTS_DIR, 'train')}")
+    print(f"\nRésultats dans : {os.path.join(WEIGHTS_DIR, 'train')}")
     return results
 
 
 # =============================================================================
-#                         TEST / INFÉRENCE
+# TEST / INFERENCE
 # =============================================================================
 
 def test(image_path=None, conf=0.35, save=True):
-    """Teste le modèle sur une image ou un screenshot ADB."""
+    """Tests the model on an image or an ADB screenshot."""
     from ultralytics import YOLO
 
     if not os.path.exists(BEST_WEIGHTS):
-        print(f"❌ Pas de modèle entraîné : {BEST_WEIGHTS}")
-        print("   Lance d'abord : python train_yolo_troops.py")
+        print(f"ERROR: Pas de modèle entraîné : {BEST_WEIGHTS}")
+        print(" Lance d'abord : python train_yolo_troops.py")
         return
 
-    print("\n🧪 Test YOLO Troupes")
-    print(f"   Modèle : {BEST_WEIGHTS}")
-    print(f"   Seuil  : {conf}")
+    print("\nTest YOLO Troupes")
+    print(f" Modèle : {BEST_WEIGHTS}")
+    print(f" Seuil : {conf}")
 
     yolo = YOLO(BEST_WEIGHTS)
 
     if image_path and os.path.exists(image_path):
-        print(f"   Image  : {image_path}")
+        print(f" Image : {image_path}")
         source = image_path
     else:
-        # Screenshot ADB
-        print("   Source  : screenshot ADB")
+        # ADB screenshot
+        print(" Source : screenshot ADB")
         import subprocess
         import io
         from PIL import Image
@@ -157,7 +158,7 @@ def test(image_path=None, conf=0.35, save=True):
             capture_output=True, timeout=5
         )
         if result.returncode != 0 or len(result.stdout) < 100:
-            print("❌ Screenshot ADB échoué")
+            print("ERROR: Screenshot ADB échoué")
             return
 
         img = Image.open(io.BytesIO(result.stdout)).convert("RGB")
@@ -165,7 +166,7 @@ def test(image_path=None, conf=0.35, save=True):
         img.save(tmp_path)
         source = tmp_path
 
-    # Inférence
+    # Inference
     results = yolo.predict(
         source=source,
         conf=conf,
@@ -176,69 +177,69 @@ def test(image_path=None, conf=0.35, save=True):
         exist_ok=True,
     )
 
-    # Afficher les résultats
+    # Display results
     for r in results:
         boxes = r.boxes
         if len(boxes) == 0:
-            print("\n   ⚠️  Aucune troupe détectée")
+            print("\n WARNING: Aucune troupe détectée")
             continue
 
-        print(f"\n   🎯 {len(boxes)} troupes détectées :")
+        print(f"\n {len(boxes)} troupes détectées :")
         names = r.names
         for box in boxes:
             cls_id = int(box.cls[0])
             conf_val = float(box.conf[0])
             x1, y1, x2, y2 = box.xyxy[0].tolist()
             name = names[cls_id]
-            print(f"      {name:20s} conf={conf_val:.2f} "
+            print(f" {name:20s} conf={conf_val:.2f} "
                   f"({int(x1)},{int(y1)})-({int(x2)},{int(y2)})")
 
     if save:
-        print(f"\n   📁 Images annotées dans : {os.path.join(WEIGHTS_DIR, 'test', 'predict')}")
+        print(f"\n Images annotées dans : {os.path.join(WEIGHTS_DIR, 'test', 'predict')}")
 
 
 # =============================================================================
-#                         VALIDATION
+# VALIDATION
 # =============================================================================
 
 def validate(data=None):
-    """Valide le modèle sur le dataset de validation."""
+    """Validates the model on the validation dataset."""
     from ultralytics import YOLO
 
     if not os.path.exists(BEST_WEIGHTS):
-        print(f"❌ Pas de modèle entraîné : {BEST_WEIGHTS}")
+        print(f"ERROR: Pas de modèle entraîné : {BEST_WEIGHTS}")
         return
 
     data_yaml = data or DATASET_YAML
 
-    print("\n📊 Validation YOLO Troupes")
-    print(f"   Modèle  : {BEST_WEIGHTS}")
-    print(f"   Dataset : {data_yaml}")
+    print("\nValidation YOLO Troupes")
+    print(f" Modèle : {BEST_WEIGHTS}")
+    print(f" Dataset : {data_yaml}")
 
     yolo = YOLO(BEST_WEIGHTS)
     metrics = yolo.val(data=data_yaml, split='val')
 
     print(f"\n{'='*60}")
-    print("  📊 Résultats de validation")
+    print(" Résultats de validation")
     print(f"{'='*60}")
-    print(f"  mAP50      : {metrics.box.map50:.3f}")
-    print(f"  mAP50-95   : {metrics.box.map:.3f}")
-    print(f"  Précision  : {metrics.box.mp:.3f}")
-    print(f"  Rappel     : {metrics.box.mr:.3f}")
+    print(f" mAP50 : {metrics.box.map50:.3f}")
+    print(f" mAP50-95 : {metrics.box.map:.3f}")
+    print(f" Précision : {metrics.box.mp:.3f}")
+    print(f" Rappel : {metrics.box.mr:.3f}")
     print(f"{'='*60}")
 
-    # Par classe
+    # Per class
     if hasattr(metrics.box, 'maps') and metrics.box.maps is not None:
         NAMES = ['golem', 'sorcier', 'sorciere', 'pekka', 'archere',
                  'lance_buche', 'roi', 'reine', 'grand_gardien', 'championne']
-        print("\n  Par classe :")
+        print("\n Par classe :")
         for i, m in enumerate(metrics.box.maps):
             name = NAMES[i] if i < len(NAMES) else f"class_{i}"
-            print(f"    {name:20s} mAP50 = {m:.3f}")
+            print(f" {name:20s} mAP50 = {m:.3f}")
 
 
 # =============================================================================
-#                         MAIN
+# MAIN
 # =============================================================================
 
 if __name__ == "__main__":
@@ -246,25 +247,25 @@ if __name__ == "__main__":
         description="ClashAI — Entraînement YOLO détection troupes"
     )
     parser.add_argument('--test', action='store_true',
-                        help="Tester le modèle")
+                        help="Test the model")
     parser.add_argument('--validate', action='store_true',
-                        help="Valider sur le dataset de validation")
+                        help="Validate on the validation dataset")
     parser.add_argument('--resume', action='store_true',
-                        help="Reprendre l'entraînement")
+                        help="Resume training")
     parser.add_argument('--epochs', type=int, default=DEFAULT_EPOCHS,
-                        help=f"Nombre d'epochs (défaut: {DEFAULT_EPOCHS})")
+                        help=f"Number of epochs (default: {DEFAULT_EPOCHS})")
     parser.add_argument('--batch', type=int, default=DEFAULT_BATCH,
-                        help=f"Batch size (défaut: {DEFAULT_BATCH})")
+                        help=f"Batch size (default: {DEFAULT_BATCH})")
     parser.add_argument('--img-size', type=int, default=DEFAULT_IMG_SIZE,
-                        help=f"Taille image (défaut: {DEFAULT_IMG_SIZE})")
+                        help=f"Image size (default: {DEFAULT_IMG_SIZE})")
     parser.add_argument('--model', type=str, default=DEFAULT_MODEL,
-                        help=f"Modèle de base (défaut: {DEFAULT_MODEL})")
+                        help=f"Base model (default: {DEFAULT_MODEL})")
     parser.add_argument('--data', type=str, default=None,
-                        help="Chemin vers le yaml du dataset")
+                        help="Path to the dataset yaml")
     parser.add_argument('--image', type=str, default=None,
-                        help="Image à tester (avec --test)")
+                        help="Image to test (with --test)")
     parser.add_argument('--conf', type=float, default=0.35,
-                        help="Seuil de confiance pour le test")
+                        help="Confidence threshold for testing")
 
     args = parser.parse_args()
 

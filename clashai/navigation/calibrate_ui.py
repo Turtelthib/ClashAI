@@ -1,20 +1,20 @@
 # scripts/rl/calibrate_ui.py
-# Calibrateur d'interface pour ClashAI.
+# UI calibrator for ClashAI.
 #
-# Enregistre les positions de tous les boutons UI en guidant l'utilisateur.
-# Les coordonnées sont sauvegardées dans ui_positions.json et utilisées
-# par tous les modules (brain, chat monitor, gdc navigator, etc.).
+# Records the positions of all UI buttons by guiding the user.
+# Coordinates are saved in ui_positions.json and used
+# by all modules (brain, chat monitor, gdc navigator, etc.).
 #
-# Usage :
-#   python -m clashai.navigation.calibrate_ui              (calibration complète)
-#   python -m clashai.navigation.calibrate_ui --only chat   (recalibrer seulement le chat)
-#   python -m clashai.navigation.calibrate_ui --show        (afficher les positions actuelles)
+# Usage:
+# python -m clashai.navigation.calibrate_ui (full calibration)
+# python -m clashai.navigation.calibrate_ui --only chat (recalibrate chat only)
+# python -m clashai.navigation.calibrate_ui --show (display current positions)
 #
-# Méthode :
-#   1. Le script prend un screenshot ADB
-#   2. Il l'affiche dans une fenêtre OpenCV
-#   3. L'utilisateur clique sur le bouton dans l'image
-#   4. Les coordonnées sont converties en ADB et sauvegardées
+# Method:
+# 1. The script takes an ADB screenshot
+# 2. It displays it in an OpenCV window
+# 3. The user clicks on the button in the image
+# 4. Coordinates are converted to ADB and saved
 
 import os
 import json
@@ -25,7 +25,7 @@ import io
 from PIL import Image
 
 # =============================================================================
-#                         CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
 from clashai.paths import UI_POSITIONS_FILE as _UI_POS
@@ -35,59 +35,59 @@ POSITIONS_FILE = _UI_POS
 ADB_WIDTH = 1920
 ADB_HEIGHT = 1080
 
-# Tous les boutons à calibrer, regroupés par contexte
-# Chaque entrée : (clé_json, description, écran_requis, delay_avant)
-# delay_avant = secondes d'attente AVANT de capturer (pour se mettre en situation)
+# All buttons to calibrate, grouped by context
+# Each entry: (json_key, description, required_screen, pre_delay)
+# pre_delay = seconds to wait BEFORE capturing (to get into position)
 BUTTONS_TO_CALIBRATE = {
     'village': [
         ('chat_open', '💬 Bouton pour OUVRIR le chat du clan', 'village_home', 0),
-        ('chat_close_tap', '❌ Tapez EN DEHORS du chat pour le FERMER', 'chat_clan', 0),
-        ('attack_button', '⚔️ Bouton ATTAQUER (en bas à gauche)', 'village_home', 0),
+        ('chat_close_tap', 'ERROR: Tapez EN DEHORS du chat pour le FERMER', 'chat_clan', 0),
+        ('attack_button', '⚔ Bouton ATTAQUER (en bas à gauche)', 'village_home', 0),
     ],
     'chat': [
-        ('chat_input', '✏️ Barre de saisie "Message de clan..." (en bas du chat)', 'chat_clan', 0),
+        ('chat_input', '✏ Barre de saisie "Message de clan..." (en bas du chat)', 'chat_clan', 0),
         ('chat_send', '➤ Bouton ENVOYER le message (flèche verte)', 'chat_clan', 0),
     ],
     'matchmaking': [
-        ('find_match', '🔍 Bouton TROUVER UNE PARTIE', 'recherche_adversaire', 0),
-        ('start_attack', '▶️ Bouton LANCER L\'ATTAQUE (pour confirmer)', 'prep_attaque', 0),
+        ('find_match', 'Bouton TROUVER UNE PARTIE', 'recherche_adversaire', 0),
+        ('start_attack', '▶ Bouton LANCER L\'ATTAQUE (pour confirmer)', 'prep_attaque', 0),
     ],
     'results': [
-        ('return_home', '🏠 Bouton RENTRER AU VILLAGE (après une attaque)', 'resultats_attaque', 20),
+        ('return_home', 'Bouton RENTRER AU VILLAGE (après une attaque)', 'resultats_attaque', 20),
     ],
     'gdc': [
-        # Flow complet de navigation GdC dans l'ordre d'utilisation :
-        # 1. Depuis le village → accéder au menu GdC
-        ('gdc_open', '🏰 Bouton pour ACCÉDER AU MENU GDC depuis le village', 'village_home', 0),
-        # 2. Écran "guerre terminée" → voir la carte
-        ('gdc_war_ended_see_map', '🗺️ Bouton VOIR LA CARTE (écran guerre terminée)', None, 10),
-        # 3. Sur la carte → basculer vers les ennemis
-        ('gdc_enemy_map', '👁️ Bouton CARTE ENNEMIE (voir les ennemis)', 'gdc_ally', 0),
-        # 4. Sur la carte → basculer vers les alliés
-        ('gdc_ally_map', '🛡️ Bouton CARTE ALLIÉE (voir les alliés)', 'gdc_enemy', 0),
-        # 5. Quand on a cliqué sur un village ennemi → popup avec "Attaquer"
-        ('gdc_attack_target', '⚔️ Bouton ATTAQUER dans le popup de cible GdC', None, 15),
-        # 6. Flèche SUIVANT (→) dans le popup de cible (village n+1)
-        ('gdc_village_next', '➡️ Flèche SUIVANT (droite) dans le popup village', None, 0),
-        # 7. Flèche PRÉCÉDENT (←) dans le popup de cible (village n-1)
-        ('gdc_village_prev', '⬅️ Flèche PRÉCÉDENT (gauche) dans le popup village', None, 0),
-        # 8. Depuis le menu GdC → retour au village
-        ('gdc_return_home', '🏠 Bouton RETOUR AU VILLAGE depuis le menu GdC', None, 0),
+        # Full CW navigation flow in order of use:
+        # 1. From the village → access the CW menu
+        ('gdc_open', 'Bouton pour ACCÉDER AU MENU GDC depuis le village', 'village_home', 0),
+        # 2. "War ended" screen → see the map
+        ('gdc_war_ended_see_map', '🗺 Bouton VOIR LA CARTE (écran guerre terminée)', None, 10),
+        # 3. On the map → switch to enemies
+        ('gdc_enemy_map', 'Bouton CARTE ENNEMIE (voir les ennemis)', 'gdc_ally', 0),
+        # 4. On the map → switch to allies
+        ('gdc_ally_map', '🛡 Bouton CARTE ALLIÉE (voir les alliés)', 'gdc_enemy', 0),
+        # 5. After clicking on an enemy village → popup with "Attack"
+        ('gdc_attack_target', '⚔ Bouton ATTAQUER dans le popup de cible GdC', None, 15),
+        # 6. NEXT arrow (→) in the target popup (village n+1)
+        ('gdc_village_next', '➡ Flèche SUIVANT (droite) dans le popup village', None, 0),
+        # 7. PREVIOUS arrow (←) in the target popup (village n-1)
+        ('gdc_village_prev', '⬅ Flèche PRÉCÉDENT (gauche) dans le popup village', None, 0),
+        # 8. From the CW menu → return to village
+        ('gdc_return_home', 'Bouton RETOUR AU VILLAGE depuis le menu GdC', None, 0),
     ],
     'general': [
         ('open_profil', '👤 Bouton pour OUVRIR le profil (depuis le village)', 'village_home', 0),
-        ('close_profil', '❌ Bouton pour FERMER le profil', 'profil', 0),
+        ('close_profil', 'ERROR: Bouton pour FERMER le profil', 'profil', 0),
     ],
     'retreat': [
-        # Boutons de retraite (abandon) pendant un combat
-        # 1. Le drapeau blanc en haut à droite pendant le combat
-        ('ff_button', '🏳️ Bouton RETRAITE (drapeau blanc, en haut à droite pendant le combat)', 'phase_attaque', 0),
-        # 2. Le bouton de CONFIRMATION dans la popup
-        ('confirm_ff', '✅ Bouton CONFIRMER la retraite (dans la popup de confirmation)', None, 0),
+        # Retreat (surrender) buttons during combat
+        # 1. The white flag in the top-right corner during combat
+        ('ff_button', 'Bouton RETRAITE (drapeau blanc, en haut à droite pendant le combat)', 'phase_attaque', 0),
+        # 2. The CONFIRMATION button in the popup
+        ('confirm_ff', 'Bouton CONFIRMER la retraite (dans la popup de confirmation)', None, 0),
     ],
 }
 
-# Positions par défaut (fallback si pas calibré)
+# Default positions (fallback if not calibrated)
 DEFAULT_POSITIONS = {
     'chat_open': (47, 400),
     'chat_close_tap': (1400, 400),
@@ -115,11 +115,11 @@ DEFAULT_POSITIONS = {
 
 
 # =============================================================================
-#                    CAPTURE DU CLIC (screenshot + fenêtre OpenCV)
+# CLICK CAPTURE (screenshot + OpenCV window)
 # =============================================================================
 
 def _adb_screenshot():
-    """Capture l'écran ADB et retourne une image PIL."""
+    """Captures the ADB screen and returns a PIL image."""
     try:
         result = subprocess.run(
             ["adb", "exec-out", "screencap", "-p"],
@@ -136,7 +136,7 @@ _click_result = {'x': None, 'y': None, 'done': False}
 
 
 def _mouse_callback(event, x, y, flags, param):
-    """Callback OpenCV pour capturer le clic souris."""
+    """OpenCV callback to capture mouse clicks."""
     import cv2
     if event == cv2.EVENT_LBUTTONDOWN and not _click_result['done']:
         _click_result['x'] = x
@@ -146,13 +146,13 @@ def _mouse_callback(event, x, y, flags, param):
 
 def capture_click(description=""):
     """
-    Prend un screenshot ADB, l'affiche dans une fenêtre OpenCV,
-    et attend que l'utilisateur clique dessus.
-    
-    Les coordonnées du clic sont converties en coordonnées ADB (1920×1080).
-    
+    Takes an ADB screenshot, displays it in an OpenCV window,
+    and waits for the user to click on it.
+
+    The click coordinates are converted to ADB coordinates (1920×1080).
+
     Returns:
-        (x, y) en coordonnées ADB, ou None si Echap / fenêtre fermée
+        (x, y) in ADB coordinates, or None if Escape / window closed
     """
     import cv2
     import numpy as np
@@ -160,16 +160,16 @@ def capture_click(description=""):
     global _click_result
     _click_result = {'x': None, 'y': None, 'done': False}
 
-    # 1. Screenshot ADB
+    # 1. ADB screenshot
     img_pil = _adb_screenshot()
     if img_pil is None:
-        print("   ❌ Impossible de capturer l'écran")
+        print(" ERROR: Impossible de capturer l'écran")
         return None
 
     img_cv = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
     img_h, img_w = img_cv.shape[:2]
 
-    # 2. Réduire si trop grand pour l'écran
+    # 2. Shrink if too large for the display
     max_display_w = 1280
     max_display_h = 720
     scale = min(max_display_w / img_w, max_display_h / img_h, 1.0)
@@ -182,23 +182,23 @@ def capture_click(description=""):
         display_img = img_cv.copy()
         scale = 1.0
 
-    # 3. Texte d'instruction
+    # 3. Instruction text
     label = f"CLIQUEZ : {description}" if description else "CLIQUEZ sur le bouton"
     cv2.putText(display_img, label, (20, 30),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
     cv2.putText(display_img, "Echap = passer", (20, 60),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (100, 100, 255), 1)
 
-    # 4. Afficher la fenêtre
+    # 4. Display the window
     window_name = "ClashAI Calibration"
     cv2.namedWindow(window_name, cv2.WINDOW_AUTOSIZE)
     cv2.setMouseCallback(window_name, _mouse_callback)
     cv2.imshow(window_name, display_img)
 
-    # 5. Attendre le clic ou Echap
+    # 5. Wait for click or Escape
     while not _click_result['done']:
         key = cv2.waitKey(100)
-        if key == 27:  # Echap
+        if key == 27:
             cv2.destroyAllWindows()
             return None
         try:
@@ -209,7 +209,7 @@ def capture_click(description=""):
 
     cv2.destroyAllWindows()
 
-    # 6. Convertir coordonnées display → ADB
+    # 6. Convert display coordinates → ADB
     click_x = _click_result['x']
     click_y = _click_result['y']
 
@@ -223,16 +223,16 @@ def capture_click(description=""):
 
 
 # =============================================================================
-#                    CHARGEMENT / SAUVEGARDE
+# LOAD / SAVE
 # =============================================================================
 
 def load_positions():
-    """Charge les positions depuis le fichier JSON."""
+    """Loads positions from the JSON file."""
     if os.path.exists(POSITIONS_FILE):
         try:
             with open(POSITIONS_FILE, 'r') as f:
                 data = json.load(f)
-            # Convertir les listes en tuples
+            # Convert lists to tuples
             return {k: tuple(v) for k, v in data.items()}
         except (json.JSONDecodeError, Exception):
             pass
@@ -240,15 +240,15 @@ def load_positions():
 
 
 def save_positions(positions):
-    """Sauvegarde les positions dans le fichier JSON."""
-    # Convertir les tuples en listes pour JSON
+    """Saves positions to the JSON file."""
+    # Convert tuples to lists for JSON
     data = {k: list(v) for k, v in positions.items()}
-    
+
     tmp_path = POSITIONS_FILE + '.tmp'
     with open(tmp_path, 'w') as f:
         json.dump(data, f, indent=2)
-    
-    # Rename atomique
+
+    # Atomic rename
     if os.path.exists(POSITIONS_FILE):
         os.replace(tmp_path, POSITIONS_FILE)
     else:
@@ -257,13 +257,13 @@ def save_positions(positions):
 
 def get_position(key):
     """
-    Récupère une position calibrée, avec fallback sur la valeur par défaut.
-    
-    C'est cette fonction que tous les modules doivent appeler.
-    
+    Retrieves a calibrated position, with fallback to the default value.
+
+    This is the function all modules should call.
+
     Args:
-        key: str (ex: 'chat_open', 'attack_button', etc.)
-        
+        key: str (e.g. 'chat_open', 'attack_button', etc.)
+
     Returns:
         (x, y) tuple
     """
@@ -272,29 +272,29 @@ def get_position(key):
         return positions[key]
     if key in DEFAULT_POSITIONS:
         return DEFAULT_POSITIONS[key]
-    return (960, 540)  # Centre de l'écran en dernier recours
+    return (960, 540)
 
 
 # =============================================================================
-#                    CALIBRATION
+# CALIBRATION
 # =============================================================================
 
 def calibrate(groups=None):
     """
-    Lance la calibration interactive.
-    
+    Launches the interactive calibration.
+
     Args:
-        groups: liste de groupes à calibrer (None = tous)
+        groups: list of groups to calibrate (None = all)
     """
     positions = load_positions()
     
     print(f"\n{'='*60}")
-    print("  🎯 ClashAI — Calibration de l'interface")
+    print(" ClashAI — Calibration de l'interface")
     print(f"{'='*60}")
-    print("\n  Pour chaque bouton, un screenshot s'affiche dans une fenêtre.")
-    print("  Cliquez sur le bouton dans l'image.")
-    print("  Echap = passer un bouton.")
-    print("  Les positions sont sauvegardées dans ui_positions.json\n")
+    print("\n Pour chaque bouton, un screenshot s'affiche dans une fenêtre.")
+    print(" Cliquez sur le bouton dans l'image.")
+    print(" Echap = passer un bouton.")
+    print(" Les positions sont sauvegardées dans ui_positions.json\n")
     
     if groups is None:
         groups = list(BUTTONS_TO_CALIBRATE.keys())
@@ -304,88 +304,88 @@ def calibrate(groups=None):
     
     for group_name in groups:
         if group_name not in BUTTONS_TO_CALIBRATE:
-            print(f"  ⚠️  Groupe '{group_name}' inconnu")
+            print(f" WARNING: Groupe '{group_name}' inconnu")
             continue
         
         buttons = BUTTONS_TO_CALIBRATE[group_name]
-        print(f"\n  ── {group_name.upper()} ──")
+        print(f"\n ── {group_name.upper()} ──")
         
         for key, description, required_screen, delay in buttons:
             current = positions.get(key)
             current_str = f" (actuel: {current})" if current else ""
             
-            print(f"\n  📍 {description}{current_str}")
+            print(f"\n {description}{current_str}")
             
             if required_screen:
-                print(f"     ⚠️  Assurez-vous d'être sur l'écran : {required_screen}")
-            
-            # Délai d'attente si nécessaire (pour se mettre en situation)
+                print(f" WARNING: Assurez-vous d'être sur l'écran : {required_screen}")
+
+            # Wait delay if needed (to get into position)
             if delay > 0:
-                print(f"     ⏱️  {delay}s pour vous mettre en position...")
+                print(f" {delay}s to get into position...")
                 for remaining in range(delay, 0, -5):
-                    print(f"         {remaining}s...", end='\r')
+                    print(f" {remaining}s...", end='\r')
                     time.sleep(min(5, remaining))
-                print("         C'est parti !        ")
-            
-            print("     → Un screenshot va s'afficher, CLIQUEZ sur le bouton")
-            print("       (Echap = passer)")
-            
-            # Screenshot + clic dans la fenêtre OpenCV
+                print(" Go! ")
+
+            print(" → A screenshot will appear, CLICK on the button")
+            print(" (Escape = skip)")
+
+            # Screenshot + click in the OpenCV window
             pos = capture_click(description=description)
             
             if pos is not None:
                 x, y = pos
                 positions[key] = (x, y)
-                print(f"     ✅ {key} = ({x}, {y})")
+                print(f" {key} = ({x}, {y})")
                 calibrated += 1
             else:
                 if current:
-                    print(f"     ⏭️  Gardé l'ancienne valeur : {current}")
+                    print(f" ⏭ Gardé l'ancienne valeur : {current}")
                 else:
                     default = DEFAULT_POSITIONS.get(key, (960, 540))
                     positions[key] = default
-                    print(f"     ⏭️  Valeur par défaut : {default}")
+                    print(f" ⏭ Valeur par défaut : {default}")
                 skipped += 1
     
-    # Sauvegarder
+    # Save
     save_positions(positions)
     
     print(f"\n{'='*60}")
-    print("  ✅ Calibration terminée !")
-    print(f"     {calibrated} boutons calibrés, {skipped} passés")
-    print(f"     Sauvegardé dans : {POSITIONS_FILE}")
+    print(" Calibration terminée !")
+    print(f" {calibrated} boutons calibrés, {skipped} passés")
+    print(f" Sauvegardé dans : {POSITIONS_FILE}")
     print(f"{'='*60}\n")
     
     return positions
 
 
 def show_positions():
-    """Affiche toutes les positions calibrées."""
+    """Displays all calibrated positions."""
     positions = load_positions()
     
-    print(f"\n📍 Positions UI ({POSITIONS_FILE}) :\n")
-    
+    print(f"\nUI Positions ({POSITIONS_FILE}):\n")
+
     if not positions:
-        print("   (aucune position calibrée)")
-        print("   Lancez : python -m clashai.navigation.calibrate_ui")
+        print(" (no calibrated position)")
+        print(" Run: python -m clashai.navigation.calibrate_ui")
         return
-    
+
     for group_name, buttons in BUTTONS_TO_CALIBRATE.items():
-        print(f"  ── {group_name.upper()} ──")
+        print(f" ── {group_name.upper()} ──")
         for key, description, _, _ in buttons:
             pos = positions.get(key)
             default = DEFAULT_POSITIONS.get(key)
             if pos:
                 is_default = pos == default
-                marker = " (défaut)" if is_default else " ✅"
-                print(f"   {key:20s} = ({pos[0]:4d}, {pos[1]:4d}){marker}")
+                marker = " (default)" if is_default else " "
+                print(f" {key:20s} = ({pos[0]:4d}, {pos[1]:4d}){marker}")
             else:
-                print(f"   {key:20s} = ???  ← non calibré")
+                print(f" {key:20s} = ??? ← not calibrated")
         print()
 
 
 # =============================================================================
-#                            MAIN
+# MAIN
 # =============================================================================
 
 if __name__ == "__main__":
@@ -406,7 +406,7 @@ if __name__ == "__main__":
         show_positions()
     elif args.reset:
         save_positions(DEFAULT_POSITIONS)
-        print(f"✅ Positions remises par défaut dans {POSITIONS_FILE}")
+        print(f"Positions remises par défaut dans {POSITIONS_FILE}")
         show_positions()
     else:
         calibrate(groups=args.only)

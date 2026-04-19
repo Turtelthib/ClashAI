@@ -1,13 +1,13 @@
 # scripts/rl/zoom_control.py
-# Contrôle du zoom via Windows API (ctypes mouse_event).
+# Zoom control via Windows API (ctypes mouse_event).
 #
-# pyautogui.scroll ne fonctionne PAS sur l'émulateur Google Play Games.
-# En revanche, ctypes.windll.user32.mouse_event avec MOUSEEVENTF_WHEEL
-# fonctionne parfaitement.
+# pyautogui.scroll does NOT work on the Google Play Games emulator.
+# However, ctypes.windll.user32.mouse_event with MOUSEEVENTF_WHEEL
+# works perfectly.
 #
-# Usage :
-#   from clashai.navigation.zoom_control import zoom_out
-#   zoom_out()  # Dézoome au maximum avant chaque attaque
+# Usage:
+# from clashai.navigation.zoom_control import zoom_out
+# zoom_out() # Zooms out to maximum before each attack
 
 import time
 import sys
@@ -15,33 +15,33 @@ import ctypes
 
 
 # =============================================================================
-#                         CONFIGURATION
+# CONFIGURATION
 # =============================================================================
 
-# Nom de la fenêtre de l'émulateur (pour la trouver automatiquement)
+# Name of the emulator window (to find it automatically)
 EMULATOR_WINDOW_KEYWORDS = ['mulateur', 'Google Play', 'play games']
 
-# Fallback si la fenêtre n'est pas trouvée
+# Fallback if the window is not found
 FALLBACK_CENTER_X = 1334
 FALLBACK_CENTER_Y = 764
 
-# Paramètres de scroll
-ZOOM_OUT_SCROLLS = 15     # Nombre de scrolls pour un dézoom complet
-SCROLL_DELTA = -120        # -120 = 1 cran de molette vers le bas = dézoom
-SCROLL_DELAY = 0.08        # Délai entre les scrolls
+# Scroll parameters
+ZOOM_OUT_SCROLLS = 15
+SCROLL_DELTA = -120
+SCROLL_DELAY = 0.08
 
 # Windows API constants
 MOUSEEVENTF_WHEEL = 0x0800
 
 
 # =============================================================================
-#                 TROUVER LA FENÊTRE DE L'ÉMULATEUR
+# FIND EMULATOR WINDOW
 # =============================================================================
 
 def _find_emulator_center():
     """
-    Trouve le centre de la fenêtre de l'émulateur automatiquement.
-    Utilise pygetwindow si disponible, sinon fallback.
+    Automatically finds the center of the emulator window.
+    Uses pygetwindow if available, otherwise falls back.
     """
     try:
         import pygetwindow as gw
@@ -64,26 +64,26 @@ def _find_emulator_center():
 
 
 # =============================================================================
-#                     FONCTIONS PRINCIPALES
+# MAIN FUNCTIONS
 # =============================================================================
 
 def zoom_out(scrolls=None):
     """
-    Dézoome au maximum en simulant la molette souris via Windows API.
+    Zooms out to maximum by simulating the mouse wheel via Windows API.
 
     Args:
-        scrolls: nombre de scrolls (défaut: ZOOM_OUT_SCROLLS)
+        scrolls: number of scrolls (default: ZOOM_OUT_SCROLLS)
 
     Returns:
-        True si le dézoom a été effectué
+        True if zoom-out was performed
     """
     if scrolls is None:
         scrolls = ZOOM_OUT_SCROLLS
 
-    # Trouver le centre de l'émulateur
+    # Find the emulator center
     center_x, center_y = _find_emulator_center()
 
-    # Sauvegarder la position actuelle du curseur
+    # Save the current cursor position
     class POINT(ctypes.Structure):
         _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
 
@@ -92,29 +92,29 @@ def zoom_out(scrolls=None):
     original_x, original_y = pt.x, pt.y
 
     try:
-        # Placer le curseur au centre de l'émulateur
+        # Place the cursor at the emulator center
         ctypes.windll.user32.SetCursorPos(center_x, center_y)
         time.sleep(0.2)
 
-        # Scroller pour dézoomer
+        # Scroll to zoom out
         for _ in range(scrolls):
             ctypes.windll.user32.mouse_event(
                 MOUSEEVENTF_WHEEL, 0, 0, SCROLL_DELTA, 0
             )
             time.sleep(SCROLL_DELAY)
 
-        # Petit délai pour que le jeu finisse l'animation de zoom
+        # Small delay for the game to finish the zoom animation
         time.sleep(0.3)
 
-        print(f"   🔍 Dézoom effectué ({scrolls} scrolls)")
+        print(f" Dézoom effectué ({scrolls} scrolls)")
         return True
 
     except Exception as e:
-        print(f"   ⚠️  Erreur dézoom : {e}")
+        print(f" WARNING: Erreur dézoom : {e}")
         return False
 
     finally:
-        # Remettre le curseur à sa position originale
+        # Restore the cursor to its original position
         ctypes.windll.user32.SetCursorPos(original_x, original_y)
 
 
@@ -135,7 +135,7 @@ def zoom_in(scrolls=5):
 
         for _ in range(scrolls):
             ctypes.windll.user32.mouse_event(
-                MOUSEEVENTF_WHEEL, 0, 0, 120, 0  # Positif = zoom in
+                MOUSEEVENTF_WHEEL, 0, 0, 120, 0
             )
             time.sleep(SCROLL_DELAY)
 
@@ -145,25 +145,25 @@ def zoom_in(scrolls=5):
 
 
 # =============================================================================
-#                            MAIN
+# MAIN
 # =============================================================================
 
 if __name__ == "__main__":
     if '--test' in sys.argv:
-        print("🔍 Test dézoom...")
+        print("Test dézoom...")
         zoom_out(scrolls=10)
-        print("✅ Terminé ! Vérifie que le jeu a dézoomé.")
+        print("Terminé ! Vérifie que le jeu a dézoomé.")
 
     elif '--zoom-in' in sys.argv:
-        print("🔍 Test zoom in...")
+        print("Test zoom in...")
         zoom_in(scrolls=5)
-        print("✅ Terminé !")
+        print("Terminé !")
 
     else:
         cx, cy = _find_emulator_center()
         print("zoom_control.py — Dézoom via Windows API")
-        print(f"  Centre émulateur : ({cx}, {cy})")
-        print(f"  Scrolls          : {ZOOM_OUT_SCROLLS}")
+        print(f" Centre émulateur : ({cx}, {cy})")
+        print(f" Scrolls : {ZOOM_OUT_SCROLLS}")
         print()
-        print("  --test      Tester le dézoom")
-        print("  --zoom-in   Tester le zoom")
+        print(" --test Tester le dézoom")
+        print(" --zoom-in Tester le zoom")
