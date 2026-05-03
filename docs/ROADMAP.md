@@ -1,6 +1,6 @@
 # ClashAI — Roadmap & Backlog
 
-> Dernière mise à jour : 18 avril 2026 (Session 8 — V4.2 fusion phases environment_v4.py)  
+> Dernière mise à jour : 26 avril 2026 (Session 11 — multi-agents V5, vitesse deploy, navigation failure fix)  
 > Ce document centralise **toutes** les modifications, features et idées prévues.  
 > On pioche ici pour construire chaque version. Rien ne se perd.
 
@@ -62,6 +62,17 @@
 ## V4.2 — Refonte architecture combat
 
 > **Objectif** : supprimer les phases rigides, rendre l'agent vraiment réactif comme un joueur humain. C'est le plus gros changement architectural depuis V3→V4.
+
+### Bug : échec navigation → faux -50 reward
+
+> Symptôme observé session 11 (épisode 22) :
+> Matchmaking bloqué (`recherche_adversaire`) → 3 recovery échouent → `ERROR: Unable to reach enemy village`
+> → l'épisode continue quand même → `_wait_for_battle_end()` voit 1-2 barres vertes (UI) → croit aux troupes mortes → surrender → **-50 reward injuste**
+
+- [ ] Dans `_wait_for_battle_end()` : si l'écran est `village_home` ou `recherche_adversaire` au lieu de `phase_attaque`, **ne pas surrendrer** — l'attaque n'a jamais eu lieu
+- [ ] Dans `reset()` : si la navigation échoue (`ERROR: Unable to reach enemy village`), marquer l'épisode comme `nav_failed=True` et ne pas lancer `step()` du tout
+- [ ] Reward d'un épisode `nav_failed` = **0.0** (pas de -50) — l'agent n'est pas responsable d'un bug de navigation
+- [ ] Idéalement : retry automatique de la navigation (relancer `_navigate_to_attack()`) au lieu d'abandonner après 3 essais
 
 ### ⚠️ CRITIQUE : Amélioration heuristique sorts (apprentissages Session 7)
 
@@ -125,13 +136,122 @@
 
 ---
 
-## V4.3 — Perception améliorée (barre de troupes)
+## V4.3 — Perception + Vitesse
 
-> **Objectif** : remplacer le template matching + OCR actuel par des CNN plus fiables pour lire la barre de troupes.
+> **Objectif** : remplacer le template matching + OCR par des CNN plus fiables, améliorer la zone de déploiement, et réduire les délais pour une exécution plus fluide.
 
-CRITIQUE: les remparts fausse les resultats de deploy_zone donc faut les labéliser via labelme. Et les rajouter au cnn batiment
+### CAUSE DE BUG: Séquence de récupération
+Parfois si l'agent ne voit pas le village_home directement après une attaque il panique et active
+la séquence de récupération et clique partout donc il arrive toujours pas a voir le village.
+Solution juste supprimer la séquence de récupération l'agent est assez intelligent maintenant
+pour reconnaitre les différents états d'écran.
 
-### CNN classification icônes troupes
+### CRITIQUE : Remparts dans le YOLO bâtiments
+
+- [ ] Labéliser les remparts via LabelMe dans `dataset_walls/` (en cours)
+- [ ] Entraîner `yolo_walls` dédié via `tools/train_yolo_walls.py`
+- [ ] Intégrer `yolo_walls` dans `get_perimeter_from_buildings()` pour exclure les remparts du hull convexe → deploy zone bien délimitée
+- [ ] Ajouter la classe `rempart` dans `state_encoder.py` CATEGORIES (canal dédié dans la grille 12×40×40)
+
+### Amélioration zone de déploiement
+
+- [x] Entraîner `yolo_walls_seg` → `weights/yolo_walls_seg/walls_detection.pt`
+- [x] Charger le modèle dans `load_models()` (`models['yolo_walls']`)
+- [x] `get_perimeter_from_walls()` dans `deploy_zone.py` — masques segmentation → contour extérieur → positions de déploiement
+- [x] Branché dans `environment_v4.py` reset() : walls en priorité, building hull en fallback
+- [ ] Améliorer le fallback quand le raycast échoue (< 3 positions) : utiliser des positions fixes en bord d'écran propres
+- [ ] Tester sur plusieurs bases (village zoomé, dézoomé, base compacte vs étalée, thème sombre CoC)
+
+### Vitesse d'exécution
+
+> Bottleneck principal : délais deploy redondants.
+> Par troupe : TroopFinder.select (tap + 0.15s) + DELAY_SWITCH_TROOP (0.15s doublon) + tap deploy (0.1s) + DELAY_DEPLOY (0.08s) = **0.48s/troupe** × 20 troupes = 9.6s de pure attente.
+
+- [x] Supprimer le doublon `DELAY_SWITCH_TROOP` quand la même troupe est déjà sélectionnée (`environment_v4.py`)
+- [x] `DELAY_SWITCH_TROOP` 0.15s → 0.10s
+- [x] `DELAY_DEPLOY` 0.08s → 0.05s
+- [x] `ADB_DELAY_TAP` 0.1s → 0.07s
+- [x] `DELAY_OBSERVE` 2.5s → 2.0s
+- [x] `RESCAN_EVERY_N_STEPS` 8 → 10 (moins de rescans = moins de screenshots)
+- [x] Capture directe fenêtre émulateur via `mss` (~20ms vs 150ms ADB) — `clashai/perception/screen_capture.py`
+- [x] `adb_screenshot()` utilise mss en priorité, ADB en fallback — transparent pour tout le code existant
+- [x] Thread de perception asynchrone — `clashai/perception/perception_thread.py` (Thread capture 20fps + Thread inference YOLO+CNN)
+- [x] `_update_combat_observation()` lit depuis le cache du thread (non-bloquant) → fallback V4.2 si pas de cache frais
+- [x] `DELAY_OBSERVE` 2.0s → 0.15s (le thread a déjà les résultats prêts)
+- [x] Thread pausé pendant la navigation, repris au début du combat
+
+### Capture directe fenêtre émulateur (zéro ADB pour la perception)
+
+> Au lieu de passer par ADB pour chaque frame, capturer directement la fenêtre Windows de l'émulateur.
+> Exactement le même principe que faire tourner un CNN sur une vidéo ou une webcam.
+> Les taps restent en ADB (seul moyen d'envoyer des inputs), seule la **perception** bypass ADB.
+
+Comparaison latences :
+- ADB screencap PNG : ~150ms
+- ADB screencap raw : ~40ms
+- `dxcam` / `mss` (capture fenêtre) : ~5-10ms, 60fps possible
+
+```python
+# dxcam — capture GPU directe (Windows, DXGI)
+import dxcam
+camera = dxcam.create()
+frame = camera.grab(region=emulator_window_bbox)  # numpy array, ~5ms
+
+# mss — alternative légère sans dépendances GPU
+import mss
+with mss.mss() as sct:
+    frame = np.array(sct.grab(emulator_bbox))
+```
+
+Pipeline cible (comme le projet détection de feu) :
+```
+Thread A — Capture : grab() à 15-30fps depuis la fenêtre émulateur
+Thread B — YOLO   : buildings + troops sur chaque frame capturée
+Thread C — CNN    : screen classifier sur chaque frame
+Agent             : lit l'état le plus récent, décide en <100ms
+```
+
+- [ ] Ajouter `dxcam` ou `mss` comme dépendance (`uv add dxcam` ou `uv add mss`)
+- [ ] Créer `clashai/perception/screen_capture.py` — wrapper unifié (dxcam en priorité, mss en fallback)
+- [ ] Trouver les coordonnées de la fenêtre émulateur au démarrage (via pygetwindow ou EnumWindows)
+- [ ] Adapter le thread de perception pour lire depuis `screen_capture` au lieu de `adb_screenshot`
+- [ ] `DELAY_OBSERVE` → 0.1s (le thread tourne déjà en fond, observe = juste lire le buffer)
+- [ ] Objectif : perception temps réel 15-30fps, même réactivité que le projet détection feu
+
+### Debug overlay (visualisation de ce que l'agent voit)
+
+> But : faciliter le debug sans attendre le dashboard V5.
+> À chaque action `observe`, générer une image annotée dans `logs/debug/` montrant
+> exactement l'état perçu par l'agent.
+
+- [ ] Image annotée par observe : bâtiments YOLO (bbox colorés par catégorie), hull convexe de la zone de déploiement, positions de déploiement (points numérotés), cluster de troupes YOLO, sorts restants (overlay texte)
+- [ ] Réutilise la logique de `save_deploy_debug_image()` déjà en place
+- [ ] Option `--debug-overlay` dans `train_rl_v4.py` pour activer/désactiver (évite de ralentir le training normal)
+Pour cette étape mettre les fichiers dans le dossier logs et dedans crée un dossier nommé episode_NUMERO_EPISODE/ et mettre tout les fichiers de l'épisode en question dedans et ainsi de suite chaque épisode = un dossier et pas tout en vrac
+
+### Thread de perception asynchrone (gros gain de réactivité)
+
+> Actuellement : agent décide → attend 2s → screenshot → YOLO 230ms → décide → ...
+> Avec async : un thread tourne en fond en continu, l'agent lit l'état le plus récent instantanément.
+
+Architecture cible :
+- `PerceptionThread` (daemon thread) : capture screenshot toutes les ~0.5s + YOLO buildings + troops en continu
+- Résultat stocké dans un buffer partagé protégé par `threading.Lock`
+- L'action `observe` ne fait plus que lire ce buffer (quasi instantané)
+- Pendant les taps de deploy, le thread a déjà calculé la prochaine observation
+- `DELAY_OBSERVE` → 0s (ou 0.1s pour laisser le temps au thread de refresher)
+
+Bénéfices :
+- L'agent voit le champ de bataille se mettre à jour **pendant** qu'il déploie
+- Réactivité proche d'un humain (décision toutes les 0.5s au lieu de 2s+)
+- Plus de temps "mort" à attendre un screenshot bloquant
+
+- [ ] Créer `clashai/perception/perception_thread.py` — thread daemon avec buffer partagé
+- [ ] Modifier `_update_combat_observation()` pour lire depuis le buffer au lieu de bloquer
+- [ ] Adapter `_execute_observe()` : `DELAY_OBSERVE` → 0.1s (juste pour que le PPO ne spam pas)
+- [ ] Gérer proprement le stop du thread en fin d'épisode (`episode_done` event)
+
+### CNN classification icônes troupes (remplace template matching)
 
 - [ ] Entraîner un classifieur (ResNet18 fine-tuné) sur des crops de chaque slot de la barre
 - [ ] Classes : chaque type de troupe + héros + sorts + siège
@@ -140,7 +260,7 @@ CRITIQUE: les remparts fausse les resultats de deploy_zone donc faut les labéli
 - [ ] Détecter l'état des abilities : grisé (mort), brillant (prêt), utilisé (cooldown)
 - [ ] Remplacer le template matching dans `troop_finder.py`
 
-### CNN lecture compteurs
+### CNN lecture compteurs (remplace OCR)
 
 - [ ] Entraîner un petit CNN type MNIST sur les compteurs (x2, x3, x11...)
 - [ ] Capturer des crops de chaque compteur et annoter les chiffres
@@ -149,7 +269,64 @@ CRITIQUE: les remparts fausse les resultats de deploy_zone donc faut les labéli
 
 ---
 
-## V5 — Nouvelles capacités
+## V5 — Architecture multi-agents
+
+> **Objectif** : formaliser l'architecture en orchestrateur + sous-agents spécialisés.
+> La structure existe déjà en partie — il s'agit de la formaliser, d'ajouter les agents manquants, et de rendre l'orchestrateur plus intelligent.
+
+### État actuel (déjà présent, non formalisé)
+
+| Sous-agent | Fichier actuel | Type |
+|---|---|---|
+| Orchestrateur | `brain.py` | Heuristique |
+| Attaque (farm) | `combat/environment_v4.py` + PPO | RL (PPO) |
+| Guerre de clan | `navigation/gdc_navigator.py` | Heuristique |
+| Chat clan | `social/clan_chat_monitor.py` | Règles |
+| Château de clan | `social/clan_castle.py` | Règles |
+
+### Interface commune à créer
+
+- [ ] Définir une classe de base `BaseAgent` avec interface `run()`, `can_run()`, `priority()`
+- [ ] L'orchestrateur `brain.py` interroge chaque agent avec `can_run()` et délègue
+- [ ] Chaque agent est isolé : son propre état, ses propres actions ADB, ses propres décisions
+- [ ] Système de priorités : attaque > GdC > jeux de clan > gestion village > idle
+
+### Nouveaux agents à créer
+
+**Agent jeux de clan** (`clashai/clan_games/`)
+- Détecter si des jeux de clan sont actifs (CNN écran)
+- Identifier les tâches disponibles (template matching sur les cartes)
+- Exécuter les tâches répétitives (attaque, don de troupes, etc.)
+- Type : règles + heuristiques (pas besoin de RL)
+
+**Agent gestion village** (`clashai/village/`)
+- Détecter les constructeurs libres (template matching)
+- Queue de priorité : améliorer selon un ordre défini (murs → défenses → ressources)
+- Détecter les laboratoires libres → lancer une recherche
+- Collecter les ressources (mines, coffres)
+- Type : règles + queue de priorité (pas besoin de RL)
+
+### Orchestrateur amélioré
+
+- [ ] Boucle principale `brain.py` : checker chaque agent toutes les N minutes selon un schedule
+- [ ] Gestion des cooldowns : ne pas relancer un agent qui vient de tourner
+- [ ] Logging centralisé : chaque agent log ses actions dans un fichier commun
+
+### Dashboard web temps réel (V5)
+
+> Une app web légère (FastAPI + HTML/JS) qui tourne en parallèle du brain.
+> Se met à jour en temps réel via WebSocket ou polling JSON.
+
+- [ ] Page principale : état de chaque sous-agent (actif / idle / cooldown), dernière action, dernière attaque
+- [ ] Onglet training : courbe reward/étoiles en temps réel, dernière image de debug overlay, PPO stats (value_loss, entropy, policy_loss)
+- [ ] Onglet replay : les 5 dernières images de debug overlay par épisode (timeline visuelle de l'attaque)
+- [ ] Onglet village : état des constructeurs, labo, ressources (lecture depuis les logs agents)
+- [ ] Accessible depuis le réseau local (pratique pour suivre depuis un autre écran)
+- [ ] **Page dédiée "Vision agent"** : flux vidéo en temps réel de ce que l'agent perçoit, avec overlays annotés (bboxes YOLO buildings colorées par classe, masques de segmentation remparts, zone de déploiement hull convexe + points numérotés, positions troupes YOLO, cluster principal, sorts restants en overlay texte). Alimentée par le thread de capture directe fenêtre émulateur — latence ~100ms entre le jeu réel et la page dashboard.
+
+---
+
+## V6 — Nouvelles capacités de combat
 
 > **Objectif** : étendre les capacités de l'agent au-delà du combat pur.
 
@@ -214,7 +391,9 @@ CRITIQUE: les remparts fausse les resultats de deploy_zone donc faut les labéli
 | V3 | ✅ Terminé | Déploiement séquentiel + combat réactif (289 actions, 1.2M params) |
 | V4.0 | ✅ Terminé | Action space simplifié 37 actions + YOLO troupes (Session 6) |
 | V4.1 | ✅ Terminé | Fix bugs critiques + BC + run validation 192 ep — CC troops non fonctionnel (Session 7) |
-| V4.2 | 🔄 En cours | Refonte combat (fusion phases ✅, YOLO continu ✅, zone deploy) |
-| V4.3 | 📋 Planifié | CNN barre de troupes (remplace template matching + OCR) |
-| V5 | 💡 Vision | Caméra, multi-compo, équipements, self-play |
+| V4.2 | ✅ Terminé | Fusion phases, YOLO continu, zone deploy murs+bâtiments (segmentation), reward shaping, logs pro (Session 8-11) |
+| V4.2.1 | ✅ Fix | PPO value loss, BC loss, ability deadlock, deploy zone walls seg (Session 10-11) |
+| V4.3 | 📋 Planifié | CNN barre de troupes, vitesse d'exécution, deploy zone remparts |
+| V5 | 💡 Vision | Architecture multi-agents (orchestrateur + spécialisés) |
+| V6 | 💡 Vision | Caméra, multi-compo, équipements, self-play |
 | V END | 🎯 Objectif | Jouer comme un humain

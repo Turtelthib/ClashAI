@@ -43,7 +43,7 @@ DELAY_SWITCH_TROOP = 0.10
 DELAY_DEPLOY = 0.05
 DELAY_WAIT_SHORT = 0.5
 DELAY_WAIT_LONG = 2.0
-DELAY_OBSERVE = 2.0
+DELAY_OBSERVE = 0.15  # V4.3: async thread pre-computes, agent just reads cache
 DELAY_ABILITY = 0.3
 RESCAN_EVERY_N_STEPS = 10
 NO_TROOPS_CHECKS_THRESHOLD = 3
@@ -464,7 +464,16 @@ class ClashEnvV4(ClashEnvV3):
 
     def reset(self):
         """Reset V4 — calls the V3 reset then adapts."""
+        # V4.3: pause async perception during navigation (save GPU)
+        _pt = self.models.get('perception_thread') if self.models else None
+        if _pt is not None:
+            _pt.pause()
+
         super().reset()
+
+        # V4.3: resume perception once we're on the attack screen
+        if _pt is not None:
+            _pt.resume()
 
         # V4.2: force _phase='combat' for inherited V3 methods
         # (_check_battle_end, _update_combat_observation use self._phase)
@@ -554,10 +563,47 @@ class ClashEnvV4(ClashEnvV3):
 
     def _update_combat_observation(self):
         """
-        Override V4.2 — continuous YOLO: buildings + troops on every observe.
-        Updates grid, village features AND combat features from a fresh screenshot.
+        V4.3 — reads from the async PerceptionThread (non-blocking).
+        Falls back to V4.2 blocking YOLO if the thread is unavailable.
         """
         import time as _time
+
+        # ── Try async perception thread (V4.3) ────────────────────────
+        perception = self.models.get('perception_thread') if self.models else None
+        if perception is not None and perception.is_fresh(max_age_s=1.0):
+            state = perception.get_latest()
+            screenshot = state['frame']
+            new_buildings = state['buildings']
+
+            if new_buildings and screenshot is not None:
+                from clashai.combat.state_encoder import encode_state
+                enc = encode_state(new_buildings)
+                self._grid = enc['grid']
+                self._features = enc['features']
+
+                curr_count = len(new_buildings)
+                destroyed = max(0, self._prev_building_count - curr_count)
+                self._buildings_destroyed_total += destroyed
+                self._prev_building_count = curr_count
+                self._buildings = new_buildings
+
+                if destroyed > 0 and self.verbose:
+                    print(f" {destroyed} destroyed — "
+                          f"total: {self._buildings_destroyed_total} "
+                          f"({curr_count} remaining)")
+
+                if state['combat_features'] is not None:
+                    self._combat_features = state['combat_features']
+
+                # Hero ability scan from the cached frame
+                self._hero_manager.scan(screenshot)
+
+                if self.verbose:
+                    print(f" Perception cache: {len(new_buildings)} bldg | "
+                          f"{state['inference_ms']:.0f}ms (async)")
+                return
+
+        # ── Fallback: V4.2 blocking YOLO ─────────────────────────────
         screenshot = self._adb_screenshot()
         if screenshot is None:
             return

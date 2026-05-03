@@ -12,6 +12,7 @@ dependencies = [
     "pillow",
     "easyocr",
     "pyyaml",
+    "mss>=10.2.0",
 ]
 
 [project.optional-dependencies]

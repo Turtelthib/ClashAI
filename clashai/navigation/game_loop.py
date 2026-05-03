@@ -109,6 +109,11 @@ def load_models():
         models['yolo_walls'] = None
         print(f"WARNING: yolo_walls not found at {walls_path} — deploy zone will use building hull fallback")
 
+    # --- 5) Async perception thread ---
+    from clashai.perception.perception_thread import PerceptionThread
+    models['perception_thread'] = PerceptionThread(models, verbose=False)
+    models['perception_thread'].start()
+
     print(f"\nTous les modèles sont chargés sur {DEVICE}\n")
     return models
 
@@ -256,10 +261,22 @@ def adb_check_connection():
 
 
 def adb_screenshot():
-    """Captures the screen via ADB and returns a PIL image.
-    Uses raw format for better speed."""
+    """
+    Captures the emulator screen and returns a PIL Image.
+
+    Priority: direct window capture (mss/dxcam, ~5-15ms) > ADB PNG (~150ms).
+    The direct backend is initialised once and reused across calls.
+    """
+    from clashai.perception.screen_capture import get_capture
     try:
-        # PNG format (slower but more reliable)
+        img = get_capture().grab()
+        if img is not None:
+            return img.convert('RGB')
+    except Exception as e:
+        print(f"WARNING: Direct capture failed ({e}), falling back to ADB")
+
+    # ADB fallback
+    try:
         result = subprocess.run(
             ["adb", "-s", ADB_DEVICE, "exec-out", "screencap", "-p"],
             capture_output=True, timeout=5
@@ -268,7 +285,8 @@ def adb_screenshot():
             return None
         return Image.open(io.BytesIO(result.stdout)).convert("RGB")
     except Exception as e:
-        print(f"WARNING: Erreur capture : {e}")
+        print(f"WARNING: ADB capture failed: {e}")
+        return None
         return None
 
 
