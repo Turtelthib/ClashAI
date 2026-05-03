@@ -39,13 +39,13 @@ from clashai.combat.agent import (
 )
 
 # Delays
-DELAY_SWITCH_TROOP = 0.15
-DELAY_DEPLOY = 0.08
+DELAY_SWITCH_TROOP = 0.10
+DELAY_DEPLOY = 0.05
 DELAY_WAIT_SHORT = 0.5
 DELAY_WAIT_LONG = 2.0
-DELAY_OBSERVE = 2.5
+DELAY_OBSERVE = 2.0
 DELAY_ABILITY = 0.3
-RESCAN_EVERY_N_STEPS = 8
+RESCAN_EVERY_N_STEPS = 10
 NO_TROOPS_CHECKS_THRESHOLD = 3
 
 
@@ -199,7 +199,11 @@ class ClashEnvV4(ClashEnvV3):
         if troop_idx is None:
             return f"WARNING: {role_name} exhausted"
 
-        time.sleep(DELAY_SWITCH_TROOP)
+        # Only sleep when a real troop switch happened (TroopFinder.select
+        # already waits 0.15s on tap; if same troop is already selected,
+        # no delay needed at all)
+        if troop_name != self._troop_mgr._last_troop_name:
+            time.sleep(DELAY_SWITCH_TROOP)
 
         # Convert sector → absolute position
         abs_pos = TroopManager.sector_to_position(sector_idx, self._center_pos)
@@ -482,24 +486,41 @@ class ClashEnvV4(ClashEnvV3):
         self._last_sector = None
         self._troop_mgr.reset()
 
-        # V4.2: recompute deploy positions from YOLO bboxes
-        # More reliable than HSV detection (red overlay sometimes faint)
+        # V4.3: deploy zone — walls segmentation (primary) then building hull (fallback)
         if self._buildings:
             from clashai.perception.deploy_zone import (
-                get_perimeter_from_buildings, save_deploy_debug_image,
+                get_perimeter_from_buildings, get_perimeter_from_walls,
+                save_deploy_debug_image,
             )
             from clashai.combat.state_encoder import find_best_attack_side
 
             debug_screenshot = self._adb_screenshot()
+            yolo_ok = False
+            deploy_debug = {}
 
-            result = get_perimeter_from_buildings(
-                self._buildings, num_points=NUM_POSITIONS, return_debug=True,
-                screenshot_pil=debug_screenshot,
-            )
-            yolo_positions, yolo_center, yolo_ok, deploy_debug = result
-            if yolo_ok and yolo_positions:
-                self._deploy_positions = yolo_positions
-                self._village_center = yolo_center
+            # Primary: wall segmentation model (robust to theme/color changes)
+            yolo_walls = self.models.get('yolo_walls') if self.models else None
+            if yolo_walls is not None and debug_screenshot is not None:
+                wall_positions, wall_center, wall_ok = get_perimeter_from_walls(
+                    debug_screenshot, yolo_walls,
+                    buildings=self._buildings,
+                    num_points=NUM_POSITIONS,
+                )
+                if wall_ok and wall_positions:
+                    self._deploy_positions = wall_positions
+                    self._village_center = wall_center
+                    yolo_ok = True
+
+            # Fallback: building bbox hull (V4.2)
+            if not yolo_ok:
+                result = get_perimeter_from_buildings(
+                    self._buildings, num_points=NUM_POSITIONS, return_debug=True,
+                    screenshot_pil=debug_screenshot,
+                )
+                yolo_positions, yolo_center, yolo_ok, deploy_debug = result
+                if yolo_ok and yolo_positions:
+                    self._deploy_positions = yolo_positions
+                    self._village_center = yolo_center
 
             best_dir = find_best_attack_side(self._buildings, verbose=False)
             self._center_pos = int(best_dir / 8 * NUM_POSITIONS) % NUM_POSITIONS
@@ -564,7 +585,11 @@ class ClashEnvV4(ClashEnvV3):
                       f"total: {self._buildings_destroyed_total} "
                       f"({curr_count} remaining)")
 
-        # 2. YOLO troops → refresh combat features
+        # 2. Hero ability scan — populates _icon_positions so the mask can enable abilities.
+        # Must run before get_ability_mask() is called in _get_mask().
+        self._hero_manager.scan(screenshot)
+
+        # 3. YOLO troops → refresh combat features
         t0 = _time.time()
         spells_remaining = build_spell_inventory(self._remaining_troops, TROOP_TYPES)
         features, _ = self._combat_observer.observe(

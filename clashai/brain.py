@@ -616,8 +616,9 @@ class ClashBrain:
                 y1 = random.randint(200, 600)
                 dx, dy = random.randint(-120, 120), random.randint(-80, 80)
                 try:
+                    from clashai.paths import ADB_DEVICE as _ADB_DEV
                     subprocess.run(
-                        ["adb", "shell",
+                        ["adb", "-s", _ADB_DEV, "shell",
                          f"input swipe {x1} {y1} {x1+dx} {y1+dy} "
                          f"{random.randint(200, 400)}"],
                         capture_output=True, timeout=5

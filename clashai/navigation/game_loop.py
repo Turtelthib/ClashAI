@@ -26,8 +26,7 @@ from clashai.perception.screen_classifier import MyCustomCNN
 # CONFIGURATION
 # =============================================================================
 
-from clashai.paths import PROJECT_ROOT, WEIGHTS_DIR
-# WEIGHTS_DIR imported from clashai.paths
+from clashai.paths import PROJECT_ROOT, WEIGHTS_DIR, ADB_DEVICE
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Seuils de confiance
@@ -37,7 +36,7 @@ YOLO_CONF = 0.25
 YOLO_IOU = 0.50
 
 # ADB delays (in seconds)
-ADB_DELAY_TAP = 0.1
+ADB_DELAY_TAP = 0.07
 ADB_DELAY_SCREENSHOT = 0.2
 ADB_DELAY_NAVIGATION = 1.0
 ADB_DELAY_MATCHMAKING = 3.0
@@ -100,6 +99,15 @@ def load_models():
     building_cnn.eval()
     models['building_cnn'] = building_cnn
     print(f" {len(models['building_classes'])} building classes loaded")
+
+    # --- 4) YOLO Walls segmentation ---
+    walls_path = os.path.join(WEIGHTS_DIR, 'yolo_walls_seg', 'walls_detection.pt')
+    if os.path.exists(walls_path):
+        models['yolo_walls'] = YOLO(walls_path)
+        print(" YOLO walls loaded")
+    else:
+        models['yolo_walls'] = None
+        print(f"WARNING: yolo_walls not found at {walls_path} — deploy zone will use building hull fallback")
 
     print(f"\nTous les modèles sont chargés sur {DEVICE}\n")
     return models
@@ -227,14 +235,17 @@ def adb_check_connection():
         lines = output.strip().split('\n')
         # Look for lines containing "device" but not "devices" (header)
         devices = [l.strip() for l in lines if '\tdevice' in l or ' device' in l]
-        if devices:
-            device_name = devices[0].split()[0]
-            print(f"📱 ADB connecté : {device_name}")
+        if any(ADB_DEVICE in d for d in devices):
+            print(f"ADB connected: {ADB_DEVICE}")
             return True
+        elif devices:
+            print(f"WARNING: {ADB_DEVICE} not found. Connected devices: {[d.split()[0] for d in devices]}")
+            print(f"Update ADB_DEVICE in clashai/paths.py or set env var ADB_DEVICE=<serial>")
+            return False
         else:
-            print("ERROR: Aucun appareil ADB détecté.")
-            print(f" (sortie adb: {repr(result.stdout[:200])})")
-            print("👉 Lancez le Developer Emulator et exécutez : adb connect localhost:6520")
+            print("ERROR: No ADB device detected.")
+            print(f" (adb output: {repr(result.stdout[:200])})")
+            print(f"Run: adb connect {ADB_DEVICE}")
             return False
     except FileNotFoundError:
         print("ERROR: ADB n'est pas installé ou pas dans le PATH.")
@@ -250,7 +261,7 @@ def adb_screenshot():
     try:
         # PNG format (slower but more reliable)
         result = subprocess.run(
-            ["adb", "exec-out", "screencap", "-p"],
+            ["adb", "-s", ADB_DEVICE, "exec-out", "screencap", "-p"],
             capture_output=True, timeout=5
         )
         if result.returncode != 0 or len(result.stdout) < 100:
@@ -263,14 +274,14 @@ def adb_screenshot():
 
 def adb_tap(x, y):
     """Performs a tap at position (x, y)."""
-    subprocess.run(["adb", "shell", f"input tap {x} {y}"], timeout=5)
+    subprocess.run(["adb", "-s", ADB_DEVICE, "shell", f"input tap {x} {y}"], timeout=5)
     time.sleep(ADB_DELAY_TAP)
 
 
 def adb_swipe(x1, y1, x2, y2, duration_ms=300):
     """Performs a swipe."""
     subprocess.run(
-        ["adb", "shell", f"input swipe {x1} {y1} {x2} {y2} {duration_ms}"],
+        ["adb", "-s", ADB_DEVICE, "shell", f"input swipe {x1} {y1} {x2} {y2} {duration_ms}"],
         timeout=5
     )
     time.sleep(ADB_DELAY_TAP)
@@ -278,7 +289,7 @@ def adb_swipe(x1, y1, x2, y2, duration_ms=300):
 
 def adb_key(keycode):
     """Envoie une touche (ex: KEYCODE_BACK)."""
-    subprocess.run(["adb", "shell", f"input keyevent {keycode}"], timeout=5)
+    subprocess.run(["adb", "-s", ADB_DEVICE, "shell", f"input keyevent {keycode}"], timeout=5)
     time.sleep(ADB_DELAY_TAP)
 
 
@@ -459,10 +470,10 @@ def run_live(models):
     print(" MODE LIVE — Boucle autonome ADB")
     print(f"{'='*60}\n")
 
-    print("📱 Connexion à Google Play Games Developer Emulator...")
-    connect_result = subprocess.run(["adb", "connect", "localhost:6520"],
+    print(f"Connecting to emulator: {ADB_DEVICE} ...")
+    connect_result = subprocess.run(["adb", "connect", ADB_DEVICE],
                                     capture_output=True, text=True, timeout=5)
-    print(f" → {connect_result.stdout.strip()}")
+    print(f" -> {connect_result.stdout.strip()}")
     time.sleep(1)
 
     if not adb_check_connection():
@@ -470,7 +481,7 @@ def run_live(models):
 
     try:
         result = subprocess.run(
-            ["adb", "shell", "wm", "size"],
+            ["adb", "-s", ADB_DEVICE, "shell", "wm", "size"],
             capture_output=True, text=True, timeout=5
         )
         print(f"📐 Résolution : {result.stdout.strip()}")

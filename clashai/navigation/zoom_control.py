@@ -1,169 +1,179 @@
-# scripts/rl/zoom_control.py
-# Zoom control via Windows API (ctypes mouse_event).
+# clashai/navigation/zoom_control.py
+# Zoom control via Windows SendMessage — completely isolated to the emulator.
 #
-# pyautogui.scroll does NOT work on the Google Play Games emulator.
-# However, ctypes.windll.user32.mouse_event with MOUSEEVENTF_WHEEL
-# works perfectly.
+# SendMessage(hwnd, WM_MOUSEWHEEL, ...) sends directly to the window handle,
+# bypassing focus and cursor position entirely — same isolation as ADB taps.
 #
-# Usage:
-# from clashai.navigation.zoom_control import zoom_out
-# zoom_out() # Zooms out to maximum before each attack
+# If the main window doesn't respond, it automatically tries child windows
+# (some emulators render the game in a child OpenGL/DirectX viewport).
+#
+# CTRL_SCROLL = True   →  Ctrl+scroll (LDPlayer, BlueStacks, MuMu…)
+# CTRL_SCROLL = False  →  plain scroll (Google Play Games)
+#
+# Currently: Google Play Games (localhost:6520) → CTRL_SCROLL = False
 
 import time
 import sys
 import ctypes
+import ctypes.wintypes
 
 
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
 
-# Name of the emulator window (to find it automatically)
-EMULATOR_WINDOW_KEYWORDS = ['mulateur', 'Google Play', 'play games']
+CTRL_SCROLL = False
 
-# Fallback if the window is not found
-FALLBACK_CENTER_X = 1334
-FALLBACK_CENTER_Y = 764
+EMULATOR_WINDOW_KEYWORDS = [
+    'Google Play', 'play games',
+    'LDPlayer', 'LD Player', 'LDMultiPlayer',
+    'BlueStacks',
+    'MuMu',
+    'Nox',
+    'MEmu',
+    'Clash of Clans',
+]
 
-# Scroll parameters
 ZOOM_OUT_SCROLLS = 15
-SCROLL_DELTA = -120
-SCROLL_DELAY = 0.08
+SCROLL_DELTA     = -120
+SCROLL_DELAY     = 0.05
 
-# Windows API constants
-MOUSEEVENTF_WHEEL = 0x0800
+WM_MOUSEWHEEL = 0x020A
+MK_CONTROL    = 0x0008
 
 
 # =============================================================================
-# FIND EMULATOR WINDOW
+# INTERNAL
 # =============================================================================
 
-def _find_emulator_center():
+_user32 = ctypes.windll.user32
+
+
+def _find_emulator_hwnd():
+    """Returns (hwnd, title) of the emulator main window, or None."""
+    found = []
+
+    EnumProc = ctypes.WINFUNCTYPE(
+        ctypes.wintypes.BOOL,
+        ctypes.wintypes.HWND,
+        ctypes.wintypes.LPARAM,
+    )
+
+    def _cb(hwnd, _):
+        n = _user32.GetWindowTextLengthW(hwnd)
+        if n > 0:
+            buf = ctypes.create_unicode_buffer(n + 1)
+            _user32.GetWindowTextW(hwnd, buf, n + 1)
+            title = buf.value
+            for kw in EMULATOR_WINDOW_KEYWORDS:
+                if kw.lower() in title.lower():
+                    found.append((hwnd, title))
+                    return False
+        return True
+
+    _user32.EnumWindows(EnumProc(_cb), 0)
+    return found[0] if found else None
+
+
+def _make_wm_mousewheel_params(delta, use_ctrl, hwnd):
+    """Returns (wParam, lParam) for WM_MOUSEWHEEL targeting hwnd's center."""
+    rect = ctypes.wintypes.RECT()
+    _user32.GetWindowRect(hwnd, ctypes.byref(rect))
+    cx = (rect.left + rect.right) // 2
+    cy = (rect.top + rect.bottom) // 2
+
+    keys = MK_CONTROL if use_ctrl else 0
+    wParam = ctypes.c_uint(((delta & 0xFFFF) << 16) | keys)
+    lParam = ctypes.c_long((cy << 16) | (cx & 0xFFFF))
+    return wParam, lParam
+
+
+def _get_child_hwnds(hwnd):
+    """Returns all direct child window handles."""
+    children = []
+    EnumProc = ctypes.WINFUNCTYPE(
+        ctypes.wintypes.BOOL,
+        ctypes.wintypes.HWND,
+        ctypes.wintypes.LPARAM,
+    )
+    def _cb(child, _):
+        children.append(child)
+        return True
+    _user32.EnumChildWindows(hwnd, EnumProc(_cb), 0)
+    return children
+
+
+def _send_scroll(hwnd, delta, use_ctrl, scrolls):
     """
-    Automatically finds the center of the emulator window.
-    Uses pygetwindow if available, otherwise falls back.
+    Sends WM_MOUSEWHEEL directly to hwnd via SendMessage.
+    If the main window doesn't respond (no effect), also tries child windows.
+    SendMessage is synchronous and targets the handle directly —
+    no cursor movement, no focus required.
     """
-    try:
-        import pygetwindow as gw
-        windows = gw.getAllTitles()
+    wParam, lParam = _make_wm_mousewheel_params(delta, use_ctrl, hwnd)
 
-        for keyword in EMULATOR_WINDOW_KEYWORDS:
-            matches = [w for w in windows if keyword.lower() in w.lower()]
-            if matches:
-                win = gw.getWindowsWithTitle(matches[0])[0]
-                cx = win.left + win.width // 2
-                cy = win.top + win.height // 2
-                return cx, cy
+    # Try main window
+    for _ in range(scrolls):
+        _user32.SendMessageW(hwnd, WM_MOUSEWHEEL, wParam, lParam)
+        time.sleep(SCROLL_DELAY)
 
-    except ImportError:
-        pass
-    except Exception:
-        pass
-
-    return FALLBACK_CENTER_X, FALLBACK_CENTER_Y
+    # Also send to child windows (game viewport in some emulators)
+    children = _get_child_hwnds(hwnd)
+    if children:
+        child_wParam, child_lParam = _make_wm_mousewheel_params(delta, use_ctrl, children[0])
+        for child in children:
+            for _ in range(scrolls):
+                _user32.SendMessageW(child, WM_MOUSEWHEEL, child_wParam, child_lParam)
+                time.sleep(SCROLL_DELAY)
 
 
 # =============================================================================
-# MAIN FUNCTIONS
+# PUBLIC API
 # =============================================================================
 
 def zoom_out(scrolls=None):
-    """
-    Zooms out to maximum by simulating the mouse wheel via Windows API.
-
-    Args:
-        scrolls: number of scrolls (default: ZOOM_OUT_SCROLLS)
-
-    Returns:
-        True if zoom-out was performed
-    """
+    """Zooms out the game in the emulator — fully isolated, no cursor needed."""
     if scrolls is None:
         scrolls = ZOOM_OUT_SCROLLS
 
-    # Find the emulator center
-    center_x, center_y = _find_emulator_center()
-
-    # Save the current cursor position
-    class POINT(ctypes.Structure):
-        _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
-
-    pt = POINT()
-    ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
-    original_x, original_y = pt.x, pt.y
-
-    try:
-        # Place the cursor at the emulator center
-        ctypes.windll.user32.SetCursorPos(center_x, center_y)
-        time.sleep(0.2)
-
-        # Scroll to zoom out
-        for _ in range(scrolls):
-            ctypes.windll.user32.mouse_event(
-                MOUSEEVENTF_WHEEL, 0, 0, SCROLL_DELTA, 0
-            )
-            time.sleep(SCROLL_DELAY)
-
-        # Small delay for the game to finish the zoom animation
-        time.sleep(0.3)
-
-        print(f" Dézoom effectué ({scrolls} scrolls)")
-        return True
-
-    except Exception as e:
-        print(f" WARNING: Erreur dézoom : {e}")
+    result = _find_emulator_hwnd()
+    if result is None:
+        print(" WARNING: Emulator window not found — zoom_out skipped")
+        print(f" Add the window title to EMULATOR_WINDOW_KEYWORDS in zoom_control.py")
         return False
 
-    finally:
-        # Restore the cursor to its original position
-        ctypes.windll.user32.SetCursorPos(original_x, original_y)
+    hwnd, title = result
+    _send_scroll(hwnd, SCROLL_DELTA, CTRL_SCROLL, scrolls)
+    print(f" Dézoom effectué ({scrolls} scrolls) → {title}")
+    return True
 
 
 def zoom_in(scrolls=5):
-    """Zoome (scroll vers le haut). Utile pour les tests."""
-    center_x, center_y = _find_emulator_center()
+    """Zooms in the game in the emulator — fully isolated, no cursor needed."""
+    result = _find_emulator_hwnd()
+    if result is None:
+        return False
 
-    class POINT(ctypes.Structure):
-        _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
-
-    pt = POINT()
-    ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
-    original_x, original_y = pt.x, pt.y
-
-    try:
-        ctypes.windll.user32.SetCursorPos(center_x, center_y)
-        time.sleep(0.2)
-
-        for _ in range(scrolls):
-            ctypes.windll.user32.mouse_event(
-                MOUSEEVENTF_WHEEL, 0, 0, 120, 0
-            )
-            time.sleep(SCROLL_DELAY)
-
-        return True
-    finally:
-        ctypes.windll.user32.SetCursorPos(original_x, original_y)
+    hwnd, _ = result
+    _send_scroll(hwnd, -SCROLL_DELTA, CTRL_SCROLL, scrolls)
+    return True
 
 
 # =============================================================================
-# MAIN
+# MAIN (test)
 # =============================================================================
 
 if __name__ == "__main__":
-    if '--test' in sys.argv:
-        print("Test dézoom...")
-        zoom_out(scrolls=10)
-        print("Terminé ! Vérifie que le jeu a dézoomé.")
-
-    elif '--zoom-in' in sys.argv:
-        print("Test zoom in...")
-        zoom_in(scrolls=5)
-        print("Terminé !")
-
+    result = _find_emulator_hwnd()
+    if result:
+        hwnd, title = result
+        children = _get_child_hwnds(hwnd)
+        print(f"Emulator: '{title}' (hwnd={hwnd}, {len(children)} child windows)")
     else:
-        cx, cy = _find_emulator_center()
-        print("zoom_control.py — Dézoom via Windows API")
-        print(f" Centre émulateur : ({cx}, {cy})")
-        print(f" Scrolls : {ZOOM_OUT_SCROLLS}")
-        print()
-        print(" --test Tester le dézoom")
-        print(" --zoom-in Tester le zoom")
+        print("WARNING: No emulator window found.")
+        print(f"Keywords: {EMULATOR_WINDOW_KEYWORDS}")
+
+    if '--test' in sys.argv:
+        zoom_out(scrolls=10)
+    elif '--zoom-in' in sys.argv:
+        zoom_in(scrolls=5)

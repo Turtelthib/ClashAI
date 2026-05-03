@@ -1,0 +1,34 @@
+# coc_walls.yaml
+# Configuration du dataset pour la détection des REMPARTS/MURS de Clash of Clans.
+#
+# Ce dataset est INDÉPENDANT du dataset des bâtiments (best.pt) :
+# - Un seul type de classe : 'mur' (ou 'rempart' au choix)
+# - Permet d'ignorer les niveaux de mur (1-19) : tous sont la même classe
+# - N'affecte pas le modèle bâtiments existant qui marche bien
+#
+# Structure attendue :
+#   dataset_walls/
+#   ├── images/
+#   │   ├── train/    # 80% des images
+#   │   └── val/      # 20% des images
+#   ├── labels/
+#   │   ├── train/    # Labels YOLO (.txt) générés depuis Labelme
+#   │   └── val/
+#   └── coc_walls.yaml (ce fichier)
+
+# Chemin racine du dataset (relatif au fichier yaml)
+path: C:/Users/turte/Documents/Linux/NewCocProj/COCProj/dataset_walls
+
+# Chemins train / val (relatifs à path)
+train: images/train
+val: images/val
+
+# Classes
+# Une seule classe : le mur / rempart CoC
+# Peu importe le niveau (bois, pierre, or, cristal, lave, skull, magma...)
+# → Généralise mieux avec peu de données par niveau
+names:
+  0: mur
+
+# Nombre de classes
+nc: 1

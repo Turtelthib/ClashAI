@@ -601,6 +601,181 @@ def get_full_perimeter_positions(screenshot_pil, num_points=20, offset_px=None):
 
 
 # =============================================================================
+# DEPLOYMENT ZONE FROM WALL SEGMENTATION (V4.3) — primary method
+# =============================================================================
+
+def get_perimeter_from_walls(screenshot_pil, yolo_walls_model,
+                              buildings=None, num_points=20):
+    """
+    V4.3 — Deployment positions from wall segmentation + building bboxes.
+
+    Combines BOTH models to define the forbidden zone:
+      - Wall masks (yolo_walls_seg) → exact village boundary
+      - Building bboxes (from buildings YOLO) → filled forbidden zones
+
+    Raycasting is done entirely in IMAGE pixel space to avoid scaling
+    artifacts, then converted to ADB coordinates at the end.
+
+    Args:
+        screenshot_pil: PIL Image
+        yolo_walls_model: loaded YOLO segmentation model
+        buildings: list of {'bbox': (x1,y1,x2,y2), 'center': (cx,cy), ...}
+                   from the buildings YOLO (optional, improves accuracy)
+        num_points: number of deploy positions to generate
+
+    Returns:
+        (positions_adb, center_adb, success)
+    """
+    import numpy as np
+    import cv2
+
+    fallback_center = (ADB_WIDTH // 2, ADB_HEIGHT // 2 - 50)
+
+    if yolo_walls_model is None:
+        return None, fallback_center, False
+
+    img_arr = np.array(screenshot_pil)
+    img_h, img_w = img_arr.shape[:2]
+    scale_x = ADB_WIDTH / img_w
+    scale_y = ADB_HEIGHT / img_h
+
+    # UI exclusion zones in IMAGE pixel space
+    def _ui_zone_img(x1, y1, x2, y2):
+        return (int(x1 / scale_x), int(y1 / scale_y),
+                int(x2 / scale_x), int(y2 / scale_y))
+
+    ui_zones_img = [_ui_zone_img(*z) for z in UI_EXCLUSION_ZONES]
+    margin_x = int(SCREEN_MARGIN / scale_x)
+    margin_y = int(SCREEN_MARGIN / scale_y)
+
+    # ── 1. Wall segmentation mask ─────────────────────────────────────────
+    try:
+        results = yolo_walls_model.predict(img_arr, conf=0.25, verbose=False)
+    except Exception as e:
+        print(f" WARNING: yolo_walls inference failed: {e}")
+        return None, fallback_center, False
+
+    r = results[0]
+    if r.masks is None or len(r.masks) == 0:
+        print(" WARNING: yolo_walls — no walls detected, falling back")
+        return None, fallback_center, False
+
+    # Combine all wall masks
+    forbidden = np.zeros((img_h, img_w), dtype=np.uint8)
+    for mask_tensor in r.masks.data:
+        mask_np = mask_tensor.cpu().numpy()
+        if mask_np.shape != (img_h, img_w):
+            mask_np = cv2.resize(mask_np, (img_w, img_h),
+                                 interpolation=cv2.INTER_NEAREST)
+        forbidden = np.maximum(forbidden, (mask_np > 0.5).astype(np.uint8))
+
+    # ── 2. Add building bboxes to the forbidden zone ─────────────────────
+    if buildings:
+        for b in buildings:
+            x1, y1, x2, y2 = b['bbox']
+            ix1 = max(0, int(x1 / scale_x) - 4)
+            iy1 = max(0, int(y1 / scale_y) - 4)
+            ix2 = min(img_w, int(x2 / scale_x) + 4)
+            iy2 = min(img_h, int(y2 / scale_y) + 4)
+            forbidden[iy1:iy2, ix1:ix2] = 1
+
+    # ── 3. Dilate to close gaps and add safety margin ─────────────────────
+    # Close gaps between wall segments
+    k_close = np.ones((11, 11), np.uint8)
+    forbidden = cv2.morphologyEx(forbidden, cv2.MORPH_CLOSE, k_close)
+    # Small dilation for safety margin
+    k_expand = np.ones((7, 7), np.uint8)
+    forbidden = cv2.dilate(forbidden, k_expand, iterations=2)
+
+    # ── 4. Compute centroid from the forbidden zone ───────────────────────
+    contours, _ = cv2.findContours(forbidden, cv2.RETR_EXTERNAL,
+                                    cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None, fallback_center, False
+
+    main = max(contours, key=cv2.contourArea)
+    if cv2.contourArea(main) < 3000:
+        print(" WARNING: yolo_walls — forbidden zone too small, falling back")
+        return None, fallback_center, False
+
+    M = cv2.moments(main)
+    if M['m00'] > 0:
+        center_img = np.array([M['m10'] / M['m00'], M['m01'] / M['m00']])
+    else:
+        center_img = np.array([img_w / 2, img_h / 2])
+
+    center_adb = (int(center_img[0] * scale_x), int(center_img[1] * scale_y))
+
+    # ── 5. Raycasting in IMAGE pixel space ────────────────────────────────
+    # For each angle: march ALL the way outward from center, track the LAST
+    # forbidden pixel encountered. Deploy position = just after that last pixel.
+    # This handles multi-ring bases: the point is placed outside the outermost
+    # wall, not the first inner ring.
+    offset_px_img = int(DEPLOY_OFFSET / scale_x)  # offset in image pixels
+    angles = np.linspace(0, 2 * np.pi, num_points, endpoint=False)
+    positions_img = []
+
+    for angle in angles:
+        dx = np.cos(angle)
+        dy = np.sin(angle)
+        last_forbidden_r = 0  # track the LAST forbidden radius on this ray
+
+        # Full sweep to find the outermost forbidden pixel
+        for radius in range(0, int(img_w * 0.8), 2):
+            px = int(center_img[0] + dx * radius)
+            py = int(center_img[1] + dy * radius)
+
+            if px < 0 or px >= img_w or py < 0 or py >= img_h:
+                break
+
+            if forbidden[py, px] > 0:
+                last_forbidden_r = radius  # keep updating → last forbidden wins
+
+        if last_forbidden_r == 0:
+            continue  # ray never hit a forbidden zone (shouldn't happen)
+
+        # Place the position just outside the outermost forbidden pixel
+        deploy_r = last_forbidden_r + offset_px_img
+        ex = int(center_img[0] + dx * deploy_r)
+        ey = int(center_img[1] + dy * deploy_r)
+
+        # Clamp to image bounds
+        ex = max(margin_x, min(img_w - margin_x, ex))
+        ey = max(margin_y, min(img_h - margin_y, ey))
+
+        # Skip UI zones
+        in_ui = any(
+            x1 <= ex <= x2 and y1 <= ey <= y2
+            for x1, y1, x2, y2 in ui_zones_img
+        )
+        if not in_ui:
+            positions_img.append((ex, ey))
+
+    if len(positions_img) < 4:
+        print(f" WARNING: yolo_walls — only {len(positions_img)} positions, falling back")
+        return None, fallback_center, False
+
+    # ── 6. Convert image pixel → ADB coordinates ─────────────────────────
+    positions_adb = [
+        (int(px * scale_x), int(py * scale_y))
+        for px, py in positions_img
+    ]
+
+    # Deduplicate (min distance 20px in ADB space)
+    unique = [positions_adb[0]]
+    for px, py in positions_adb[1:]:
+        if not any((px - ux)**2 + (py - uy)**2 < 400 for ux, uy in unique):
+            unique.append((px, py))
+
+    n_walls = len(r.masks) if r.masks is not None else 0
+    n_buildings = len(buildings) if buildings else 0
+    print(f" Deploy zone (walls+buildings): {n_walls} wall segments, "
+          f"{n_buildings} buildings, {len(unique)}/{num_points} positions")
+
+    return unique, center_adb, True
+
+
+# =============================================================================
 # DEPLOYMENT ZONE FROM YOLO BOUNDING BOXES (V4.2)
 # =============================================================================
 

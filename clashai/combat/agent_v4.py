@@ -53,11 +53,11 @@ GAMMA = 0.99
 GAE_LAMBDA = 0.95
 CLIP_EPSILON = 0.2
 ENTROPY_COEF = 0.02
-VALUE_COEF = 0.5
+VALUE_COEF = 0.05
 MAX_GRAD_NORM = 0.5
 LEARNING_RATE = 3e-4
 PPO_EPOCHS = 4
-BATCH_SIZE = 8
+BATCH_SIZE = 16
 
 
 # =============================================================================
@@ -365,7 +365,11 @@ class PPOAgentV4:
             ) * batch['advantages']
             policy_loss = -torch.min(surr1, surr2).mean()
 
-            value_loss = nn.MSELoss()(values.squeeze(), batch['returns'])
+            # Normalize returns before MSE to prevent value loss explosion
+            # when rewards have high variance (e.g. [-50 ... +641]).
+            ret = batch['returns']
+            ret_norm = (ret - ret.mean()) / (ret.std() + 1e-8)
+            value_loss = nn.MSELoss()(values.squeeze(), ret_norm)
 
             loss = (policy_loss
                     + VALUE_COEF * value_loss
@@ -458,10 +462,15 @@ class PPOAgentV4:
             for start in range(0, n, mini_batch_size):
                 batch_idx = indices[start:start + mini_batch_size]
 
+                # Do not apply action mask during BC: when the heuristic
+                # deploys a role after its counter hits 0, that action has
+                # mask=0 in the stored demo. Passing the mask sets
+                # logit[target] = -1e8, making CE loss ≈ 1e8 per sample
+                # and causing the total BC loss to blow up (~284 000).
                 logits, _ = self.network(
                     grids[batch_idx],
                     vectors[batch_idx],
-                    masks[batch_idx],
+                    None,
                 )
 
                 loss = nn.CrossEntropyLoss()(logits, actions[batch_idx])
