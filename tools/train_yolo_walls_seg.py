@@ -19,16 +19,16 @@
 #
 # Expected structure (Roboflow YOLO Segmentation export):
 #   dataset_walls/
-#   ├── data.yaml               (Roboflow config)
-#   ├── train/
-#   │   ├── images/
-#   │   └── labels/             (.txt with normalized polygons)
-#   ├── valid/
-#   │   ├── images/
-#   │   └── labels/
-#   └── test/                   (optional)
-#       ├── images/
-#       └── labels/
+#    data.yaml               (Roboflow config)
+#    train/
+#       images/
+#       labels/             (.txt with normalized polygons)
+#    valid/
+#       images/
+#       labels/
+#    test/                   (optional)
+#        images/
+#        labels/
 
 import os
 import argparse
@@ -65,13 +65,13 @@ def train(epochs=DEFAULT_EPOCHS, batch=DEFAULT_BATCH, img_size=DEFAULT_IMG_SIZE,
         print(f"ERROR: Dataset not found: {data_yaml}")
         print("   Expected structure:")
         print("   datasets/dataset_walls/")
-        print("   ├── data.yaml")
-        print("   ├── train/images/, train/labels/")
-        print("   └── valid/images/, valid/labels/")
+        print("    data.yaml")
+        print("    train/images/, train/labels/")
+        print("    valid/images/, valid/labels/")
         return
 
     print(f"\n{'='*60}")
-    print("  🧱 ClashAI — Entraînement YOLO26-SEG Murs")
+    print("   ClashAI — Entraînement YOLO26-SEG Murs")
     print(f"{'='*60}")
     print(f"  Dataset  : {data_yaml}")
     print(f"  Modèle   : {model}")
@@ -82,10 +82,10 @@ def train(epochs=DEFAULT_EPOCHS, batch=DEFAULT_BATCH, img_size=DEFAULT_IMG_SIZE,
     print(f"{'='*60}\n")
 
     if resume and os.path.exists(BEST_WEIGHTS):
-        print(f"📦 Reprise depuis {BEST_WEIGHTS}")
+        print(f" Reprise depuis {BEST_WEIGHTS}")
         yolo = YOLO(BEST_WEIGHTS)
     else:
-        print(f"📦 Chargement du modèle pré-entraîné {model}")
+        print(f" Chargement du modèle pré-entraîné {model}")
         yolo = YOLO(model)
 
     results = yolo.train(
@@ -129,9 +129,9 @@ def train(epochs=DEFAULT_EPOCHS, batch=DEFAULT_BATCH, img_size=DEFAULT_IMG_SIZE,
     if os.path.exists(best_src):
         import shutil
         shutil.copy2(best_src, BEST_WEIGHTS)
-        print(f"\n✅ Meilleur modèle copié vers : {BEST_WEIGHTS}")
+        print(f"\n Meilleur modèle copié vers : {BEST_WEIGHTS}")
 
-    print(f"\n📊 Résultats dans : {os.path.join(WEIGHTS_DIR, 'train')}")
+    print(f"\n Résultats dans : {os.path.join(WEIGHTS_DIR, 'train')}")
     return results
 
 
@@ -144,11 +144,11 @@ def test(image_path=None, conf=0.35, save=True):
     from ultralytics import YOLO
 
     if not os.path.exists(BEST_WEIGHTS):
-        print(f"❌ Pas de modèle entraîné : {BEST_WEIGHTS}")
+        print(f" Pas de modèle entraîné : {BEST_WEIGHTS}")
         print("   Lance d'abord : uv run python tools/train_yolo_walls_seg.py")
         return
 
-    print("\n🧪 Test YOLO26-SEG Murs")
+    print("\n Test YOLO26-SEG Murs")
     print(f"   Modèle : {BEST_WEIGHTS}")
     print(f"   Seuil  : {conf}")
 
@@ -169,7 +169,7 @@ def test(image_path=None, conf=0.35, save=True):
             capture_output=True, timeout=5
         )
         if result.returncode != 0 or len(result.stdout) < 100:
-            print("❌ Screenshot ADB échoué")
+            print(" Screenshot ADB échoué")
             return
 
         img = Image.open(io.BytesIO(result.stdout)).convert("RGB")
@@ -191,11 +191,11 @@ def test(image_path=None, conf=0.35, save=True):
     for r in results:
         masks = r.masks
         if masks is None or len(masks) == 0:
-            print("\n   ⚠️  Aucun mur détecté")
+            print("\n     Aucun mur détecté")
             continue
 
         boxes = r.boxes
-        print(f"\n   🧱 {len(masks)} murs détectés :")
+        print(f"\n    {len(masks)} murs détectés :")
         for i, (box, mask) in enumerate(zip(boxes, masks)):
             conf_val = float(box.conf[0])
             x1, y1, x2, y2 = box.xyxy[0].tolist()
@@ -205,7 +205,7 @@ def test(image_path=None, conf=0.35, save=True):
                   f"surface={mask_pixels}px")
 
     if save:
-        print(f"\n   📁 Images annotées : {os.path.join(WEIGHTS_DIR, 'test', 'predict')}")
+        print(f"\n    Images annotées : {os.path.join(WEIGHTS_DIR, 'test', 'predict')}")
 
 
 # =============================================================================
@@ -217,12 +217,12 @@ def validate(data=None):
     from ultralytics import YOLO
 
     if not os.path.exists(BEST_WEIGHTS):
-        print(f"❌ Pas de modèle entraîné : {BEST_WEIGHTS}")
+        print(f" Pas de modèle entraîné : {BEST_WEIGHTS}")
         return
 
     data_yaml = data or DATASET_YAML
 
-    print("\n📊 Validation YOLO26-SEG Murs")
+    print("\n Validation YOLO26-SEG Murs")
     print(f"   Modèle  : {BEST_WEIGHTS}")
     print(f"   Dataset : {data_yaml}")
 
@@ -230,7 +230,7 @@ def validate(data=None):
     metrics = yolo.val(data=data_yaml, split='val')
 
     print(f"\n{'='*60}")
-    print("  📊 Résultats de validation")
+    print("   Résultats de validation")
     print(f"{'='*60}")
     print(f"  [Box] mAP50      : {metrics.box.map50:.3f}")
     print(f"  [Box] mAP50-95   : {metrics.box.map:.3f}")
@@ -244,13 +244,13 @@ def validate(data=None):
 
     seg_map50 = metrics.seg.map50
     if seg_map50 >= 0.8:
-        print("  ✅ Excellent — segmentation murs très fiable")
+        print("   Excellent — segmentation murs très fiable")
     elif seg_map50 >= 0.6:
-        print("  🟡 Correct — utilisable avec quelques ratés")
+        print("   Correct — utilisable avec quelques ratés")
     elif seg_map50 >= 0.4:
-        print("  🟠 Moyen — plus d'images ou meilleure annotation nécessaire")
+        print("   Moyen — plus d'images ou meilleure annotation nécessaire")
     else:
-        print("  🔴 Faible — dataset insuffisant ou mal annoté")
+        print("   Faible — dataset insuffisant ou mal annoté")
 
 
 # =============================================================================

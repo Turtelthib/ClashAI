@@ -30,7 +30,7 @@ try:
 except FileNotFoundError:
     print("ERROR: ERREUR : Le fichier 'classes.json' est introuvable !")
     print(f" L'IA cherche dans : {os.path.abspath(json_path)}")
-    print("👉 Lancez d'abord 'python main/train_all.py' pour générer ce fichier.")
+    print(" Lancez d'abord 'python main/train_all.py' pour générer ce fichier.")
     exit()
 
 # --- LOADING MODELS ---
@@ -49,7 +49,7 @@ transform = transforms.Compose([
 ])
 
 # --- INFERENCE ---
-print(f"🕵 Analyse de {IMAGE_TO_TEST}...")
+print(f" Analyse de {IMAGE_TO_TEST}...")
 
 results = yolo_model.predict(IMAGE_TO_TEST, conf=0.25, iou=0.50, verbose=False)
 result = results[0]
@@ -103,4 +103,4 @@ for box in result.boxes:
 output_file = "Result.jpg"
 cv2.imwrite(output_file, img_cv)
 print(f"\nAnalyse terminée ! {count} objets détectés.")
-print(f"🖼 Résultat sauvegardé sous : {output_file}")
+print(f" Résultat sauvegardé sous : {output_file}")

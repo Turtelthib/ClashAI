@@ -648,7 +648,7 @@ def get_perimeter_from_walls(screenshot_pil, yolo_walls_model,
     margin_x = int(SCREEN_MARGIN / scale_x)
     margin_y = int(SCREEN_MARGIN / scale_y)
 
-    # ── 1. Wall segmentation mask ─────────────────────────────────────────
+    #  1. Wall segmentation mask 
     try:
         results = yolo_walls_model.predict(img_arr, conf=0.25, verbose=False)
     except Exception as e:
@@ -669,7 +669,7 @@ def get_perimeter_from_walls(screenshot_pil, yolo_walls_model,
                                  interpolation=cv2.INTER_NEAREST)
         forbidden = np.maximum(forbidden, (mask_np > 0.5).astype(np.uint8))
 
-    # ── 2. Add building bboxes to the forbidden zone ─────────────────────
+    #  2. Add building bboxes to the forbidden zone 
     if buildings:
         for b in buildings:
             x1, y1, x2, y2 = b['bbox']
@@ -679,7 +679,7 @@ def get_perimeter_from_walls(screenshot_pil, yolo_walls_model,
             iy2 = min(img_h, int(y2 / scale_y) + 4)
             forbidden[iy1:iy2, ix1:ix2] = 1
 
-    # ── 3. Dilate to close gaps and add safety margin ─────────────────────
+    #  3. Dilate to close gaps and add safety margin 
     # Close gaps between wall segments
     k_close = np.ones((11, 11), np.uint8)
     forbidden = cv2.morphologyEx(forbidden, cv2.MORPH_CLOSE, k_close)
@@ -687,7 +687,7 @@ def get_perimeter_from_walls(screenshot_pil, yolo_walls_model,
     k_expand = np.ones((7, 7), np.uint8)
     forbidden = cv2.dilate(forbidden, k_expand, iterations=2)
 
-    # ── 4. Compute centroid from the forbidden zone ───────────────────────
+    #  4. Compute centroid from the forbidden zone 
     contours, _ = cv2.findContours(forbidden, cv2.RETR_EXTERNAL,
                                     cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
@@ -706,7 +706,7 @@ def get_perimeter_from_walls(screenshot_pil, yolo_walls_model,
 
     center_adb = (int(center_img[0] * scale_x), int(center_img[1] * scale_y))
 
-    # ── 5. Raycasting in IMAGE pixel space ────────────────────────────────
+    #  5. Raycasting in IMAGE pixel space 
     # For each angle: march ALL the way outward from center, track the LAST
     # forbidden pixel encountered. Deploy position = just after that last pixel.
     # This handles multi-ring bases: the point is placed outside the outermost
@@ -755,7 +755,7 @@ def get_perimeter_from_walls(screenshot_pil, yolo_walls_model,
         print(f" WARNING: yolo_walls — only {len(positions_img)} positions, falling back")
         return None, fallback_center, False
 
-    # ── 6. Convert image pixel → ADB coordinates ─────────────────────────
+    #  6. Convert image pixel → ADB coordinates 
     positions_adb = [
         (int(px * scale_x), int(py * scale_y))
         for px, py in positions_img

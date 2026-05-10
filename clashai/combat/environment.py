@@ -97,7 +97,7 @@ REWARD_FIRST_STAR_BONUS = 50
 # IMPORTANT: the "stable plateau method" was removed because it caused
 # catastrophic false positives. In normal combat, green bars naturally
 # decrease (green → orange when injured), which the plateau
-# wrongly interpreted as "troops dead". Result: surrender at 88% 2★.
+# wrongly interpreted as "troops dead". Result: surrender at 88% 2.
 #
 GREEN_DEAD_THRESHOLD = 2
 NO_TROOPS_CHECKS_THRESHOLD = 3
@@ -188,9 +188,10 @@ class ClashEnvV3:
         self._hero_manager = HeroAbilityManager(verbose=self.verbose)
         self._spell_caster = SpellCaster(verbose=self.verbose)
 
-        # TroopFinder (template matching troop bar)
+        # TroopFinder — uses YOLO detector if loaded, template matching as fallback
         from clashai.perception.troop_finder import TroopFinder
-        self._troop_finder = TroopFinder()
+        _detector = models.get('troop_bar_detector') if models else None
+        self._troop_finder = TroopFinder(detector=_detector)
 
         # Reward shaping
         self._shaping_history = []
@@ -233,7 +234,7 @@ class ClashEnvV3:
         """Simulates human-like behaviour between episodes."""
         wait_time = random.uniform(15, 60)
         if self.verbose:
-            print(f" 😴 Pause humaine ({wait_time:.0f}s)...")
+            print(f"  Pause humaine ({wait_time:.0f}s)...")
 
         elapsed = 0
         while elapsed < wait_time:
@@ -350,8 +351,8 @@ class ClashEnvV3:
 
             if stuck_count >= MAX_STUCK:
                 if self.verbose:
-                    print(f" Stuck on '{state}' → recovery")
-                self._recovery_sequence()
+                    print(f" Stuck on '{state}' — waiting...")
+                time.sleep(2.0)
                 stuck_count = 0
                 continue
 
@@ -400,19 +401,6 @@ class ClashEnvV3:
 
         return False, None
 
-    def _recovery_sequence(self):
-        if self.verbose:
-            print(" 🚑 Recovery sequence...")
-        for x, y, wait in [
-            (30, 540, 0.5), (1340, 95, 0.5), (1800, 500, 0.5),
-            (30, 540, 0.5), (1270, 90, 0.5), (30, 540, 1.0),
-        ]:
-            self._adb_tap(x, y)
-            time.sleep(wait)
-            state, _, _ = self._get_screen_state()
-            if state in ('village_home', 'phase_attaque', 'prep_attaque'):
-                return
-
     def _zoom_out(self):
         if ZOOM_AVAILABLE:
             try:
@@ -454,7 +442,7 @@ class ClashEnvV3:
                 stuck_count = 0
             last_state = state
             if stuck_count >= 3:
-                self._recovery_sequence()
+                time.sleep(2.0)
                 stuck_count = 0
                 continue
             if state == 'village_home':
@@ -1024,7 +1012,7 @@ class ClashEnvV3:
 
         # 2. Wait + zoom out
         if self.verbose:
-            print(f" ⏳ Waiting for decorations ({WAIT_DECORATIONS}s)...")
+            print(f"  Waiting for decorations ({WAIT_DECORATIONS}s)...")
         time.sleep(WAIT_DECORATIONS)
         self._zoom_out()
 
@@ -1055,7 +1043,7 @@ class ClashEnvV3:
                     if self._remaining_troops[idx] > 0:
                         self._remaining_troops[idx] = float(count)
             if self.verbose and real_counts:
-                print(f" 📖 OCR counters: {dict(real_counts)}")
+                print(f"  OCR counters: {dict(real_counts)}")
         except Exception as e:
             if self.verbose:
                 print(f" WARNING: OCR counters failed: {e}")
@@ -1283,7 +1271,7 @@ class ClashEnvV3:
         action_desc = self._execute_action(action_idx)
 
         if self.verbose:
-            phase_tag = "🏗" if self._phase == 'deploy' else "⚔"
+            phase_tag = "" if self._phase == 'deploy' else ""
             shaping_str = f" ({shaping:+.0f})" if shaping != 0 else ""
             print(f" {phase_tag} Step {self._step_count:2d}: "
                   f"{action_desc}{shaping_str}")
@@ -1308,7 +1296,7 @@ class ClashEnvV3:
             self._combat_observer.start_combat()
 
             if self.verbose:
-                print("\n ⚔ ═══ COMBAT PHASE ═══")
+                print("\n   COMBAT PHASE ")
                 print(f" Heroes deployed: {self._hero_manager.num_deployed()}")
                 abilities = self._hero_manager.get_available_abilities()
                 if abilities:

@@ -60,8 +60,9 @@ class ClashEnvV4(ClashEnvV3):
     - Reward shaping (separate module)
     """
 
-    def __init__(self, models, verbose=True):
+    def __init__(self, models, verbose=True, debug_overlay=False):
         super().__init__(models, verbose)
+        self._debug_overlay = debug_overlay
 
         # TroopManager V4 (replaces direct V3 selection)
         self._troop_mgr = TroopManager(
@@ -547,7 +548,7 @@ class ClashEnvV4(ClashEnvV3):
                         rejected_rays=deploy_debug.get('rejected_rays') if deploy_debug else None,
                     )
                     if path and self.verbose:
-                        print(f" 📸 Debug deploy : {path}")
+                        print(f"  Debug deploy : {path}")
             except Exception as e:
                 if self.verbose:
                     print(f" WARNING: Debug deploy image : {e}")
@@ -568,7 +569,7 @@ class ClashEnvV4(ClashEnvV3):
         """
         import time as _time
 
-        # ── Try async perception thread (V4.3) ────────────────────────
+        #  Try async perception thread (V4.3) 
         perception = self.models.get('perception_thread') if self.models else None
         if perception is not None and perception.is_fresh(max_age_s=1.0):
             state = perception.get_latest()
@@ -601,9 +602,13 @@ class ClashEnvV4(ClashEnvV3):
                 if self.verbose:
                     print(f" Perception cache: {len(new_buildings)} bldg | "
                           f"{state['inference_ms']:.0f}ms (async)")
+
+                # Debug overlay
+                if self._debug_overlay:
+                    self._save_debug_overlay(screenshot, new_buildings)
                 return
 
-        # ── Fallback: V4.2 blocking YOLO ─────────────────────────────
+        #  Fallback: V4.2 blocking YOLO 
         screenshot = self._adb_screenshot()
         if screenshot is None:
             return
@@ -652,6 +657,28 @@ class ClashEnvV4(ClashEnvV3):
         if self.verbose:
             print(f" YOLO buildings: {t_buildings:.0f}ms | "
                   f"troops: {t_troops:.0f}ms")
+
+        if self._debug_overlay:
+            self._save_debug_overlay(screenshot, new_buildings)
+
+    def _save_debug_overlay(self, screenshot, buildings):
+        """Saves a debug overlay image for the current observe step."""
+        try:
+            from clashai.perception.debug_overlay import save_debug_overlay
+            troop_positions = getattr(self._troop_finder, 'positions', {})
+            save_debug_overlay(
+                screenshot_pil=screenshot,
+                step=self._step_count,
+                episode=self._episode_count,
+                buildings=buildings,
+                deploy_positions=self._deploy_positions,
+                troop_positions=troop_positions,
+                remaining_troops=self._remaining_troops,
+                troop_types=TROOP_TYPES,
+            )
+        except Exception as e:
+            if self.verbose:
+                print(f" WARNING: debug overlay: {e}")
 
     # -----------------------------------------------------------------
     # Heuristic V4

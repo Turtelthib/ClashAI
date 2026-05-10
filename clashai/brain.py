@@ -258,7 +258,7 @@ class ClashBrain:
             elif self.mode == 'gdc':
                 # CW mode: wait for commands
                 if self.verbose:
-                    print(f" ⏳ Waiting for CW commands... "
+                    print(f"  Waiting for CW commands... "
                           f"(next check in {CHAT_CHECK_INTERVAL}s)")
                 time.sleep(CHAT_CHECK_INTERVAL)
                 continue
@@ -328,7 +328,7 @@ class ClashBrain:
 
         if self.verbose:
             print(f"\n{'='*60}")
-            print(f" ⚔ Attaque farm #{self._attacks_done}")
+            print(f"  Attaque farm #{self._attacks_done}")
             print(f" {datetime.now().strftime('%H:%M:%S')}")
             print(f"{'='*60}")
 
@@ -484,7 +484,7 @@ class ClashBrain:
             commands: list of detected commands
         """
         if self.verbose:
-            print("\n 💬 Vérification du chat clan...")
+            print("\n  Vérification du chat clan...")
 
         self._last_chat_check = time.time()
         self._attacks_since_chat_check = 0
@@ -507,7 +507,7 @@ class ClashBrain:
         self._chat_monitor.close_chat()
 
         if commands and self.verbose:
-            print(f" 📨 {len(commands)} commande(s) trouvée(s)")
+            print(f"  {len(commands)} commande(s) trouvée(s)")
 
         return commands
 
@@ -592,7 +592,7 @@ class ClashBrain:
         wait = random.uniform(IDLE_BETWEEN_ATTACKS, IDLE_BETWEEN_ATTACKS_MAX)
 
         if self.verbose:
-            print(f"\n 😴 Pause ({wait:.0f}s)...")
+            print(f"\n  Pause ({wait:.0f}s)...")
 
         elapsed = 0
         while elapsed < wait and self._running:

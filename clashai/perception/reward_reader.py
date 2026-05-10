@@ -508,19 +508,19 @@ def read_attack_results(img_pil=None, debug=False):
 
     # OCR fix 6→1: template matching often confuses 6 with 1.
     # Result: 60-69% read as 10-19%. Detected by cross-checking
-    # with stars: 2★ requires at least 50%.
-    # For 1★, 16% is technically possible (TH destroyed at 16%) but
+    # with stars: 2 requires at least 50%.
+    # For 1, 16% is technically possible (TH destroyed at 16%) but
     # statistically it is almost always a misread 6X%.
     if 10 <= percentage <= 19:
         corrected_pct = percentage + 50
         if stars >= 2:
-            # 2★ + <50% = impossible → certain correction
-            print(f" OCR fix 6→1: {percentage}% impossible with {stars}★"
+            # 2 + <50% = impossible → certain correction
+            print(f" OCR fix 6→1: {percentage}% impossible with {stars}"
                   f" → corrected to {corrected_pct}%")
             percentage = corrected_pct
         elif stars == 1 and corrected_pct <= 100:
-            # 1★ + 1X% = suspicious → probable correction
-            print(f" OCR fix 6→1: {percentage}% suspect with {stars}★"
+            # 1 + 1X% = suspicious → probable correction
+            print(f" OCR fix 6→1: {percentage}% suspect with {stars}"
                   f" → corrected to {corrected_pct}%")
             percentage = corrected_pct
 
@@ -533,9 +533,9 @@ def read_attack_results(img_pil=None, debug=False):
         print(" Correction: >= 50% guarantees at least 1 star.")
         stars = 1
 
-    # Final safeguard: 2★ requires ≥50%
+    # Final safeguard: 2 requires ≥50%
     if stars >= 2 and percentage < 50:
-        print(f" Correction: {stars}★ but {percentage}% → forced to 50%")
+        print(f" Correction: {stars} but {percentage}% → forced to 50%")
         percentage = 50
 
     reward = calculate_reward(stars, percentage)
@@ -568,7 +568,7 @@ def calculate_reward(stars, percentage):
 
 def extract_result_screen():
     """Captures the results screen and saves useful zones."""
-    print("📸 Extracting the results screen...")
+    print(" Extracting the results screen...")
     print(" Make sure you are on the attack results screen")
     print(" (with stars and 'Victory' or 'Defeat')\n")
 
@@ -593,7 +593,7 @@ def extract_result_screen():
 
     print(f"Screenshots saved in {TEMPLATES_DIR}/")
     print()
-    print("📝 NEXT STEP:")
+    print(" NEXT STEP:")
     print(" Place templates 0-9 + pct.png in reward_templates/digits/")
     print(" Then run --test to verify")
 
@@ -629,7 +629,7 @@ def test_reward_reader(image_path=None):
 
 def test_digits_only(image_path=None):
     """Tests digit reading only."""
-    print("🔢 Digit Template Matching Test\n")
+    print(" Digit Template Matching Test\n")
 
     if image_path and os.path.exists(image_path):
         print(f" Image: {image_path}")

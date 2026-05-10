@@ -36,7 +36,7 @@ def renommer_et_deplacer():
         return
 
     print(f"\n{len(fichiers)} fichiers trouvés...")
-    print(f"📤 Destination : {dossier_output}\n")
+    print(f" Destination : {dossier_output}\n")
 
     compteur = dernier_num + 1
 

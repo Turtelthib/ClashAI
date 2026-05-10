@@ -65,7 +65,7 @@ def main():
     convert_labelme.ALIASES = WALL_ALIASES
 
     print(f"\n{'='*60}")
-    print("  🧱 Conversion LabelMe → YOLO pour murs")
+    print("   Conversion LabelMe → YOLO pour murs")
     print(f"{'='*60}")
     print(f"  Classes  : {list(WALL_CLASS_MAP.keys())}")
     print(f"  Aliases  : {list(WALL_ALIASES.keys())}")

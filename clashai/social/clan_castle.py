@@ -226,7 +226,7 @@ class ClanCastleManager:
             return True
         if self.verbose:
             remaining = (REQUEST_COOLDOWN - elapsed) / 60
-            print(f" ⏳ CC cooldown: encore {remaining:.0f}min")
+            print(f"  CC cooldown: encore {remaining:.0f}min")
         return False
 
     # -----------------------------------------------------------------
@@ -332,7 +332,7 @@ class ClanCastleManager:
         time.sleep(DELAY_AFTER_CONFIRM)
 
         if self.verbose:
-            print(f" 📤 'Envoyer' à ({confirm_pos[0]}, {confirm_pos[1]})")
+            print(f"  'Envoyer' à ({confirm_pos[0]}, {confirm_pos[1]})")
 
         # 5. Close + cooldown
         self._close_menu(tap_fn)
@@ -365,7 +365,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.capture:
-        print("📸 Capture of the clan castle bar\n")
+        print(" Capture of the clan castle bar\n")
         print(" 1. Tap your clan castle in-game")
         print(" 2. Wait for the bar to appear at the bottom")
         input("\n → Press Enter when ready...")

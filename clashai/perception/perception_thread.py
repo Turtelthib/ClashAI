@@ -59,6 +59,8 @@ class PerceptionThread:
             'combat_features': None,
             'screen_state': None,
             'screen_conf': 0.0,
+            'troop_bar': [],
+            'troop_positions': {},
             'timestamp': -999.0,  # sentinel: never fresh until first inference
             'inference_ms': 0.0,
         }
@@ -215,15 +217,17 @@ class PerceptionThread:
             combat_features = None
             screen_state = None
             screen_conf = 0.0
+            troop_bar = []       # raw detections from TroopBarDetector
+            troop_positions = {} # active positions {name: (x, y, conf)}
 
-            # ── 1. YOLO buildings + building CNN ──────────────────────
+            #  1. YOLO buildings + building CNN 
             try:
                 buildings = analyze_village(frame, self.models)
             except Exception as e:
                 if self.verbose:
                     traceback.print_exc()
 
-            # ── 2. YOLO troops → combat features ──────────────────────
+            #  2. YOLO troops → combat features 
             try:
                 troop_detector = self.models.get('troop_detector')
                 combat_obs = self.models.get('combat_observer')
@@ -240,7 +244,17 @@ class PerceptionThread:
                 if self.verbose:
                     traceback.print_exc()
 
-            # ── 3. Screen classifier ───────────────────────────────────
+            #  3. Troop bar detector (YOLO + HSV grayed filter)
+            try:
+                bar_detector = self.models.get('troop_bar_detector')
+                if bar_detector is not None:
+                    troop_bar = bar_detector.detect(frame)
+                    troop_positions = bar_detector.to_positions(troop_bar)
+            except Exception:
+                if self.verbose:
+                    traceback.print_exc()
+
+            #  4. Screen classifier
             try:
                 screen_state, screen_conf = classify_screen(frame, self.models)
             except Exception as e:
@@ -250,7 +264,7 @@ class PerceptionThread:
             elapsed_ms = (time.time() - t0) * 1000
             last_inference = time.time()
 
-            # ── Update shared state ────────────────────────────────────
+            #  Update shared state 
             with self._lock:
                 self._state = {
                     'frame': frame,
@@ -258,6 +272,8 @@ class PerceptionThread:
                     'combat_features': combat_features,
                     'screen_state': screen_state,
                     'screen_conf': screen_conf,
+                    'troop_bar': troop_bar,         # raw detections with is_grayed
+                    'troop_positions': troop_positions,  # {name: (x,y,conf)} active only
                     'timestamp': last_inference,
                     'inference_ms': elapsed_ms,
                 }

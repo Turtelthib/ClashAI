@@ -55,7 +55,7 @@ def capture_combat_screenshots(output_dir=DEFAULT_OUTPUT_DIR,
     combat_count = 0
     
     print(f"\n{'='*60}")
-    print(" 📸 Capture de combat pour annotation YOLO")
+    print("  Capture de combat pour annotation YOLO")
     print(f" Dossier : {output_dir}")
     print(f" Interval : {interval}s")
     print(f" Max : {max_captures}")
@@ -79,7 +79,7 @@ def capture_combat_screenshots(output_dir=DEFAULT_OUTPUT_DIR,
             # Combat detected!
             combat_count += 1
             combat_captures = 0
-            print(f"⚔ Combat #{combat_count} détecté !")
+            print(f" Combat #{combat_count} détecté !")
             
             while total_captured < max_captures:
                 img = gl.adb_screenshot()
@@ -104,7 +104,7 @@ def capture_combat_screenshots(output_dir=DEFAULT_OUTPUT_DIR,
                 combat_captures += 1
                 
                 if combat_captures % 10 == 0:
-                    print(f" 📸 {combat_captures} captures "
+                    print(f"  {combat_captures} captures "
                           f"(total: {total_captured}/{max_captures})")
                 
                 time.sleep(interval)
@@ -115,12 +115,12 @@ def capture_combat_screenshots(output_dir=DEFAULT_OUTPUT_DIR,
         print("\nArrêt")
     
     print(f"\n{'='*60}")
-    print(" 📸 Capture terminée")
+    print("  Capture terminée")
     print(f" Combats : {combat_count}")
     print(f" Captures : {total_captured}")
     print(f" Dossier : {output_dir}")
     print(f"{'='*60}")
-    print("\n📝 Prochaine étape :")
+    print("\n Prochaine étape :")
     print(" 1. Ouvre les images dans un outil d'annotation (LabelImg, CVAT, Roboflow)")
     print(" 2. Annote les troupes avec des bounding boxes")
     print(" 3. Exporte en format YOLO (txt)")

@@ -114,7 +114,7 @@ def _init_ocr():
         import easyocr
         _ocr_engine = easyocr.Reader(['fr', 'en'], gpu=False, verbose=False)
         _ocr_type = 'easyocr'
-        print("📖 OCR initialized: EasyOCR (fr+en)")
+        print(" OCR initialized: EasyOCR (fr+en)")
         return _ocr_engine, _ocr_type
     except ImportError:
         pass
@@ -124,7 +124,7 @@ def _init_ocr():
         import pytesseract
         _ocr_engine = pytesseract
         _ocr_type = 'tesseract'
-        print("📖 OCR initialized: Tesseract")
+        print(" OCR initialized: Tesseract")
         return _ocr_engine, _ocr_type
     except ImportError:
         pass
@@ -387,7 +387,7 @@ class ClanChatMonitor:
         time.sleep(0.5)
 
         if self.verbose:
-            print(f" 📤 Message envoyé : {message}")
+            print(f"  Message envoyé : {message}")
 
     def mark_executed(self, command):
         """Compatibility — the Brain calls this but the real filter is the chat."""
@@ -423,7 +423,7 @@ class ClanChatMonitor:
         lines = _ocr_read(chat_zone)
 
         if self.verbose and lines:
-            print(f" 📖 OCR : {len(lines)} lignes lues")
+            print(f"  OCR : {len(lines)} lignes lues")
 
         # Step 1: record the position of each bot reply
         # Bot messages start with "IA -" or "IA" followed by "jattaque" or "fait"
@@ -468,17 +468,17 @@ class ClanChatMonitor:
                 # No [IA] reply → new command
                 new_commands.append(cmd)
                 if self.verbose:
-                    print(f" 🆕 #{target}: no [IA] reply → new")
+                    print(f"  #{target}: no [IA] reply → new")
             elif cmd_pos > ack_pos:
                 # Command AFTER the reply → new request
                 new_commands.append(cmd)
                 if self.verbose:
-                    print(f" 🆕 #{target}: command (line {cmd_pos}) "
+                    print(f"  #{target}: command (line {cmd_pos}) "
                           f"after [IA] (line {ack_pos}) → new")
             else:
                 # Reply AFTER the command → already handled
                 if self.verbose:
-                    print(f" ⏭ #{target}: [IA] (line {ack_pos}) "
+                    print(f"  #{target}: [IA] (line {ack_pos}) "
                           f"after command (line {cmd_pos}) → already done")
 
         # Also parse non-attack commands (stop, status)
@@ -532,7 +532,7 @@ class ClanChatMonitor:
 
         if state == 'chat_clan':
             if self.verbose:
-                print(" 💬 Clan chat opened")
+                print("  Clan chat opened")
             return True
         else:
             if self.verbose:
@@ -685,7 +685,7 @@ if __name__ == "__main__":
         print(" Chat zone saved: debug_chat_zone.png")
 
         lines = _ocr_read(chat_zone)
-        print(f"\n 📖 {len(lines)} lines detected:")
+        print(f"\n  {len(lines)} lines detected:")
         for i, line in enumerate(lines):
             cmd = parse_command(line, args.bot_name)
             marker = " ← COMMAND" if cmd else ""

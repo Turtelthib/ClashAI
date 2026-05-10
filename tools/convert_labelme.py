@@ -171,7 +171,7 @@ def process_dataset(input_dir, output_dir, train_split=DEFAULT_TRAIN_SPLIT):
         print(f"ERROR: Aucun fichier .json trouvé dans {input_dir}")
         return
 
-    print(f"📄 {len(json_files)} fichiers JSON trouvés")
+    print(f" {len(json_files)} fichiers JSON trouvés")
 
     # Create output structure
     for split in ['train', 'val']:
@@ -255,7 +255,7 @@ def process_dataset(input_dir, output_dir, train_split=DEFAULT_TRAIN_SPLIT):
     print("\n Annotations par classe :")
     for cls in sorted(total_stats.keys()):
         count = total_stats[cls]
-        bar = '█' * min(count // 5, 40)
+        bar = '' * min(count // 5, 40)
         print(f" {cls:20s} : {count:5d} {bar}")
 
     total_annotations = sum(total_stats.values())
@@ -267,7 +267,7 @@ def process_dataset(input_dir, output_dir, train_split=DEFAULT_TRAIN_SPLIT):
         print(f"\n WARNING: Classes sans annotation : {sorted(missing)}")
         print(" Assure-toi d'annoter ces troupes !")
 
-    print("\n📝 Prochaine étape :")
+    print("\n Prochaine étape :")
     print(" python scripts/rl/train_yolo_troops.py --data coc_troops.yaml")
 
 

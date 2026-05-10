@@ -57,7 +57,7 @@ def load_models():
 
     if not os.path.exists(screen_classes_path) or not os.path.exists(screen_weights_path):
         print("ERROR: ERREUR : screen_cnn.pth ou screen_classes.json introuvable !")
-        print("👉 Lancez d'abord 'python scripts/train_screen_cnn.py'")
+        print(" Lancez d'abord 'python scripts/train_screen_cnn.py'")
         sys.exit(1)
 
     with open(screen_classes_path) as f:
@@ -109,7 +109,16 @@ def load_models():
         models['yolo_walls'] = None
         print(f"WARNING: yolo_walls not found at {walls_path} — deploy zone will use building hull fallback")
 
-    # --- 5) Async perception thread ---
+    # --- 5) YOLO Troop Bar Detector ---
+    troop_bar_path = os.path.join(WEIGHTS_DIR, 'yolo_troop_bar', 'troop_bar.pt')
+    if os.path.exists(troop_bar_path):
+        from clashai.perception.troop_bar_detector import TroopBarDetector
+        models['troop_bar_detector'] = TroopBarDetector(troop_bar_path)
+    else:
+        models['troop_bar_detector'] = None
+        print(f"WARNING: troop_bar.pt not found — using template matching fallback")
+
+    # --- 6) Async perception thread ---
     from clashai.perception.perception_thread import PerceptionThread
     models['perception_thread'] = PerceptionThread(models, verbose=False)
     models['perception_thread'].start()
@@ -375,7 +384,7 @@ def handle_state(state, confidence, models, img_pil=None):
     elif state == 'prep_attaque':
         # → Army screen with the green Attack button. Launch!
         result['action'] = 'tap_lancer_attaque'
-        print("⚔ Préparation armée détectée → Lancement de l'attaque")
+        print(" Préparation armée détectée → Lancement de l'attaque")
 
     elif state == 'phase_attaque':
         if img_pil is not None:
@@ -393,8 +402,8 @@ def handle_state(state, confidence, models, img_pil=None):
             result['action'] = 'analyze_village'
 
             print(f" {summary['total']} bâtiments détectés")
-            print(f" ⚔ {summary['defenses']} défenses")
-            print(f" 💰 {summary['ressources']} bâtiments de ressources")
+            print(f"  {summary['defenses']} défenses")
+            print(f"  {summary['ressources']} bâtiments de ressources")
 
             for cls, count in sorted(summary['details'].items()):
                 print(f" {cls}: {count}")
@@ -411,19 +420,19 @@ def handle_state(state, confidence, models, img_pil=None):
 
     elif state == 'chargement':
         result['action'] = 'wait'
-        print("⏳ Chargement en cours...")
+        print(" Chargement en cours...")
 
     elif state == 'chat_clan':
         result['action'] = 'close_menu'
-        print("💬 Chat de clan détecté → Fermeture")
+        print(" Chat de clan détecté → Fermeture")
 
     elif state == 'menu_boutique':
         result['action'] = 'close_menu'
-        print("🛒 Boutique détectée → Fermeture")
+        print(" Boutique détectée → Fermeture")
 
     else:
         result['action'] = 'unknown'
-        print(f"❓ État inconnu : {state} ({confidence:.1%})")
+        print(f" État inconnu : {state} ({confidence:.1%})")
 
     return result
 
@@ -470,7 +479,7 @@ def run_test(image_path, models):
 
         output_path = "GameLoop_Result.jpg"
         cv2.imwrite(output_path, annotated)
-        print(f"\n🖼 Image annotée sauvegardée : {output_path}")
+        print(f"\n Image annotée sauvegardée : {output_path}")
 
     print(f"\n{'='*60}")
     print(f" RÉSULTAT : état={state} | action={result['action']}")
@@ -502,7 +511,7 @@ def run_live(models):
             ["adb", "-s", ADB_DEVICE, "shell", "wm", "size"],
             capture_output=True, text=True, timeout=5
         )
-        print(f"📐 Résolution : {result.stdout.strip()}")
+        print(f" Résolution : {result.stdout.strip()}")
     except:
         pass
 

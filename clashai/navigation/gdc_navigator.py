@@ -296,7 +296,7 @@ class GdCNavigator:
             success: bool
         """
         if self.verbose:
-            print("\n🗺 Navigation vers la carte GdC ennemie...")
+            print("\n Navigation vers la carte GdC ennemie...")
 
         # Step 1: Go to village if not already on a CW screen
         state, _, _ = self._get_screen_state()
@@ -359,7 +359,7 @@ class GdCNavigator:
             else:
                 # Unknown state → try the "View map" button as fallback
                 if self.verbose:
-                    print(f" ❓ Unknown state ({state} {conf:.0%}) "
+                    print(f"  Unknown state ({state} {conf:.0%}) "
                           f"→ trying 'View map' button")
                 _adb_tap(*_get_ui_pos('gdc_war_ended_see_map'))
                 time.sleep(WAIT_NAVIGATION)
@@ -421,7 +421,7 @@ class GdCNavigator:
         # Max 30 villages in classic CW, 15 in league
         max_prev = 30
         if self.verbose:
-            print(f" ⬅ Returning to village #1 ({max_prev}x prev)...")
+            print(f"  Returning to village #1 ({max_prev}x prev)...")
         
         for i in range(max_prev):
             _adb_tap(*_get_ui_pos('gdc_village_prev'))
@@ -434,7 +434,7 @@ class GdCNavigator:
         
         if steps_needed > 0:
             if self.verbose:
-                print(f" ➡ Navigation: {steps_needed}x next → target #{target_number}")
+                print(f"  Navigation: {steps_needed}x next → target #{target_number}")
             
             for i in range(steps_needed):
                 _adb_tap(*_get_ui_pos('gdc_village_next'))
@@ -481,7 +481,7 @@ class GdCNavigator:
         """
         Reads the target number from the selection popup.
 
-        The popup shows "3. PlayerName" or "3. ほりほり" at the top.
+        The popup shows "3. PlayerName" or "3. " at the top.
         We look for a number at the start of a line in the popup area.
 
         Returns:
@@ -512,8 +512,8 @@ class GdCNavigator:
                         continue
                     text = text.strip()
                     # Possible patterns:
-                    # "3. ほりほり" → "3."
-                    # "3.ほりほり" → "3."
+                    # "3. " → "3."
+                    # "3." → "3."
                     # "#3" → "#3"
                     # "3 . name" → "3"
                     # We just look for a 1-2 digit number
@@ -545,7 +545,7 @@ class GdCNavigator:
         From the screen with the target popup, launches the attack.
         """
         if self.verbose:
-            print(" ⚔ Lancement de l'attaque GdC...")
+            print("  Lancement de l'attaque GdC...")
 
         for attempt in range(15):
             # First: check state via CNN
@@ -587,7 +587,7 @@ class GdCNavigator:
 
             else:
                 if self.verbose:
-                    print(f" ❓ State {state}, tap confirmation")
+                    print(f"  State {state}, tap confirmation")
                 _adb_tap(960, 600)
                 time.sleep(WAIT_NAVIGATION)
 

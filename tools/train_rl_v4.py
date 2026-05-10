@@ -37,6 +37,8 @@ def main():
     parser.add_argument('--resume', action='store_true',
                         help="Resume from the last checkpoint")
     parser.add_argument('--verbose', action='store_true', default=True)
+    parser.add_argument('--debug-overlay', action='store_true',
+                        help="Save annotated debug image at each observe step (logs/episode_N/)")
     args = parser.parse_args()
 
     mode = 'heuristique' if args.heuristic else 'PPO'
@@ -57,7 +59,8 @@ def main():
     models = game_loop.load_models()
 
     # Create the V4 environment
-    env = ClashEnvV4(models=models, verbose=args.verbose)
+    env = ClashEnvV4(models=models, verbose=args.verbose,
+                     debug_overlay=args.debug_overlay)
 
     # Clan Castle Manager (V4.1 — request troops during training)
     from clashai.social.clan_castle import ClanCastleManager
@@ -176,7 +179,7 @@ def main():
     # =====================================================================
     for episode in range(1, args.episodes + 1):
         print(f"\n{'='*60}")
-        print(f" ⚔ Épisode {episode}/{args.episodes}")
+        print(f"  Épisode {episode}/{args.episodes}")
         print(f" {datetime.now().strftime('%H:%M:%S')}")
         print(f"{'='*60}")
 

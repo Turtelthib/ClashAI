@@ -42,17 +42,17 @@ ADB_HEIGHT = 1080
 # pre_delay = seconds to wait BEFORE capturing (to get into position)
 BUTTONS_TO_CALIBRATE = {
     'village': [
-        ('chat_open', '💬 Bouton pour OUVRIR le chat du clan', 'village_home', 0),
+        ('chat_open', ' Bouton pour OUVRIR le chat du clan', 'village_home', 0),
         ('chat_close_tap', 'ERROR: Tapez EN DEHORS du chat pour le FERMER', 'chat_clan', 0),
-        ('attack_button', '⚔ Bouton ATTAQUER (en bas à gauche)', 'village_home', 0),
+        ('attack_button', ' Bouton ATTAQUER (en bas à gauche)', 'village_home', 0),
     ],
     'chat': [
-        ('chat_input', '✏ Barre de saisie "Message de clan..." (en bas du chat)', 'chat_clan', 0),
-        ('chat_send', '➤ Bouton ENVOYER le message (flèche verte)', 'chat_clan', 0),
+        ('chat_input', ' Barre de saisie "Message de clan..." (en bas du chat)', 'chat_clan', 0),
+        ('chat_send', ' Bouton ENVOYER le message (flèche verte)', 'chat_clan', 0),
     ],
     'matchmaking': [
         ('find_match', 'Bouton TROUVER UNE PARTIE', 'recherche_adversaire', 0),
-        ('start_attack', '▶ Bouton LANCER L\'ATTAQUE (pour confirmer)', 'prep_attaque', 0),
+        ('start_attack', ' Bouton LANCER L\'ATTAQUE (pour confirmer)', 'prep_attaque', 0),
     ],
     'results': [
         ('return_home', 'Bouton RENTRER AU VILLAGE (après une attaque)', 'resultats_attaque', 20),
@@ -62,22 +62,22 @@ BUTTONS_TO_CALIBRATE = {
         # 1. From the village → access the GdC menu
         ('gdc_open', 'Bouton pour ACCÉDER AU MENU GDC depuis le village', 'village_home', 0),
         # 2. "War ended" screen → view the map
-        ('gdc_war_ended_see_map', '🗺 Bouton VOIR LA CARTE (écran guerre terminée)', None, 10),
+        ('gdc_war_ended_see_map', ' Bouton VOIR LA CARTE (écran guerre terminée)', None, 10),
         # 3. On the map → switch to enemies
         ('gdc_enemy_map', 'Bouton CARTE ENNEMIE (voir les ennemis)', 'gdc_ally', 0),
         # 4. On the map → switch to allies
-        ('gdc_ally_map', '🛡 Bouton CARTE ALLIÉE (voir les alliés)', 'gdc_enemy', 0),
+        ('gdc_ally_map', ' Bouton CARTE ALLIÉE (voir les alliés)', 'gdc_enemy', 0),
         # 5. When an enemy village is clicked → popup with "Attack"
-        ('gdc_attack_target', '⚔ Bouton ATTAQUER dans le popup de cible GdC', None, 15),
+        ('gdc_attack_target', ' Bouton ATTAQUER dans le popup de cible GdC', None, 15),
         # 6. NEXT arrow (→) in the target popup (village n+1)
-        ('gdc_village_next', '➡ Flèche SUIVANT (droite) dans le popup village', None, 0),
+        ('gdc_village_next', ' Flèche SUIVANT (droite) dans le popup village', None, 0),
         # 7. PREVIOUS arrow (←) in the target popup (village n-1)
-        ('gdc_village_prev', '⬅ Flèche PRÉCÉDENT (gauche) dans le popup village', None, 0),
+        ('gdc_village_prev', ' Flèche PRÉCÉDENT (gauche) dans le popup village', None, 0),
         # 8. From the GdC menu → back to village
         ('gdc_return_home', 'Bouton RETOUR AU VILLAGE depuis le menu GdC', None, 0),
     ],
     'general': [
-        ('open_profil', '👤 Bouton pour OUVRIR le profil (depuis le village)', 'village_home', 0),
+        ('open_profil', ' Bouton pour OUVRIR le profil (depuis le village)', 'village_home', 0),
         ('close_profil', 'ERROR: Bouton pour FERMER le profil', 'profil', 0),
     ],
     'retreat': [
@@ -314,7 +314,7 @@ def calibrate(groups=None):
             continue
         
         buttons = BUTTONS_TO_CALIBRATE[group_name]
-        print(f"\n ── {group_name.upper()} ──")
+        print(f"\n  {group_name.upper()} ")
         
         for key, description, required_screen, delay in buttons:
             current = positions.get(key)
@@ -346,11 +346,11 @@ def calibrate(groups=None):
                 calibrated += 1
             else:
                 if current:
-                    print(f" ⏭ Gardé l'ancienne valeur : {current}")
+                    print(f"  Gardé l'ancienne valeur : {current}")
                 else:
                     default = DEFAULT_POSITIONS.get(key, (960, 540))
                     positions[key] = default
-                    print(f" ⏭ Valeur par défaut : {default}")
+                    print(f"  Valeur par défaut : {default}")
                 skipped += 1
     
     # Save
@@ -377,7 +377,7 @@ def show_positions():
         return
     
     for group_name, buttons in BUTTONS_TO_CALIBRATE.items():
-        print(f" ── {group_name.upper()} ──")
+        print(f"  {group_name.upper()} ")
         for key, description, _, _ in buttons:
             pos = positions.get(key)
             default = DEFAULT_POSITIONS.get(key)

@@ -58,7 +58,7 @@ optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS) 
 
 # --- TRAINING ---
-print("\n🔥 Démarrage de l'entraînement...")
+print("\n Démarrage de l'entraînement...")
 
 for epoch in range(EPOCHS):
     model.train()

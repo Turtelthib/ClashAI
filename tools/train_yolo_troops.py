@@ -9,13 +9,13 @@
 #
 # Expected dataset structure:
 # dataset_troops/
-# ├── images/
-# │ ├── train/ # 80% of images
-# │ └── val/ # 20% of images
-# ├── labels/
-# │ ├── train/ # YOLO labels (.txt)
-# │ └── val/
-# └── coc_troops.yaml
+#  images/
+#   train/ # 80% of images
+#   val/ # 20% of images
+#  labels/
+#   train/ # YOLO labels (.txt)
+#   val/
+#  coc_troops.yaml
 #
 # Usage:
 # python scripts/rl/train_yolo_troops.py

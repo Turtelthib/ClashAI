@@ -95,10 +95,11 @@ class TroopFinder:
     using OpenCV template matching.
     """
 
-    def __init__(self, templates_dir=TEMPLATES_DIR):
+    def __init__(self, templates_dir=TEMPLATES_DIR, detector=None):
         self.templates_dir = templates_dir
         self.templates = {}
         self.positions = {}
+        self._detector = detector  # TroopBarDetector — YOLO primary, template matching fallback
         self._load_templates()
 
     def _load_templates(self):
@@ -164,12 +165,31 @@ class TroopFinder:
 
     def update(self, screenshot_pil):
         """
-        Analyzes the current troop bar and finds the position of each troop.
-        Uses multi-scale matching for greater robustness.
+        Analyzes the current troop bar and updates self.positions.
+
+        V4.3: uses YOLO TroopBarDetector if available (faster, no templates needed).
+        Falls back to template matching if the detector is not loaded.
 
         Args:
             screenshot_pil: PIL image of the full screen
         """
+        if self._detector is not None:
+            self._update_yolo(screenshot_pil)
+        else:
+            self._update_template(screenshot_pil)
+
+    def _update_yolo(self, screenshot_pil):
+        """YOLO-based update — primary path."""
+        detections = self._detector.detect(screenshot_pil)
+        self.positions = self._detector.to_positions(detections)
+
+        found = len(self.positions)
+        print(f"Troops detected: {found} (YOLO)")
+        for name, (x, y, conf) in sorted(self.positions.items(), key=lambda i: i[1][0]):
+            print(f" {name:<25s} -> ({x:4d}, {y:4d}) conf: {conf:.2f}")
+
+    def _update_template(self, screenshot_pil):
+        """Template matching fallback — legacy path."""
         screen = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
         bar_region = screen[BAR_TOP:BAR_BOTTOM, BAR_LEFT:BAR_RIGHT]
 
@@ -186,12 +206,11 @@ class TroopFinder:
 
         found = len(self.positions)
         total = len(self.templates)
-        print(f"Troops detected: {found}/{total}")
+        print(f"Troops detected: {found}/{total} (template)")
 
-        for name, (x, y, conf) in sorted(self.positions.items(), key=lambda item: item[1][0]):
-            print(f" {name:<25s} → ({x:4d}, {y:4d}) conf: {conf:.2f}")
+        for name, (x, y, conf) in sorted(self.positions.items(), key=lambda i: i[1][0]):
+            print(f" {name:<25s} -> ({x:4d}, {y:4d}) conf: {conf:.2f}")
 
-        # List missing troops
         missing = set(self.templates.keys()) - set(self.positions.keys())
         if missing:
             print(f" WARNING: Not found: {sorted(missing)}")
@@ -220,7 +239,7 @@ class TroopFinder:
 
         # Scroll the bar to the right and rescan
         for attempt in range(scroll_attempts):
-            print(f" 📜 Scroll de la barre (tentative {attempt+1})...")
+            print(f"  Scroll de la barre (tentative {attempt+1})...")
             # Swipe right to left in the bar to reveal hidden troops
             adb_swipe(1400, 1020, 600, 1020, 300)
             time.sleep(0.5)
@@ -295,7 +314,7 @@ def extract_bar():
     Captures the troop bar and saves it.
     The user then cuts out the icons manually.
     """
-    print("📸 Extracting the troop bar...")
+    print(" Extracting the troop bar...")
     print(" Make sure you are on an enemy village screen")
     print(" (with the troop bar visible at the bottom)\n")
 
@@ -318,7 +337,7 @@ def extract_bar():
     print(f"Bar saved: {bar_path}")
     print(f"Full screenshot: {full_path}")
     print()
-    print("📝 NEXT STEP:")
+    print(" NEXT STEP:")
     print(f" 1. Open {bar_path} in an image editor")
     print(" 2. Cut out each troop icon separately")
     print(f" 3. Save each icon in {TEMPLATES_DIR}/ with the correct name:")
@@ -342,7 +361,7 @@ def auto_crop_bar():
     spacing = 85
     icon_w = 75
 
-    print(f"✂ Auto-cropping the bar ({w}x{h})")
+    print(f" Auto-cropping the bar ({w}x{h})")
 
     slot = 0
     x = start_x
@@ -383,7 +402,7 @@ def test_finder():
 
     # Then with scroll if troops are missing
     if len(finder.positions) < len(finder.templates):
-        print("\n📜 Trying with bar scroll...")
+        print("\n Trying with bar scroll...")
         finder.update_with_scroll()
 
     if not finder.positions:

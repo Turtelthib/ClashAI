@@ -91,7 +91,7 @@ def convert_labelme_to_yolo(json_path, output_dir, img_path):
     except Exception as e:
         print(f"Erreur sur {json_path}: {e}")
 
-print("🔨 Début de la préparation du dataset...")
+print(" Début de la préparation du dataset...")
 
 # Paths based on the project root
 source_dir = os.path.join(project_root, 'data_source', 'data')

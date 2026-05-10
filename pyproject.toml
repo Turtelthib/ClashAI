@@ -7,7 +7,7 @@ dependencies = [
     "torch>=2.0",
     "torchvision",
     "ultralytics>=8.0",
-    "opencv-python-headless",
+    "opencv-python",
     "numpy",
     "pillow",
     "easyocr",

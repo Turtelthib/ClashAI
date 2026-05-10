@@ -665,13 +665,13 @@ if __name__ == "__main__":
     print(f"\nBest attack side: {directions[best_side]}")
 
     # Check dimensions
-    print("\n📐 Dimensions:")
+    print("\n Dimensions:")
     print(f" Grid: {state['grid'].shape} (expected: ({NUM_CHANNELS}, {GRID_SIZE}, {GRID_SIZE}))")
     print(f" Features: {state['features'].shape} (expected: ({NUM_VILLAGE_FEATURES},))")
 
     # Check danger map
     ground = state['grid'][10]
     air = state['grid'][11]
-    print("\n🔥 Danger map:")
+    print("\n Danger map:")
     print(f" Ground: {(ground > 0).sum()} cells covered, max={ground.max():.3f}")
     print(f" Air: {(air > 0).sum()} cells covered, max={air.max():.3f}")
