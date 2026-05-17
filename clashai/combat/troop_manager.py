@@ -198,8 +198,22 @@ class TroopManager:
                 if t['role'] != 'spell':
                     remaining_troops[i] = 0
 
-        # OCR counters
-        if read_counts_fn is not None:
+        # Counters — pass current remaining_troops as prev_counts so OCR
+        # uses them as dynamic upper bound (monotonic validation, no hardcoding)
+        detector = getattr(self._finder, '_detector', None)
+        if detector is not None:
+            try:
+                prev = {t['name']: int(remaining_troops[i])
+                        for i, t in enumerate(self._troop_types)
+                        if remaining_troops[i] > 0}
+                counts = detector.to_counts(prev_counts=prev)
+                for name, count in counts.items():
+                    real_name = ALIAS_MAP.get(name, name)
+                    if real_name in self._name_to_idx:
+                        remaining_troops[self._name_to_idx[real_name]] = float(count)
+            except Exception:
+                pass
+        elif read_counts_fn is not None:
             try:
                 real = read_counts_fn(img, self._finder)
                 for name, count in real.items():

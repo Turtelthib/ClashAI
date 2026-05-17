@@ -31,6 +31,11 @@ ADB_HEIGHT = 1080
 
 # UI exclusion zones (in ADB coordinates 1920×1080)
 # Taps in these zones trigger buttons instead of deploying troops
+# YOLO walls segmentation trained at imgsz=640 (see
+# tools/train_yolo_walls_seg.py DEFAULT_IMG_SIZE). Set explicitly so a
+# future retrain at 1280/1600 only requires bumping this constant.
+YOLO_WALLS_IMGSZ = 640
+
 UI_EXCLUSION_ZONES = [
     # Top: player info + resources
     (0, 0, 280, 230),
@@ -650,7 +655,9 @@ def get_perimeter_from_walls(screenshot_pil, yolo_walls_model,
 
     #  1. Wall segmentation mask 
     try:
-        results = yolo_walls_model.predict(img_arr, conf=0.25, verbose=False)
+        results = yolo_walls_model.predict(
+            img_arr, conf=0.25, imgsz=YOLO_WALLS_IMGSZ, verbose=False,
+        )
     except Exception as e:
         print(f" WARNING: yolo_walls inference failed: {e}")
         return None, fallback_center, False

@@ -34,6 +34,10 @@ SCREEN_CONFIDENCE_THRESHOLD = 0.60
 BUILDING_CONFIDENCE_THRESHOLD = 0.50
 YOLO_CONF = 0.25
 YOLO_IOU = 0.50
+# YOLO buildings was trained at imgsz=1600 (see tools/train_yolo_buildings.py).
+# Ultralytics defaults to 640 at predict if not specified, halving the input
+# resolution and degrading detection quality.
+YOLO_BUILDINGS_IMGSZ = 1600
 
 # ADB delays (in seconds)
 ADB_DELAY_TAP = 0.07
@@ -52,22 +56,30 @@ def load_models():
 
     # --- 1) Screen state CNN ---
     print(" Loading screen state CNN...")
-    screen_classes_path = os.path.join(WEIGHTS_DIR, 'screen_classes.json')
-    screen_weights_path = os.path.join(WEIGHTS_DIR, 'screen_cnn.pth')
+    screen_classes_path = os.path.join(WEIGHTS_DIR, 'classification', 'screen_classes.json')
+    screen_weights_path = os.path.join(WEIGHTS_DIR, 'classification', 'cnn_screen_classification.pt')
 
     if not os.path.exists(screen_classes_path) or not os.path.exists(screen_weights_path):
-        print("ERROR: ERREUR : screen_cnn.pth ou screen_classes.json introuvable !")
-        print(" Lancez d'abord 'python scripts/train_screen_cnn.py'")
+        print("ERROR: cnn_screen_classification.pt or screen_classes.json not found!")
+        print(" Run: uv run python tools/train_screen_cnn.py")
         sys.exit(1)
 
     with open(screen_classes_path) as f:
-        models['screen_classes'] = json.load(f)
+        meta = json.load(f)
 
-    screen_cnn = MyCustomCNN(num_classes=len(models['screen_classes'])).to(DEVICE)
+    # Support both formats: old list and new list (both use MyCustomCNN)
+    if isinstance(meta, list):
+        models['screen_classes'] = meta
+    else:
+        models['screen_classes'] = meta.get('classes', meta)
+
+    num_screen_classes = len(models['screen_classes'])
+    screen_cnn = MyCustomCNN(num_classes=num_screen_classes)
     screen_cnn.load_state_dict(torch.load(screen_weights_path, map_location=DEVICE))
+    screen_cnn = screen_cnn.to(DEVICE)
     screen_cnn.eval()
     models['screen_cnn'] = screen_cnn
-    print(f" {len(models['screen_classes'])} états chargés : {models['screen_classes']}")
+    print(f" {num_screen_classes} states loaded: {models['screen_classes']}")
 
     # --- 2) YOLO Detection ---
     print("Loading YOLO11...")
@@ -110,7 +122,7 @@ def load_models():
         print(f"WARNING: yolo_walls not found at {walls_path} — deploy zone will use building hull fallback")
 
     # --- 5) YOLO Troop Bar Detector ---
-    troop_bar_path = os.path.join(WEIGHTS_DIR, 'yolo_troop_bar', 'troop_bar.pt')
+    troop_bar_path = os.path.join(WEIGHTS_DIR, 'yolo_troupes_barre', 'troop_bar.pt')
     if os.path.exists(troop_bar_path):
         from clashai.perception.troop_bar_detector import TroopBarDetector
         models['troop_bar_detector'] = TroopBarDetector(troop_bar_path)
@@ -134,7 +146,7 @@ def load_models():
 screen_transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
-    transforms.Normalize([0.5]*3, [0.5]*3)
+    transforms.Normalize([0.5]*3, [0.5]*3),
 ])
 
 building_transform = transforms.Compose([
@@ -171,7 +183,10 @@ def analyze_village(img_pil, models):
     """
     # YOLO detection
     img_np = np.array(img_pil)
-    results = models['yolo'].predict(img_np, conf=YOLO_CONF, iou=YOLO_IOU, verbose=False)
+    results = models['yolo'].predict(
+        img_np, conf=YOLO_CONF, iou=YOLO_IOU,
+        imgsz=YOLO_BUILDINGS_IMGSZ, verbose=False,
+    )
     
     buildings = []
     for box in results[0].boxes:
@@ -271,10 +286,11 @@ def adb_check_connection():
 
 def adb_screenshot():
     """
-    Captures the emulator screen and returns a PIL Image.
+    Captures the emulator screen and returns a PIL Image (1920x1080).
 
-    Priority: direct window capture (mss/dxcam, ~5-15ms) > ADB PNG (~150ms).
-    The direct backend is initialised once and reused across calls.
+    Priority: direct window capture via screen_capture (WGC, ~5-15ms) → ADB
+    PNG (~150ms) fallback. The direct backend is initialised once and
+    reused across calls (see clashai/perception/screen_capture.py).
     """
     from clashai.perception.screen_capture import get_capture
     try:
@@ -284,7 +300,7 @@ def adb_screenshot():
     except Exception as e:
         print(f"WARNING: Direct capture failed ({e}), falling back to ADB")
 
-    # ADB fallback
+    # ADB fallback — works even if WGC fails or the window is unavailable
     try:
         result = subprocess.run(
             ["adb", "-s", ADB_DEVICE, "exec-out", "screencap", "-p"],
@@ -295,7 +311,6 @@ def adb_screenshot():
         return Image.open(io.BytesIO(result.stdout)).convert("RGB")
     except Exception as e:
         print(f"WARNING: ADB capture failed: {e}")
-        return None
         return None
 
 

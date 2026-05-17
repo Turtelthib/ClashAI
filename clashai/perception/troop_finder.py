@@ -163,7 +163,7 @@ class TroopFinder:
 
         return best_val, best_loc, best_tw, best_th
 
-    def update(self, screenshot_pil):
+    def update(self, screenshot_pil, screen='combat'):
         """
         Analyzes the current troop bar and updates self.positions.
 
@@ -172,15 +172,22 @@ class TroopFinder:
 
         Args:
             screenshot_pil: PIL image of the full screen
+            screen: 'combat' (battle bar, counter top-right)
+                    'prep'   (army selection screen, counter top-left)
         """
         if self._detector is not None:
-            self._update_yolo(screenshot_pil)
+            self._update_yolo(screenshot_pil, screen=screen)
         else:
             self._update_template(screenshot_pil)
 
-    def _update_yolo(self, screenshot_pil):
-        """YOLO-based update — primary path."""
-        detections = self._detector.detect(screenshot_pil)
+    def _update_yolo(self, screenshot_pil, screen='combat'):
+        """YOLO-based update — primary path.
+
+        Args:
+            screen: 'combat' (battle bar, counter top-right)
+                    'prep'   (army selection, counter top-left)
+        """
+        detections = self._detector.detect(screenshot_pil, screen=screen)
         self.positions = self._detector.to_positions(detections)
 
         found = len(self.positions)

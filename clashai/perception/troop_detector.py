@@ -37,6 +37,10 @@ TROOP_CLASSES_SET = set(TROOP_CLASSES) - HERO_CLASSES - SIEGE_CLASSES
 
 # Confidence threshold
 DEFAULT_CONF = 0.35
+# YOLO combat troops trained at imgsz=640 (see tools/train_yolo_troops.py
+# DEFAULT_IMG_SIZE). Set explicitly so a future retrain at 1280/1600 only
+# requires updating this constant.
+YOLO_TROOPS_IMGSZ = 640
 
 ADB_WIDTH = 1920
 ADB_HEIGHT = 1080
@@ -126,7 +130,10 @@ class TroopDetector:
         scale_x = ADB_WIDTH / img_w
         scale_y = ADB_HEIGHT / img_h
 
-        results = self._model(screenshot_pil, conf=self.conf, verbose=False)
+        results = self._model(
+            screenshot_pil, conf=self.conf,
+            imgsz=YOLO_TROOPS_IMGSZ, verbose=False,
+        )
         detections = []
 
         for r in results:

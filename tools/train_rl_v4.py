@@ -39,11 +39,29 @@ def main():
     parser.add_argument('--verbose', action='store_true', default=True)
     parser.add_argument('--debug-overlay', action='store_true',
                         help="Save annotated debug image at each observe step (logs/episode_N/)")
+    parser.add_argument('--test', action='store_true',
+                        help="Diagnostic mode: 1 heuristic episode, saves "
+                             "5 annotated captures to logs/test_run/ so we "
+                             "can visually validate every perception model "
+                             "before launching real training")
     args = parser.parse_args()
+
+    # --test forces heuristic + 1 episode, no PPO updates
+    test_capture = None
+    if args.test:
+        args.heuristic = True
+        args.episodes = 1
+        args.pretrain = 0
+        from clashai.perception.test_run_capture import TestRunCapture
+        test_capture = TestRunCapture()
+        print(f" --test mode: 1 heuristic episode → captures in "
+              f"{test_capture.output_dir}/\n")
 
     mode = 'heuristique' if args.heuristic else 'PPO'
     if args.pretrain > 0:
         mode = f'pretrain BC ({args.pretrain} demos) + PPO'
+    if args.test:
+        mode = 'test (diagnostic, 1 ep)'
 
     print(f"\n{'='*60}")
     print(" ClashAI V4 — Entraînement RL")
@@ -60,7 +78,8 @@ def main():
 
     # Create the V4 environment
     env = ClashEnvV4(models=models, verbose=args.verbose,
-                     debug_overlay=args.debug_overlay)
+                     debug_overlay=args.debug_overlay,
+                     test_capture=test_capture)
 
     # Clan Castle Manager (V4.1 — request troops during training)
     from clashai.social.clan_castle import ClanCastleManager
@@ -271,6 +290,13 @@ def main():
                       f"policy={stats['policy_loss']:.4f} "
                       f"value={stats['value_loss']:.4f} "
                       f"entropy={stats['entropy']:.4f}")
+
+        # --test: print capture report and exit without checkpointing
+        if args.test:
+            if test_capture is not None:
+                test_capture.report()
+            env.close()
+            return
 
         # Checkpoint
         if episode % BATCH_SIZE == 0 or episode == args.episodes:

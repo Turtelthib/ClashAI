@@ -31,7 +31,8 @@ EMULATOR_WINDOW_KEYWORDS = [
     'MuMu',
     'Nox',
     'MEmu',
-    'Clash of Clans',
+    # NOTE: 'Clash of Clans' intentionally excluded — it matches VS Code
+    # window titles when a CoC screenshot is open in the editor.
 ]
 
 ZOOM_OUT_SCROLLS = 15

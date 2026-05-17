@@ -11,6 +11,7 @@
 # - Centralized reward shaping
 # - Agent freely chooses the order of spells/abilities
 
+import os
 import time
 import numpy as np
 
@@ -45,7 +46,8 @@ DELAY_WAIT_SHORT = 0.5
 DELAY_WAIT_LONG = 2.0
 DELAY_OBSERVE = 0.15  # V4.3: async thread pre-computes, agent just reads cache
 DELAY_ABILITY = 0.3
-RESCAN_EVERY_N_STEPS = 10
+# V4.3: periodic step rescan removed — _sync_remaining_from_perception()
+# now keeps _remaining_troops fresh from the YOLO troop bar in PerceptionThread.
 NO_TROOPS_CHECKS_THRESHOLD = 3
 
 
@@ -60,9 +62,13 @@ class ClashEnvV4(ClashEnvV3):
     - Reward shaping (separate module)
     """
 
-    def __init__(self, models, verbose=True, debug_overlay=False):
+    def __init__(self, models, verbose=True, debug_overlay=False,
+                 test_capture=None):
         super().__init__(models, verbose)
         self._debug_overlay = debug_overlay
+        # TestRunCapture instance for --test mode. When set, screen-state
+        # detections + observe steps will save the 5 diagnostic captures.
+        self._test_capture = test_capture
 
         # TroopManager V4 (replaces direct V3 selection)
         self._troop_mgr = TroopManager(
@@ -405,10 +411,12 @@ class ClashEnvV4(ClashEnvV3):
             sh = f" ({shaping:+.0f})" if shaping != 0 else ""
             print(f" Step {self._step_count:2d} [{action_type}]: {action_desc}{sh}")
 
-        # Periodic rescan
-        if (self._step_count % RESCAN_EVERY_N_STEPS == 0
-                and action_type != 'done'):
-            self._troop_mgr.rescan(self._remaining_troops)
+        # V4.3: periodic rescan removed — TroopBarDetector runs every frame
+        # in PerceptionThread, and _sync_remaining_from_perception() is called
+        # in _update_combat_observation() to keep _remaining_troops fresh.
+        # Only the one-shot exhaustion sanity rescan in
+        # _all_resources_exhausted() remains, as a safety net before declaring
+        # the episode finished.
 
         # Episode end
         is_over = self._check_battle_end()
@@ -460,6 +468,29 @@ class ClashEnvV4(ClashEnvV3):
         }
 
     # -----------------------------------------------------------------
+    # Test-mode hook: notify TestRunCapture of every classified screen
+    # -----------------------------------------------------------------
+
+    def _get_screen_state(self):
+        state, confidence, img_pil = super()._get_screen_state()
+        if self._test_capture is not None and img_pil is not None:
+            # Trace every CNN screen-state transition (dedup consecutive
+            # duplicates) → logs/test_run/screens/NN_state_conf.png
+            self._test_capture.trace_screen(
+                state, confidence, img_pil, self.models, env=self
+            )
+            # The 5 main diagnostic captures (village_home / prep_attaque /
+            # debut_attaque / 30s / 60s) are still saved by the more
+            # detailed annotation path:
+            if state == 'phase_attaque':
+                self._test_capture.mark_attack_start()
+            else:
+                self._test_capture.maybe_save_screen(
+                    state, img_pil, self.models, env=self
+                )
+        return state, confidence, img_pil
+
+    # -----------------------------------------------------------------
     # Reset override (V4 specific state)
     # -----------------------------------------------------------------
 
@@ -500,13 +531,11 @@ class ClashEnvV4(ClashEnvV3):
         if self._buildings:
             from clashai.perception.deploy_zone import (
                 get_perimeter_from_buildings, get_perimeter_from_walls,
-                save_deploy_debug_image,
             )
             from clashai.combat.state_encoder import find_best_attack_side
 
             debug_screenshot = self._adb_screenshot()
             yolo_ok = False
-            deploy_debug = {}
 
             # Primary: wall segmentation model (robust to theme/color changes)
             yolo_walls = self.models.get('yolo_walls') if self.models else None
@@ -524,10 +553,10 @@ class ClashEnvV4(ClashEnvV3):
             # Fallback: building bbox hull (V4.2)
             if not yolo_ok:
                 result = get_perimeter_from_buildings(
-                    self._buildings, num_points=NUM_POSITIONS, return_debug=True,
+                    self._buildings, num_points=NUM_POSITIONS, return_debug=False,
                     screenshot_pil=debug_screenshot,
                 )
-                yolo_positions, yolo_center, yolo_ok, deploy_debug = result
+                yolo_positions, yolo_center, yolo_ok = result
                 if yolo_ok and yolo_positions:
                     self._deploy_positions = yolo_positions
                     self._village_center = yolo_center
@@ -535,23 +564,9 @@ class ClashEnvV4(ClashEnvV3):
             best_dir = find_best_attack_side(self._buildings, verbose=False)
             self._center_pos = int(best_dir / 8 * NUM_POSITIONS) % NUM_POSITIONS
 
-            try:
-                if debug_screenshot is not None:
-                    extra = f'center_pos={self._center_pos} (dir best)'
-                    path = save_deploy_debug_image(
-                        debug_screenshot,
-                        self._buildings,
-                        self._deploy_positions or [],
-                        self._village_center or (960, 500),
-                        episode=self._episode_count,
-                        extra_info=extra,
-                        rejected_rays=deploy_debug.get('rejected_rays') if deploy_debug else None,
-                    )
-                    if path and self.verbose:
-                        print(f"  Debug deploy : {path}")
-            except Exception as e:
-                if self.verbose:
-                    print(f" WARNING: Debug deploy image : {e}")
+            # Save start-of-episode annotated capture (replaces deploy_zone log)
+            if debug_screenshot is not None:
+                self._schedule_episode_captures(debug_screenshot)
         else:
             self._center_pos = NUM_POSITIONS // 2
 
@@ -561,6 +576,53 @@ class ClashEnvV4(ClashEnvV3):
     # -----------------------------------------------------------------
     # YOLO continu V4.2
     # -----------------------------------------------------------------
+
+    def _sync_remaining_from_perception(self, troop_bar_detections):
+        """
+        V4.3 — sync `_remaining_troops` with the YOLO troop bar detector
+        running in PerceptionThread. Replaces the periodic `rescan()` call.
+
+        For each detected slot:
+          - is_grayed → that troop is depleted, force count = 0
+          - active   → use the OCR count (with hero hardcap at 1)
+
+        Manual decrement after each deploy still happens; this just corrects
+        drift when YOLO+OCR sees a different reality.
+        """
+        if not troop_bar_detections:
+            return
+        bar = self.models.get('troop_bar_detector') if self.models else None
+        if bar is None:
+            return
+
+        try:
+            from clashai.combat.troop_manager import ALIAS_MAP
+        except ImportError:
+            ALIAS_MAP = {}
+
+        # Set of names actually visible in the bar (post-grey filter)
+        visible_active = set()
+        for d in troop_bar_detections:
+            if d.get('no_tap'):
+                continue
+            name = ALIAS_MAP.get(d['name'], d['name'])
+            if name not in TROOP_NAME_TO_IDX:
+                continue
+            idx = TROOP_NAME_TO_IDX[name]
+            if d.get('is_grayed'):
+                self._remaining_troops[idx] = 0
+            else:
+                visible_active.add(name)
+
+        # Counts (with hero hardcap inside to_counts())
+        try:
+            counts = bar.to_counts(troop_bar_detections)
+        except Exception:
+            counts = {}
+        for raw_name, cnt in counts.items():
+            name = ALIAS_MAP.get(raw_name, raw_name)
+            if name in TROOP_NAME_TO_IDX:
+                self._remaining_troops[TROOP_NAME_TO_IDX[name]] = float(cnt)
 
     def _update_combat_observation(self):
         """
@@ -596,6 +658,11 @@ class ClashEnvV4(ClashEnvV3):
                 if state['combat_features'] is not None:
                     self._combat_features = state['combat_features']
 
+                # V4.3: keep _remaining_troops in sync with the YOLO troop bar
+                # detector that runs in PerceptionThread (replaces the
+                # periodic rescan that used to fire every 10 steps).
+                self._sync_remaining_from_perception(state.get('troop_bar'))
+
                 # Hero ability scan from the cached frame
                 self._hero_manager.scan(screenshot)
 
@@ -606,6 +673,11 @@ class ClashEnvV4(ClashEnvV3):
                 # Debug overlay
                 if self._debug_overlay:
                     self._save_debug_overlay(screenshot, new_buildings)
+                # Test mode: maybe save debut/30s/60s combat captures
+                if self._test_capture is not None:
+                    self._test_capture.maybe_save_combat(
+                        screenshot, self.models, env=self
+                    )
                 return
 
         #  Fallback: V4.2 blocking YOLO 
@@ -660,6 +732,99 @@ class ClashEnvV4(ClashEnvV3):
 
         if self._debug_overlay:
             self._save_debug_overlay(screenshot, new_buildings)
+        # Test mode: maybe save debut/30s/60s combat captures
+        if self._test_capture is not None:
+            self._test_capture.maybe_save_combat(
+                screenshot, self.models, env=self
+            )
+
+    def _schedule_episode_captures(self, start_screenshot):
+        """
+        Saves annotated captures for the current episode:
+          - t=0s  (start_screenshot already taken)
+          - t=15s (scheduled via threading.Timer)
+          - t=30s (scheduled via threading.Timer)
+        All saved to logs/episode_NNNN/.
+        """
+        import threading
+        ep = self._episode_count
+
+        # t=0 — we already have the screenshot
+        self._save_episode_capture(start_screenshot, ep, label='t0s')
+
+        # t=15s and t=30s — capture in background (non-blocking)
+        def _capture_later(delay, label):
+            import time as _t
+            _t.sleep(delay)
+            try:
+                img = self._adb_screenshot()
+                if img:
+                    self._save_episode_capture(img, ep, label=label)
+            except Exception:
+                pass
+
+        threading.Thread(target=_capture_later, args=(15, 't15s'), daemon=True).start()
+        threading.Thread(target=_capture_later, args=(30, 't30s'), daemon=True).start()
+
+    def _save_episode_capture(self, screenshot, episode, label='t0s'):
+        """Saves one annotated capture for the episode folder."""
+        try:
+            import cv2
+            import numpy as np
+            from clashai.navigation.game_loop import classify_screen, analyze_village
+
+            ep_dir = os.path.join('logs', f'episode_{episode:04d}')
+            os.makedirs(ep_dir, exist_ok=True)
+
+            img_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
+            h, w = img_cv.shape[:2]
+            sx = w / 1920
+            sy = h / 1080
+
+            # Screen state
+            state, conf = classify_screen(screenshot, self.models)
+            cv2.putText(img_cv, f"Screen: {state} ({conf:.0%})", (8, 28),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                        (0, 255, 0) if conf > 0.7 else (0, 165, 255), 2)
+
+            # Buildings YOLO
+            buildings = analyze_village(screenshot, self.models)
+            for b in buildings:
+                x1, y1, x2, y2 = b['bbox']
+                cv2.rectangle(img_cv, (x1, y1), (x2, y2), (0, 200, 0), 1)
+                cv2.putText(img_cv, b['class'][:10], (x1, y1 - 2),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.27, (0, 255, 0), 1)
+
+            # Deploy positions
+            if self._deploy_positions:
+                for i, (px, py) in enumerate(self._deploy_positions):
+                    cv2.circle(img_cv, (int(px * sx), int(py * sy)), 7, (0, 0, 220), -1)
+                    cv2.putText(img_cv, str(i), (int(px * sx) - 4, int(py * sy) + 4),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.3, (255, 255, 255), 1)
+
+            # Troop bar detector
+            bar_det = self.models.get('troop_bar_detector') if self.models else None
+            if bar_det is not None:
+                for d in bar_det.detect(screenshot):
+                    x1, y1, x2, y2 = d['bbox']
+                    color = (80, 80, 80) if d['is_grayed'] else (0, 200, 255)
+                    cv2.rectangle(img_cv, (x1, y1), (x2, y2), color, 2)
+                    cv2.putText(img_cv, f"{d['name']} x{d['count']}", (x1, y1 - 3),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.32, color, 1)
+
+            # Stats
+            cv2.putText(img_cv, f"Ep {episode} | {label} | {len(buildings)} bldg",
+                        (8, h - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+            cv2.putText(img_cv, f"Ep {episode} | {label} | {len(buildings)} bldg",
+                        (8, h - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1)
+
+            path = os.path.join(ep_dir, f'{label}.jpg')
+            cv2.imwrite(path, img_cv, [cv2.IMWRITE_JPEG_QUALITY, 90])
+            if self.verbose:
+                print(f" Episode capture: {path}")
+        except Exception as e:
+            if self.verbose:
+                print(f" WARNING: episode capture failed: {e}")
 
     def _save_debug_overlay(self, screenshot, buildings):
         """Saves a debug overlay image for the current observe step."""
