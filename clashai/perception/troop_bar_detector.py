@@ -18,11 +18,18 @@ GRAYED_SAT_THRESHOLD = 30
 
 # Confidence threshold for YOLO detection
 YOLO_CONF = 0.30
-# Match the training imgsz of the troop bar weights (see
-# tools/train_yolo_troop_bar.py::IMG_SIZE). Ultralytics' default at predict
-# is 640, which silently halves the resolution the model sees and tanks
-# detection quality on small icons / counter badges.
-YOLO_IMGSZ = 1600
+# Inference image size.
+#
+# Session 13 finding: setting this to 1600 (the value in
+# tools/train_yolo_troop_bar.py::IMG_SIZE) TANKED detection — only 0-1
+# icons found out of ~9 visible. At default 640 we recover 9/9 detections.
+# Likely cause: double-resize (WGC 2451x1411 → LANCZOS 1920x1080 → YOLO
+# letterbox 1600x1600) blurs small icons, OR the checkpoint was actually
+# trained at a different imgsz than what's hardcoded in the train script.
+#
+# Sticking to 640 (Ultralytics' default) until next retrain validates a
+# higher imgsz with explicit train→infer parity benchmarking.
+YOLO_IMGSZ = 640
 
 # Counter position differs by screen:
 #   prep_attaque  → top-LEFT  corner of the icon (army selection screen)

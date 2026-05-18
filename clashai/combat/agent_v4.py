@@ -29,9 +29,8 @@ from clashai.combat.combat_observer import COMBAT_FEATURES_SIZE
 # OBSERVATION SPACE
 # =============================================================================
 
-GRID_CHANNELS = 12
-GRID_SIZE = 40
-VILLAGE_FEATURES = 20
+# Re-imported from clashai/config/rl.py (Phase A).
+from clashai.config import GRID_CHANNELS, GRID_SIZE, VILLAGE_FEATURES  # noqa: E402
 
 # V4 : compacted vector
 ROLE_FEATURES = NUM_ROLES

@@ -60,16 +60,13 @@ except (ImportError, OSError):
 # CONFIGURATION
 # =============================================================================
 
-SCREEN_WIDTH = 1920
-SCREEN_HEIGHT = 1080
-
-# Wait times
-WAIT_DECORATIONS = 3.0
-WAIT_BATTLE_MAX = 195.0
-WAIT_BATTLE_CHECK = 5.0
-WAIT_RESULT_SCREEN = 5.0
-WAIT_NAVIGATION = 1.5
-WAIT_MATCHMAKING = 4.0
+# Screen / timing constants moved to clashai/config/ — see Phase A migration.
+# Re-imported here under the same names so existing call sites keep working.
+from clashai.config import (
+    SCREEN_WIDTH, SCREEN_HEIGHT,
+    WAIT_DECORATIONS, WAIT_BATTLE_MAX, WAIT_BATTLE_CHECK,
+    WAIT_RESULT_SCREEN, WAIT_NAVIGATION, WAIT_MATCHMAKING,
+)
 
 # Delays between actions
 DELAY_DEPLOY = 0.05

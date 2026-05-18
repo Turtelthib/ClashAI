@@ -39,11 +39,11 @@ YOLO_IOU = 0.50
 # resolution and degrading detection quality.
 YOLO_BUILDINGS_IMGSZ = 1600
 
-# ADB delays (in seconds)
-ADB_DELAY_TAP = 0.07
-ADB_DELAY_SCREENSHOT = 0.2
-ADB_DELAY_NAVIGATION = 1.0
-ADB_DELAY_MATCHMAKING = 3.0
+# ADB delays — re-imported from clashai/config/timing.py (Phase A).
+from clashai.config import (  # noqa: E402
+    ADB_DELAY_TAP, ADB_DELAY_SCREENSHOT,
+    ADB_DELAY_NAVIGATION, ADB_DELAY_MATCHMAKING,
+)
 
 
 # =============================================================================
@@ -341,8 +341,8 @@ def adb_key(keycode):
 # Coordinates calibrated for Google Play Games Developer Emulator
 # Resolution: 1920x1080 (adb shell wm size)
 
-SCREEN_WIDTH = 1920
-SCREEN_HEIGHT = 1080
+# Re-imported from clashai/config/screen.py (Phase A migration).
+from clashai.config import SCREEN_WIDTH, SCREEN_HEIGHT  # noqa: E402
 
 # Button coordinates (calibrated on real captures)
 BUTTONS = {

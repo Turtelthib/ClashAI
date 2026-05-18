@@ -32,8 +32,8 @@ from clashai.paths import UI_POSITIONS_FILE as _UI_POS
 
 POSITIONS_FILE = _UI_POS
 
-ADB_WIDTH = 1920
-ADB_HEIGHT = 1080
+# Re-imported from clashai/config/screen.py (Phase A).
+from clashai.config import ADB_WIDTH, ADB_HEIGHT  # noqa: E402
 
 # All buttons to calibrate, grouped by context
 # Each entry: (json_key, description, required_screen, pre_delay)

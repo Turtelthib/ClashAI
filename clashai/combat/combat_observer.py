@@ -23,8 +23,8 @@ from PIL import Image
 # CONFIGURATION
 # =============================================================================
 
-ADB_WIDTH = 1920
-ADB_HEIGHT = 1080
+# Re-imported from clashai/config/screen.py (Phase A).
+from clashai.config import ADB_WIDTH, ADB_HEIGHT  # noqa: E402
 
 # --- Green health bars (healthy troops) ---
 HP_GREEN_H_RANGE = (45, 85)

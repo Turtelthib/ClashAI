@@ -39,13 +39,13 @@ from clashai.combat.agent import (
     TROOP_TYPES, TROOP_NAME_TO_IDX,
 )
 
-# Delays
-DELAY_SWITCH_TROOP = 0.10
-DELAY_DEPLOY = 0.05
-DELAY_WAIT_SHORT = 0.5
-DELAY_WAIT_LONG = 2.0
-DELAY_OBSERVE = 0.15  # V4.3: async thread pre-computes, agent just reads cache
-DELAY_ABILITY = 0.3
+# Delays — re-imported from clashai/config/timing.py (Phase A).
+from clashai.config import (
+    DELAY_SWITCH_TROOP, DELAY_DEPLOY,
+    DELAY_WAIT_SHORT, DELAY_WAIT_LONG,
+    DELAY_OBSERVE, DELAY_ABILITY,
+)  # noqa: E402
+
 # V4.3: periodic step rescan removed — _sync_remaining_from_perception()
 # now keeps _remaining_troops fresh from the YOLO troop bar in PerceptionThread.
 NO_TROOPS_CHECKS_THRESHOLD = 3

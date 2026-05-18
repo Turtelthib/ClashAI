@@ -39,8 +39,8 @@ from clashai.paths import PROJECT_ROOT
 # Templates directory
 CC_TEMPLATES_DIR = os.path.join(PROJECT_ROOT, 'templates', 'clan_castle')
 
-# Cooldown between two requests (seconds)
-REQUEST_COOLDOWN = 15 * 60
+# Cooldown re-imported from clashai/config/brain.py (Phase A).
+from clashai.config import REQUEST_COOLDOWN  # noqa: E402
 
 # ADB delays (seconds)
 DELAY_AFTER_TAP_CC = 1.5
@@ -48,9 +48,10 @@ DELAY_AFTER_TAP_REQUEST = 1.0
 DELAY_AFTER_CONFIRM = 0.8
 DELAY_CLOSE = 0.5
 
-# Template matching (bottom bar — unstable position)
-MATCH_THRESHOLD = 0.60
-MATCH_SCALES = [1.0, 0.9, 1.1, 0.85, 1.15]
+# Template matching — MATCH_SCALES from clashai/config/ (Phase A), threshold local.
+from clashai.config import MATCH_SCALES  # noqa: E402
+
+MATCH_THRESHOLD = 0.60  # local — clan_castle uses higher threshold (cleaner UI templates)
 
 # Building options bar zone (bottom of screen)
 BAR_TOP = 880

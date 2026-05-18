@@ -24,16 +24,8 @@ import ctypes.wintypes
 
 CTRL_SCROLL = False
 
-EMULATOR_WINDOW_KEYWORDS = [
-    'Google Play', 'play games',
-    'LDPlayer', 'LD Player', 'LDMultiPlayer',
-    'BlueStacks',
-    'MuMu',
-    'Nox',
-    'MEmu',
-    # NOTE: 'Clash of Clans' intentionally excluded — it matches VS Code
-    # window titles when a CoC screenshot is open in the editor.
-]
+# Re-imported from clashai/config/window.py (Phase A migration).
+from clashai.config import EMULATOR_WINDOW_KEYWORDS  # noqa: E402
 
 ZOOM_OUT_SCROLLS = 15
 SCROLL_DELTA     = -120

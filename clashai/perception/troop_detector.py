@@ -42,8 +42,8 @@ DEFAULT_CONF = 0.35
 # requires updating this constant.
 YOLO_TROOPS_IMGSZ = 640
 
-ADB_WIDTH = 1920
-ADB_HEIGHT = 1080
+# Re-imported from clashai/config/screen.py (Phase A).
+from clashai.config import ADB_WIDTH, ADB_HEIGHT  # noqa: E402
 
 # UI exclusion zone (do not detect in the troop bar / header)
 UI_TOP_Y_RATIO = 0.06

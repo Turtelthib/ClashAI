@@ -53,17 +53,18 @@ ABILITY_ZONE_BOTTOM = 1080
 ABILITY_ZONE_LEFT = 0
 ABILITY_ZONE_RIGHT = 1920
 
-# Template matching
-MATCH_THRESHOLD = 0.50
-MATCH_SCALES = [1.0, 0.9, 1.1, 0.85, 1.15]
+# Template matching — MATCH_SCALES from clashai/config/ (Phase A), threshold local.
+from clashai.config import MATCH_SCALES  # noqa: E402
+
+MATCH_THRESHOLD = 0.50  # local — hero_ability tuned at 0.50
 
 # The 5 heroes that can have an ability in combat.
 # At the start of each attack, TroopFinder detects which heroes are
 # in the bar → only deployed heroes will have their ability activatable.
 # If the Royal Champion is being upgraded, she won't be in the bar,
 # won't be deployed, and her ability will be masked automatically.
-HERO_NAMES = ['roi', 'reine', 'grand_gardien', 'championne', 'prince_gargouille']
-NUM_HEROES = len(HERO_NAMES)
+# Re-imported from clashai/config/rl.py (Phase A).
+from clashai.config import HERO_NAMES, NUM_HEROES  # noqa: E402
 
 HERO_ABILITY_NAMES = {
     'roi': 'Rage Royale',

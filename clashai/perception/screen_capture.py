@@ -25,36 +25,14 @@ import time
 import numpy as np
 from PIL import Image
 
-from clashai.navigation.zoom_control import EMULATOR_WINDOW_KEYWORDS
+# Window detection constants re-imported from clashai/config/window.py (Phase A).
+from clashai.config import (
+    EMULATOR_WINDOW_KEYWORDS,
+    EXCLUDED_TITLE_SUBSTRINGS,
+    title_is_excluded as _title_is_excluded,
+)
 
 
-# Window titles that contain one of EMULATOR_WINDOW_KEYWORDS *but* are not the
-# emulator — typically editor / browser tabs showing the keyword as text.
-# Without this, capturing "Fix Google Play emulator - VS Code" would target VS
-# Code instead of the actual emulator.
-EXCLUDED_TITLE_SUBSTRINGS = [
-    'Visual Studio Code',
-    '- Mozilla Firefox',
-    '- Google Chrome',
-    '- Microsoft Edge',
-    '- Microsoft Edge',
-    '- Brave',
-    '- Opera',
-    '- Vivaldi',
-    'Discord',
-    'Slack',
-    'GitHub Desktop',
-    'Notepad',
-    'Sublime Text',
-    'JetBrains',
-    'PyCharm',
-    'IntelliJ',
-]
-
-
-def _title_is_excluded(title: str) -> bool:
-    t = title.lower()
-    return any(s.lower() in t for s in EXCLUDED_TITLE_SUBSTRINGS)
 
 
 # =============================================================================

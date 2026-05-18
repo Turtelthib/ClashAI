@@ -43,11 +43,12 @@ BAR_BOTTOM = 1080
 BAR_LEFT = 0
 BAR_RIGHT = 1920
 
-# Confidence threshold for template matching
+# Confidence threshold for template matching (local — TroopFinder uses 0.45,
+# lower than hero_ability/clan_castle which use 0.50/0.60).
 MATCH_THRESHOLD = 0.45
 
-# Multi-scale: scales to try if the direct match fails
-MATCH_SCALES = [1.0, 0.9, 1.1, 0.85, 1.15]
+# Multi-scale list re-imported from clashai/config/perception.py (Phase A).
+from clashai.config import MATCH_SCALES  # noqa: E402
 
 
 # =============================================================================

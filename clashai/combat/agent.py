@@ -66,7 +66,9 @@ TROOP_TYPES = [
 ]
 
 NUM_TROOP_TYPES = len(TROOP_TYPES)
-NUM_POSITIONS = 20
+
+# Re-imported from clashai/config/rl.py (Phase A).
+from clashai.config import NUM_POSITIONS  # noqa: E402
 
 # --- Action space ---
 NUM_DEPLOY_ACTIONS = NUM_TROOP_TYPES * NUM_POSITIONS
@@ -78,7 +80,9 @@ ACTION_DONE = NUM_DEPLOY_ACTIONS + 2
 # 5 heroes with ability. At runtime, only heroes detected in the bar
 # and then deployed will have their ability unmasked. If a hero is being upgraded
 # → not in the bar → not deployed → ability automatically masked.
-HERO_NAMES = ['roi', 'reine', 'grand_gardien', 'championne', 'prince_gargouille']
+# HERO_NAMES re-imported from clashai/config/rl.py (Phase A).
+from clashai.config import HERO_NAMES  # noqa: E402
+
 NUM_HERO_ABILITIES = len(HERO_NAMES)
 ACTION_ABILITY_START = NUM_DEPLOY_ACTIONS + 3
 ACTION_ABILITY_ROI = ACTION_ABILITY_START
@@ -98,9 +102,9 @@ TROOP_NAME_TO_IDX = {t['name']: i for i, t in enumerate(TROOP_TYPES)}
 HERO_NAME_TO_ABILITY = {name: ACTION_ABILITY_START + i for i, name in enumerate(HERO_NAMES)}
 
 # --- Observation sizes ---
-GRID_CHANNELS = 12
-GRID_SIZE = 40
-VILLAGE_FEATURES = 20
+# Re-imported from clashai/config/rl.py (Phase A).
+from clashai.config import GRID_CHANNELS, GRID_SIZE, VILLAGE_FEATURES  # noqa: E402
+
 TROOP_FEATURES = NUM_TROOP_TYPES
 DEPLOY_MAP_SIZE = NUM_POSITIONS
 STEP_FEATURES = 1

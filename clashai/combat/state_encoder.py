@@ -100,9 +100,9 @@ for channel_idx, (category, classes) in enumerate(CATEGORIES.items()):
 # GRID CONFIGURATION
 # =============================================================================
 
-GRID_SIZE = 40
-SCREEN_WIDTH = 1920
-SCREEN_HEIGHT = 1080
+# Re-imported from clashai/config/ (Phase A).
+from clashai.config import GRID_SIZE, SCREEN_WIDTH, SCREEN_HEIGHT  # noqa: E402
+
 NUM_CHANNELS = len(CHANNEL_NAMES)
 
 CELL_WIDTH = SCREEN_WIDTH / GRID_SIZE

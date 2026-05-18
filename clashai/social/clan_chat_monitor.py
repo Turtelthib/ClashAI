@@ -37,8 +37,8 @@ from PIL import Image
 # CONFIGURATION
 # =============================================================================
 
-ADB_WIDTH = 1920
-ADB_HEIGHT = 1080
+# Re-imported from clashai/config/screen.py (Phase A).
+from clashai.config import ADB_WIDTH, ADB_HEIGHT  # noqa: E402
 
 # Chat zone on screen (when the chat is open)
 # The chat occupies approximately the left half of the screen
@@ -57,18 +57,11 @@ def _get_chat_button_pos():
     except ImportError:
         return (47, 400)
 
-# Monitoring interval (seconds)
-MONITOR_INTERVAL = 30.0
-
-# Bot name (the @mention to detect)
-DEFAULT_BOT_NAME = 'mini_pekka'
-
-# Max age of a message to be considered (minutes)
-# Messages older than this are ignored (like a real player would)
-MAX_COMMAND_AGE_MINUTES = 10
-
-# Number of recent messages to keep (to avoid re-processing)
-MAX_HISTORY = 20
+# Brain/chat orchestrator constants re-imported from clashai/config/brain.py (Phase A).
+from clashai.config import (
+    MONITOR_INTERVAL, DEFAULT_BOT_NAME,
+    MAX_COMMAND_AGE_MINUTES, MAX_HISTORY,
+)  # noqa: E402
 
 
 # =============================================================================

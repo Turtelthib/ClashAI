@@ -23,11 +23,13 @@ from clashai.combat.action_space import (
 # CONFIGURATION
 # =============================================================================
 
-SCREEN_WIDTH = 1920
-SCREEN_HEIGHT = 1080
+# Re-imported from clashai/config/ (Phase A).
+from clashai.config import (
+    SCREEN_WIDTH, SCREEN_HEIGHT,
+    DELAY_SWITCH_TROOP, DELAY_DEPLOY,
+)  # noqa: E402
+
 SLOT_SATURATION_THRESHOLD = 40
-DELAY_SWITCH_TROOP = 0.10
-DELAY_DEPLOY = 0.05
 MAX_CLEANUP_ROUNDS = 5
 
 # Template aliases

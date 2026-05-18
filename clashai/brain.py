@@ -39,21 +39,14 @@ from clashai.paths import RL_WEIGHTS_DIR
 # CONFIGURATION
 # =============================================================================
 
-# Intervals (seconds)
-CHAT_CHECK_INTERVAL = 45
-IDLE_BETWEEN_ATTACKS = 20
-IDLE_BETWEEN_ATTACKS_MAX = 60
-
-# Priorities (higher = more urgent)
-PRIORITY_GDC_COMMAND = 100
-PRIORITY_FARM_ATTACK = 10
-PRIORITY_IDLE = 0
-
-# Farm mode: number of attacks before checking the chat
-ATTACKS_BEFORE_CHAT_CHECK = 2
-
-# Bot name
-DEFAULT_BOT_NAME = 'mini_pekka'
+# Brain orchestrator constants re-imported from clashai/config/brain.py (Phase A).
+from clashai.config import (
+    CHAT_CHECK_INTERVAL,
+    IDLE_BETWEEN_ATTACKS, IDLE_BETWEEN_ATTACKS_MAX,
+    PRIORITY_GDC_COMMAND, PRIORITY_FARM_ATTACK, PRIORITY_IDLE,
+    ATTACKS_BEFORE_CHAT_CHECK,
+    DEFAULT_BOT_NAME,
+)  # noqa: E402
 
 
 # =============================================================================

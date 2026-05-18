@@ -25,9 +25,8 @@ from datetime import datetime
 # CONFIGURATION
 # =============================================================================
 
-# ADB resolution (tap coordinates)
-ADB_WIDTH = 1920
-ADB_HEIGHT = 1080
+# ADB resolution — re-imported from clashai/config/screen.py (Phase A).
+from clashai.config import ADB_WIDTH, ADB_HEIGHT  # noqa: E402
 
 # UI exclusion zones (in ADB coordinates 1920×1080)
 # Taps in these zones trigger buttons instead of deploying troops
