@@ -34,8 +34,8 @@ project_root = os.path.dirname(os.path.dirname(current_script_dir))
 
 POSITIONS_FILE = os.path.join(project_root, 'ui_positions.json')
 
-ADB_WIDTH = 1920
-ADB_HEIGHT = 1080
+# Re-imported from clashai/config/screen.py (Phase A).
+from clashai.config import ADB_WIDTH, ADB_HEIGHT  # noqa: E402
 
 # All buttons to calibrate, grouped by context
 # Each entry: (json_key, description, required_screen, pre_delay)
