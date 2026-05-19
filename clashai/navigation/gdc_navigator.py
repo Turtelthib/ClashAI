@@ -25,11 +25,9 @@
 import os
 import time
 import subprocess
-import io
 
 import cv2
 import numpy as np
-from PIL import Image
 
 
 # =============================================================================
@@ -99,17 +97,9 @@ MAX_RETRIES = 15
 # ADB FUNCTIONS
 # =============================================================================
 
-def _adb_screenshot():
-    try:
-        result = subprocess.run(
-            ["adb", "exec-out", "screencap", "-p"],
-            capture_output=True, timeout=5
-        )
-        if result.returncode != 0 or len(result.stdout) < 100:
-            return None
-        return Image.open(io.BytesIO(result.stdout)).convert("RGB")
-    except Exception:
-        return None
+# Re-exported from the canonical implementation in game_loop (Phase B.1).
+# That version routes through WGC (fast, occlusion-proof) with ADB fallback.
+from clashai.navigation.game_loop import adb_screenshot as _adb_screenshot  # noqa: E402
 
 
 def _adb_tap(x, y, delay=0.15):

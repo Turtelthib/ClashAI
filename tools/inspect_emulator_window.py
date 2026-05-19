@@ -17,47 +17,21 @@ import ctypes.wintypes
 import numpy as np
 from PIL import Image
 
-from clashai.navigation.zoom_control import EMULATOR_WINDOW_KEYWORDS
-from clashai.perception.screen_capture import _title_is_excluded
-
-
 user32 = ctypes.windll.user32
 gdi32  = ctypes.windll.gdi32
 
 
 def _find_parent_hwnd():
-    found = []
-    EnumProc = ctypes.WINFUNCTYPE(
-        ctypes.wintypes.BOOL, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM)
+    """Phase B.2 thin shim — delegates to the canonical implementation
+    in clashai.perception.screen_capture (same match logic, exclusion list,
+    and 400x300 minimum size).
 
-    def _cb(hwnd, _):
-        if not user32.IsWindowVisible(hwnd):
-            return True
-        n = user32.GetWindowTextLengthW(hwnd)
-        if n < 3:
-            return True
-        buf = ctypes.create_unicode_buffer(n + 1)
-        user32.GetWindowTextW(hwnd, buf, n + 1)
-        title = buf.value
-        if '\\' in title or '.exe' in title.lower():
-            return True
-        if _title_is_excluded(title):
-            return True
-        for kw in EMULATOR_WINDOW_KEYWORDS:
-            if kw.lower() in title.lower():
-                rect = ctypes.wintypes.RECT()
-                user32.GetWindowRect(hwnd, ctypes.byref(rect))
-                w, h = rect.right - rect.left, rect.bottom - rect.top
-                if w >= 400 and h >= 300:
-                    found.append((hwnd, w * h, title))
-                break
-        return True
-
-    user32.EnumWindows(EnumProc(_cb), 0)
-    if not found:
-        return None, None
-    found.sort(key=lambda x: -x[1])
-    return found[0][0], found[0][2]
+    Returns (hwnd, title) for back-compat with this tool's callers, or
+    (None, None) if no emulator window is found.
+    """
+    from clashai.perception.screen_capture import find_emulator_bbox
+    bbox, title, hwnd = find_emulator_bbox()
+    return (hwnd, title) if hwnd is not None else (None, None)
 
 
 def _enum_children_recursive(parent_hwnd):

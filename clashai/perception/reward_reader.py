@@ -18,8 +18,6 @@
 
 import os
 import sys
-import subprocess
-import io
 
 import cv2
 import numpy as np
@@ -50,19 +48,9 @@ STAR_VALUE_MIN = 180
 # ADB FUNCTIONS
 # =============================================================================
 
-def adb_screenshot():
-    """Captures the screen and returns a PIL image."""
-    try:
-        result = subprocess.run(
-            ["adb", "exec-out", "screencap", "-p"],
-            capture_output=True, timeout=5
-        )
-        if result.returncode != 0 or len(result.stdout) < 100:
-            return None
-        return Image.open(io.BytesIO(result.stdout)).convert("RGB")
-    except Exception as e:
-        print(f"WARNING: Capture error: {e}")
-        return None
+# Re-exported from the canonical implementation in game_loop (Phase B.1).
+# That version routes through WGC (fast, occlusion-proof) with ADB fallback.
+from clashai.navigation.game_loop import adb_screenshot  # noqa: E402
 
 
 # =============================================================================

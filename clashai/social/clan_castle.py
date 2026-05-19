@@ -27,7 +27,6 @@ import time
 
 import cv2
 import numpy as np
-from PIL import Image
 
 from clashai.paths import PROJECT_ROOT
 
@@ -355,8 +354,6 @@ class ClanCastleManager:
 
 if __name__ == "__main__":
     import argparse
-    import subprocess
-    import io
 
     parser = argparse.ArgumentParser(description="ClashAI CC Manager")
     parser.add_argument('--capture', action='store_true',
@@ -371,14 +368,12 @@ if __name__ == "__main__":
         print(" 2. Wait for the bar to appear at the bottom")
         input("\n → Press Enter when ready...")
 
-        result = subprocess.run(
-            ["adb", "exec-out", "screencap", "-p"],
-            capture_output=True, timeout=5
-        )
-        if result.returncode != 0:
-            print(" ERROR: ADB error")
+        # Phase B.1: canonical adb_screenshot (WGC → ADB fallback).
+        from clashai.navigation.game_loop import adb_screenshot
+        img = adb_screenshot()
+        if img is None:
+            print(" ERROR: capture failed")
         else:
-            img = Image.open(io.BytesIO(result.stdout)).convert("RGB")
             img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
 
             os.makedirs(CC_TEMPLATES_DIR, exist_ok=True)
@@ -405,11 +400,9 @@ if __name__ == "__main__":
             print(" ERROR: Template 'request' missing")
             print(f" → uv run python -m clashai.social.clan_castle --capture")
         else:
-            result = subprocess.run(
-                ["adb", "exec-out", "screencap", "-p"],
-                capture_output=True, timeout=5
-            )
-            img = Image.open(io.BytesIO(result.stdout)).convert("RGB")
+            # Phase B.1: canonical adb_screenshot (WGC → ADB fallback).
+            from clashai.navigation.game_loop import adb_screenshot
+            img = adb_screenshot()
             img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
             match = _find_template(
                 img_cv, mgr._tmpl_request,

@@ -499,12 +499,9 @@ def test_spell_caster(image_path=None):
     if image_path:
         img_pil = Image.open(image_path).convert("RGB")
     else:
-        import subprocess, io
-        result = subprocess.run(
-            ["adb", "exec-out", "screencap", "-p"],
-            capture_output=True, timeout=5
-        )
-        img_pil = Image.open(io.BytesIO(result.stdout)).convert("RGB")
+        # Phase B.1: route through the canonical adb_screenshot (WGC → ADB).
+        from clashai.navigation.game_loop import adb_screenshot
+        img_pil = adb_screenshot()
 
     caster = SpellCaster(verbose=True)
 

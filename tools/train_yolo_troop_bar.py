@@ -20,11 +20,11 @@ import yaml
 from ultralytics import YOLO
 import shutil, os
 
-DATA_YAML = './datasets/dataset_troupe_barre/data.yaml'
+DATA_YAML = './datasets/dataset_troupe_barre/dataa.yaml'
 MODEL      = 'yolo26s.pt'
-EPOCHS     = 200
+EPOCHS     = 100
 BATCH      = 16
-IMG_SIZE   = 1280
+IMG_SIZE   = 1088
 OUTPUT_DIR = './weights/yolo_troupes_barre/V2/'
 
 if __name__ == '__main__':
