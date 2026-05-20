@@ -227,15 +227,12 @@ class PerceptionThread:
                 if self.verbose:
                     traceback.print_exc()
 
-            #  2. YOLO troops → combat features 
+            #  2. YOLO troops → combat features
             try:
                 troop_detector = self.models.get('troop_detector')
                 combat_obs = self.models.get('combat_observer')
                 if troop_detector is not None and combat_obs is not None:
-                    import cv2, numpy as np
-                    img_cv = cv2.cvtColor(np.array(frame), cv2.COLOR_RGB2BGR)
-                    scale_x = 1920 / frame.width
-                    scale_y = 1080 / frame.height
+                    # combat_obs handles PIL→cv2 conversion + scaling internally.
                     combat_features, _ = combat_obs.observe(
                         frame,
                         buildings_count=len(buildings) if buildings else None,

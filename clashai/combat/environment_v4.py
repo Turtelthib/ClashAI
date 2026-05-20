@@ -777,9 +777,10 @@ class ClashEnvV4(ClashEnvV3):
             os.makedirs(ep_dir, exist_ok=True)
 
             img_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
-            h, w = img_cv.shape[:2]
-            sx = w / 1920
-            sy = h / 1080
+            from clashai.perception.coord_utils import ImageScaler
+            scaler = ImageScaler(img_cv)
+            h = scaler.img_h
+            sx, sy = scaler.sx, scaler.sy  # legacy names — used below
 
             # Screen state
             state, conf = classify_screen(screenshot, self.models)

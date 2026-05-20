@@ -174,8 +174,10 @@ class TestRunCapture:
         profile = PROFILES.get(label, set())
         try:
             img_cv = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
-            h, w = img_cv.shape[:2]
-            sx, sy = w / 1920, h / 1080
+            from clashai.perception.coord_utils import ImageScaler
+            scaler = ImageScaler(img_cv)
+            h = scaler.img_h
+            sx, sy = scaler.sx, scaler.sy
 
             if 'screen' in profile:
                 _draw_screen_state(img_cv, img_pil, models, label)

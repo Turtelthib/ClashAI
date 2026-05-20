@@ -167,20 +167,21 @@ def read_troop_counts(screenshot_pil, troop_finder):
         counts: dict {troop_name: count} for detected troops
     """
     img_cv = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
-    h, w = img_cv.shape[:2]
+    from clashai.perception.coord_utils import ImageScaler
+    scaler = ImageScaler(img_cv)
+    h, w = scaler.img_h, scaler.img_w
 
     counts = {}
 
     for name, (tx, ty, conf) in troop_finder.positions.items():
-        # Convert ADB position to image coordinates
-        ix = int(tx * w / 1920)
-        iy = int(ty * h / 1080)
+        # Convert ADB position (1920x1080 canonical) to image coordinates
+        ix, iy = scaler.to_img(tx, ty)
 
-        # "xN" zone in the top-left of the icon
-        x1 = ix + int(COUNT_OFFSET_X * w / 1920)
-        y1 = iy + int(COUNT_OFFSET_Y * h / 1080)
-        x2 = x1 + int(COUNT_WIDTH * w / 1920)
-        y2 = y1 + int(COUNT_HEIGHT * h / 1080)
+        # "xN" zone in the top-left of the icon (offsets in canonical px)
+        x1 = ix + scaler.to_img_x(COUNT_OFFSET_X)
+        y1 = iy + scaler.to_img_y(COUNT_OFFSET_Y)
+        x2 = x1 + scaler.to_img_x(COUNT_WIDTH)
+        y2 = y1 + scaler.to_img_y(COUNT_HEIGHT)
 
         # Clamp
         x1 = max(0, x1)

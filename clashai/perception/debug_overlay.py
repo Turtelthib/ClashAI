@@ -77,12 +77,10 @@ def save_debug_overlay(screenshot_pil, step, episode,
         os.makedirs(ep_dir, exist_ok=True)
 
         img = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
-        h, w = img.shape[:2]
-        scale_x = w / 1920
-        scale_y = h / 1080
-
-        def sx(x): return int(x * scale_x)
-        def sy(y): return int(y * scale_y)
+        from clashai.perception.coord_utils import ImageScaler
+        scaler = ImageScaler(img)
+        sx, sy = scaler.to_img_x, scaler.to_img_y
+        h, w = scaler.img_h, scaler.img_w
 
         # ── 1. YOLO buildings ─────────────────────────────────────
         if buildings:
