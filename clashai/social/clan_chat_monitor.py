@@ -25,8 +25,6 @@
 import sys
 import re
 import time
-import subprocess
-
 import cv2
 import numpy as np
 
@@ -72,9 +70,9 @@ from clashai.navigation.game_loop import adb_screenshot as _adb_screenshot  # no
 
 
 def _adb_tap(x, y, delay=0.1):
-    subprocess.run(["adb", "shell", f"input tap {x} {y}"],
-                   capture_output=True, timeout=5)
-    time.sleep(delay)
+    """Phase C.1: routed through clashai.adb.ADBClient."""
+    from clashai.adb import get_client
+    get_client().tap(x, y, delay=delay)
 
 
 # =============================================================================
@@ -350,11 +348,9 @@ class ClanChatMonitor:
         safe_text = ''.join(c for c in safe_text if c.isalnum() or c in "!?.,-%s")
 
         try:
-            subprocess.run(
-                ['adb', 'shell', 'input', 'text', safe_text],
-                capture_output=True, timeout=5
-            )
-            time.sleep(0.3)
+            # Phase C.1: routed through clashai.adb.ADBClient.
+            from clashai.adb import get_client
+            get_client().input_text(safe_text)
         except Exception as e:
             if self.verbose:
                 print(f" WARNING: Text input error: {e}")

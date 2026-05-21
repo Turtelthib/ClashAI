@@ -20,7 +20,6 @@
 
 import os
 import sys
-import subprocess
 import time
 
 import cv2
@@ -54,19 +53,15 @@ from clashai.config import MATCH_SCALES  # noqa: E402
 # =============================================================================
 
 def adb_tap(x, y, delay=0.05):
-    """Tap ADB."""
-    subprocess.run(["adb", "shell", f"input tap {x} {y}"],
-                   capture_output=True, timeout=5)
-    time.sleep(delay)
+    """Phase C.1: routed through clashai.adb.ADBClient."""
+    from clashai.adb import get_client
+    get_client().tap(x, y, delay=delay)
 
 
 def adb_swipe(x1, y1, x2, y2, duration_ms=300):
-    """Swipe ADB."""
-    subprocess.run(
-        ["adb", "shell", f"input swipe {x1} {y1} {x2} {y2} {duration_ms}"],
-        capture_output=True, timeout=5
-    )
-    time.sleep(0.3)
+    """Phase C.1: routed through clashai.adb.ADBClient."""
+    from clashai.adb import get_client
+    get_client().swipe(x1, y1, x2, y2, duration_ms=duration_ms, delay=0.3)
 
 
 # Re-exported from the canonical implementation in game_loop (Phase B.1).

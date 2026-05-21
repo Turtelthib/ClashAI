@@ -24,7 +24,6 @@
 
 import os
 import time
-import subprocess
 
 import cv2
 import numpy as np
@@ -103,17 +102,15 @@ from clashai.navigation.game_loop import adb_screenshot as _adb_screenshot  # no
 
 
 def _adb_tap(x, y, delay=0.15):
-    subprocess.run(["adb", "shell", f"input tap {x} {y}"],
-                   capture_output=True, timeout=5)
-    time.sleep(delay)
+    """Phase C.1: routed through clashai.adb.ADBClient."""
+    from clashai.adb import get_client
+    get_client().tap(x, y, delay=delay)
 
 
 def _adb_swipe(x1, y1, x2, y2, duration_ms=300):
-    subprocess.run(
-        ["adb", "shell", f"input swipe {x1} {y1} {x2} {y2} {duration_ms}"],
-        capture_output=True, timeout=5
-    )
-    time.sleep(0.5)
+    """Phase C.1: routed through clashai.adb.ADBClient."""
+    from clashai.adb import get_client
+    get_client().swipe(x1, y1, x2, y2, duration_ms=duration_ms, delay=0.5)
 
 
 # =============================================================================

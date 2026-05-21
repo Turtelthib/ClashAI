@@ -25,7 +25,6 @@
 # manager.activate('roi', adb_tap_fn) # Taps on the king's icon
 
 import os
-import subprocess
 import time
 
 import cv2
@@ -90,10 +89,14 @@ from clashai.navigation.game_loop import adb_screenshot as _adb_screenshot  # no
 
 
 def _adb_tap(x, y, delay=0.1):
-    """Tap ADB."""
-    subprocess.run(["adb", "shell", f"input tap {x} {y}"],
-                   capture_output=True, timeout=5)
-    time.sleep(delay)
+    """Tap ADB — routes through clashai.adb.ADBClient (Phase C.1).
+
+    Note: the custom `delay` param is preserved (callers historically pass
+    different values). ADBClient's tap() applies its own internal delay
+    too; we explicitly sleep here for the caller's custom value.
+    """
+    from clashai.adb import get_client
+    get_client().tap(x, y, delay=delay)
 
 
 # =============================================================================

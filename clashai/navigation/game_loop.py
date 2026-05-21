@@ -9,8 +9,6 @@ import sys
 import json
 import time
 import argparse
-import subprocess
-import io
 
 import cv2
 import numpy as np
@@ -254,34 +252,9 @@ def get_village_summary(buildings):
 
 
 def adb_check_connection():
-    """Checks that ADB is connected to a device."""
-    try:
-        result = subprocess.run(
-            ["adb", "devices"],
-            capture_output=True, text=True, timeout=5
-        )
-        output = result.stdout.replace('\r', '')
-        lines = output.strip().split('\n')
-        # Look for lines containing "device" but not "devices" (header)
-        devices = [l.strip() for l in lines if '\tdevice' in l or ' device' in l]
-        if any(ADB_DEVICE in d for d in devices):
-            print(f"ADB connected: {ADB_DEVICE}")
-            return True
-        elif devices:
-            print(f"WARNING: {ADB_DEVICE} not found. Connected devices: {[d.split()[0] for d in devices]}")
-            print(f"Update ADB_DEVICE in clashai/paths.py or set env var ADB_DEVICE=<serial>")
-            return False
-        else:
-            print("ERROR: No ADB device detected.")
-            print(f" (adb output: {repr(result.stdout[:200])})")
-            print(f"Run: adb connect {ADB_DEVICE}")
-            return False
-    except FileNotFoundError:
-        print("ERROR: ADB n'est pas installé ou pas dans le PATH.")
-        return False
-    except subprocess.TimeoutExpired:
-        print("ERROR: ADB ne répond pas (timeout).")
-        return False
+    """Checks that ADB is connected to the configured device."""
+    from clashai.adb import get_client
+    return get_client().check_connection()
 
 
 def adb_screenshot():
@@ -300,39 +273,33 @@ def adb_screenshot():
     except Exception as e:
         print(f"WARNING: Direct capture failed ({e}), falling back to ADB")
 
-    # ADB fallback — works even if WGC fails or the window is unavailable
-    try:
-        result = subprocess.run(
-            ["adb", "-s", ADB_DEVICE, "exec-out", "screencap", "-p"],
-            capture_output=True, timeout=5
-        )
-        if result.returncode != 0 or len(result.stdout) < 100:
-            return None
-        return Image.open(io.BytesIO(result.stdout)).convert("RGB")
-    except Exception as e:
-        print(f"WARNING: ADB capture failed: {e}")
-        return None
+    # ADB fallback — works even if WGC fails or the window is unavailable.
+    # Routes through ADBClient (Phase C.1).
+    from clashai.adb import get_client
+    return get_client().screencap()
 
+
+# Phase C.1: ADB I/O routed through clashai.adb.ADBClient. These wrappers
+# are kept as thin convenience functions so existing callers
+# (env, brain, agents, tools) don't need to change. New code should prefer
+# `from clashai.adb import get_client; client.tap(...)`.
 
 def adb_tap(x, y):
     """Performs a tap at position (x, y)."""
-    subprocess.run(["adb", "-s", ADB_DEVICE, "shell", f"input tap {x} {y}"], timeout=5)
-    time.sleep(ADB_DELAY_TAP)
+    from clashai.adb import get_client
+    get_client().tap(x, y)
 
 
 def adb_swipe(x1, y1, x2, y2, duration_ms=300):
     """Performs a swipe."""
-    subprocess.run(
-        ["adb", "-s", ADB_DEVICE, "shell", f"input swipe {x1} {y1} {x2} {y2} {duration_ms}"],
-        timeout=5
-    )
-    time.sleep(ADB_DELAY_TAP)
+    from clashai.adb import get_client
+    get_client().swipe(x1, y1, x2, y2, duration_ms=duration_ms)
 
 
 def adb_key(keycode):
     """Envoie une touche (ex: KEYCODE_BACK)."""
-    subprocess.run(["adb", "-s", ADB_DEVICE, "shell", f"input keyevent {keycode}"], timeout=5)
-    time.sleep(ADB_DELAY_TAP)
+    from clashai.adb import get_client
+    get_client().keyevent(keycode)
 
 
 # =============================================================================
@@ -513,8 +480,9 @@ def run_live(models):
     print(f"{'='*60}\n")
 
     print(f"Connecting to emulator: {ADB_DEVICE} ...")
-    connect_result = subprocess.run(["adb", "connect", ADB_DEVICE],
-                                    capture_output=True, text=True, timeout=5)
+    from clashai.adb import get_client
+    client = get_client()
+    connect_result = client.connect()
     print(f" -> {connect_result.stdout.strip()}")
     time.sleep(1)
 
@@ -522,10 +490,7 @@ def run_live(models):
         sys.exit(1)
 
     try:
-        result = subprocess.run(
-            ["adb", "-s", ADB_DEVICE, "shell", "wm", "size"],
-            capture_output=True, text=True, timeout=5
-        )
+        result = client.shell("wm size")
         print(f" Résolution : {result.stdout.strip()}")
     except:
         pass
