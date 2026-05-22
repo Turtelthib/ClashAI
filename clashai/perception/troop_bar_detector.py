@@ -17,7 +17,7 @@ from PIL import Image
 GRAYED_SAT_THRESHOLD = 30
 
 # Confidence threshold for YOLO detection
-YOLO_CONF = 0.30
+YOLO_CONF = 0.45
 # Inference image size.
 #
 # Session 13 finding: setting this to 1600 (the value in
@@ -29,7 +29,7 @@ YOLO_CONF = 0.30
 #
 # Sticking to 640 (Ultralytics' default) until next retrain validates a
 # higher imgsz with explicit train→infer parity benchmarking.
-YOLO_IMGSZ = 640
+YOLO_IMGSZ = 1088
 
 # Counter position differs by screen:
 #   prep_attaque  → top-LEFT  corner of the icon (army selection screen)

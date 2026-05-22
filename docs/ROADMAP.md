@@ -291,9 +291,10 @@ Objectif : valider visuellement que **tous les CNN voient correctement** avant d
 
 ### Interface commune `BaseAgent`
 
-- [ ] Définir classe abstraite `BaseAgent` : `can_run()`, `run()`, `priority()`, `cooldown()`
-- [ ] Chaque agent existant (combat, GdC, château, chat) implémente l'interface
-- [ ] L'orchestrateur `brain.py` itère et interroge `can_run()` selon les priorités
+- [x] Définir classe abstraite `BaseAgent` : `can_run(world)`, `run()`, `priority`, `cooldown_seconds` (Session 13, Phase C.4 — `clashai/agents/base.py`)
+- [x] `AgentScheduler` : registry + `pick(world)` (prio + cooldown + can_run) + `tick(world)` + history (Session 13, `clashai/agents/scheduler.py`)
+- [ ] Chaque agent existant (combat, GdC, château, chat) implémente l'interface — fait en V5.2
+- [ ] L'orchestrateur `brain.py` utilise `AgentScheduler` au lieu de la logique ad-hoc actuelle — fait en V5.2
 
 ### État actuel (à formaliser)
 

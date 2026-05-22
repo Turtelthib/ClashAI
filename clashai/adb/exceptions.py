@@ -4,7 +4,14 @@
 # Catchers should prefer the most specific subclass. Code that wants to
 # treat any ADB failure as recoverable catches the base ADBError.
 
-class ADBError(Exception):
+# Inherit from the project-wide ClashAIError so a top-level handler can
+# catch every ClashAI failure with one except. ClashAIError lives in the
+# leaf module clashai/_core_exceptions.py to avoid a circular import with
+# clashai/exceptions.py (which re-exports our classes).
+from clashai._core_exceptions import ClashAIError
+
+
+class ADBError(ClashAIError):
     """Base for any ADB failure. Catch this to recover from arbitrary
     ADB I/O problems."""
 

@@ -1,4 +1,15 @@
 # scripts/rl/environment_v3.py
+#
+# ⚠️ DEPRECATED — see V5.x for removal (Phase D, Session 13).
+#
+# This file is the V3 environment, kept around because:
+#   - ClashEnvV4 in environment_v4.py inherits from ClashEnvV3
+#   - Existing V3 PPO checkpoints (weights/rl/) might still be loaded
+#
+# Do NOT add new features here. New behaviour goes into V4 or higher.
+# Once V4 has stabilised through a full retrain cycle, the inheritance
+# chain (V4 ← V3) will be flattened and this file deleted entirely.
+#
 # V3 Environment for ClashAI — reactive mid-combat AI.
 #
 # Major change vs V2:

@@ -1,4 +1,13 @@
 # scripts/rl/agent_v3.py
+#
+# ⚠️ DEPRECATED — see V5.x for removal (Phase D, Session 13).
+#
+# V4 (`agent_v4.py`) is the active PPO agent. This file is kept because:
+#   - Old V3 PPO checkpoints in weights/rl/ may still need to be loaded
+#   - environment.py (V3) imports some constants from here
+#
+# Do NOT add new features here. New behaviour goes into agent_v4.
+#
 # PPO Agent V3 for ClashAI — reactive mid-combat AI.
 #
 # Changes vs V2 :

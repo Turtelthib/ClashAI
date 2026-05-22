@@ -43,7 +43,7 @@ class PerceptionThread:
     # Minimum interval between inference runs (don't hammer GPU unnecessarily)
     INFERENCE_MIN_INTERVAL = 0.05  # 50ms → max 20fps inference
 
-    def __init__(self, models, verbose=False):
+    def __init__(self, models, verbose=False, event_bus=None):
         self.models = models
         self.verbose = verbose
 
@@ -64,6 +64,21 @@ class PerceptionThread:
             'timestamp': -999.0,  # sentinel: never fresh until first inference
             'inference_ms': 0.0,
         }
+
+        # Phase C.3: event bus so consumers can subscribe to push updates
+        # instead of polling get_latest(). If no bus is passed, we use the
+        # process-wide singleton — that lets multiple PerceptionThread
+        # instances share subscribers, and lets consumers wire up before
+        # the thread starts.
+        if event_bus is None:
+            from clashai.perception.events import get_bus
+            event_bus = get_bus()
+        self.events = event_bus
+
+        # Previous screen state — used to detect transitions so we only
+        # emit EVENT_SCREEN_STATE_CHANGED on a real change, not every tick.
+        self._prev_screen_state = None
+        self._prev_building_count = None
 
         # Control
         self._running = False
@@ -261,24 +276,72 @@ class PerceptionThread:
             elapsed_ms = (time.time() - t0) * 1000
             last_inference = time.time()
 
-            #  Update shared state 
+            #  Update shared state
+            new_state = {
+                'frame': frame,
+                'buildings': buildings,
+                'combat_features': combat_features,
+                'screen_state': screen_state,
+                'screen_conf': screen_conf,
+                'troop_bar': troop_bar,         # raw detections with is_grayed
+                'troop_positions': troop_positions,  # {name: (x,y,conf)} active only
+                'timestamp': last_inference,
+                'inference_ms': elapsed_ms,
+            }
             with self._lock:
-                self._state = {
-                    'frame': frame,
-                    'buildings': buildings,
-                    'combat_features': combat_features,
-                    'screen_state': screen_state,
-                    'screen_conf': screen_conf,
-                    'troop_bar': troop_bar,         # raw detections with is_grayed
-                    'troop_positions': troop_positions,  # {name: (x,y,conf)} active only
-                    'timestamp': last_inference,
-                    'inference_ms': elapsed_ms,
-                }
+                self._state = new_state
 
             if self.verbose:
                 print(f" Perception: {len(buildings)} buildings | "
                       f"screen={screen_state} ({screen_conf:.0%}) | "
                       f"{elapsed_ms:.0f}ms")
+
+            # Phase C.3: emit events for push-based consumers.
+            # Subscribers run synchronously on this inference thread —
+            # keep callbacks fast.
+            self._emit_events(new_state)
+
+    def _emit_events(self, state):
+        """Fire push events derived from the latest inference cycle."""
+        from clashai.perception.events import (
+            EVENT_PERCEPTION_UPDATED,
+            EVENT_SCREEN_STATE_CHANGED,
+            EVENT_BUILDINGS_DESTROYED,
+            EVENT_TROOP_BAR_CHANGED,
+        )
+
+        # Always: full state available
+        self.events.emit(EVENT_PERCEPTION_UPDATED, state)
+
+        # Screen state transitions
+        ss = state['screen_state']
+        if ss is not None and ss != self._prev_screen_state:
+            self.events.emit(EVENT_SCREEN_STATE_CHANGED, {
+                'state': ss,
+                'conf': state['screen_conf'],
+                'previous': self._prev_screen_state,
+            })
+            self._prev_screen_state = ss
+
+        # Building destruction (compared to previous cycle)
+        curr_buildings = state['buildings'] or []
+        curr_count = len(curr_buildings)
+        if self._prev_building_count is not None:
+            destroyed = self._prev_building_count - curr_count
+            if destroyed > 0:
+                self.events.emit(EVENT_BUILDINGS_DESTROYED, {
+                    'destroyed': destroyed,
+                    'remaining': curr_count,
+                })
+        self._prev_building_count = curr_count
+
+        # Troop bar updated (we don't diff content, just signal a refresh).
+        # Consumers can filter on actual changes if needed.
+        if state['troop_bar']:
+            self.events.emit(EVENT_TROOP_BAR_CHANGED, {
+                'detections': state['troop_bar'],
+                'positions': state['troop_positions'],
+            })
 
     # ------------------------------------------------------------------
     # Internal
