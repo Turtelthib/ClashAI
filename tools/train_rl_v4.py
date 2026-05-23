@@ -82,10 +82,12 @@ def main():
                      test_capture=test_capture)
 
     # Clan Castle Manager (V4.1 — request troops during training)
+    # F.2 fix: verbose=True so we see when requests fire / fail. Was False
+    # before → the agent silently ignored CC for the whole run.
     from clashai.social.clan_castle import ClanCastleManager
     cc_manager = ClanCastleManager(
         models=models,
-        verbose=False,
+        verbose=True,
     )
 
     # Create the agent
@@ -202,13 +204,24 @@ def main():
         print(f" {datetime.now().strftime('%H:%M:%S')}")
         print(f"{'='*60}")
 
-        # V4.1: request CC troops if cooldown has passed
-        try:
-            cc_manager.request_if_needed(
-                game_loop.adb_screenshot, game_loop.adb_tap
-            )
-        except Exception:
-            pass
+        # V4.1 + F.2: request CC troops only when on village_home and the
+        # cooldown has actually passed. Without the screen check the call
+        # wastes a screenshot + YOLO on screens where YOLO can't find the
+        # castle (resultats_attaque, recherche_adversaire, etc.), making
+        # debugging confusing.
+        if cc_manager.time_until_next_request() <= 0:
+            try:
+                img = game_loop.adb_screenshot()
+                if img is not None:
+                    state, conf = game_loop.classify_screen(img, models)
+                    if state == 'village_home' and conf > 0.7:
+                        cc_manager.request_if_needed(
+                            game_loop.adb_screenshot, game_loop.adb_tap
+                        )
+                    elif args.verbose:
+                        print(f" CC: skipped (screen={state} conf={conf:.0%}, need village_home)")
+            except Exception as e:
+                print(f" WARNING: CC request raised: {type(e).__name__}: {e}")
 
         obs, mask = env.reset()
         grid, vector = obs

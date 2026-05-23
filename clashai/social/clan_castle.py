@@ -239,11 +239,14 @@ class ClanCastleManager:
         try:
             from clashai.navigation.game_loop import analyze_village
             buildings = analyze_village(screenshot_pil, self._models)
+            # The YOLO building classes are in French (see weights/classes.json).
+            # We accept both names for robustness across future retrains.
+            CC_CLASSES = ('chateau_clan', 'clan_castle')
             for b in buildings:
-                if b['class'] == 'clan_castle':
+                if b['class'] in CC_CLASSES:
                     cx, cy = b['center']
                     if self.verbose:
-                        print(f" CC à ({cx}, {cy}) conf={b['confidence']:.2f}")
+                        print(f" CC ({b['class']}) à ({cx}, {cy}) conf={b['confidence']:.2f}")
                     return (cx, cy)
         except Exception as e:
             if self.verbose:

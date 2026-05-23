@@ -63,16 +63,16 @@
 
 > **Objectif** : supprimer les phases rigides, rendre l'agent vraiment réactif comme un joueur humain. C'est le plus gros changement architectural depuis V3→V4.
 
-### Bug : échec navigation → faux -50 reward
+### Bug : échec navigation → faux -50 reward (Session 13, ✅ fix)
 
 > Symptôme observé session 11 (épisode 22) :
 > Matchmaking bloqué (`recherche_adversaire`) → 3 recovery échouent → `ERROR: Unable to reach enemy village`
 > → l'épisode continue quand même → `_wait_for_battle_end()` voit 1-2 barres vertes (UI) → croit aux troupes mortes → surrender → **-50 reward injuste**
 
-- [ ] Dans `_wait_for_battle_end()` : si l'écran est `village_home` ou `recherche_adversaire` au lieu de `phase_attaque`, **ne pas surrendrer** — l'attaque n'a jamais eu lieu
-- [ ] Dans `reset()` : si la navigation échoue (`ERROR: Unable to reach enemy village`), marquer l'épisode comme `nav_failed=True` et ne pas lancer `step()` du tout
-- [ ] Reward d'un épisode `nav_failed` = **0.0** (pas de -50) — l'agent n'est pas responsable d'un bug de navigation
-- [ ] Idéalement : retry automatique de la navigation (relancer `_navigate_to_attack()`) au lieu d'abandonner après 3 essais
+- [x] **`_wait_for_battle_end()` ne surrend plus si écran ≠ phase_attaque** : nouvelle garde dans `clashai/combat/episode_lifecycle.py::wait_for_battle_end()` — détecte les états non-battle (`village_home`, `recherche_adversaire`, `prep_attaque`, `chargement`, `gdc_*`, `menu_*`, `profil`, `chat_clan`) et retourne `None` au lieu de surrendrer
+- [x] **`reset()` marque `self._nav_failed = True`** quand `_navigate_to('phase_attaque')` échoue après tous les retries — `clashai/combat/environment.py::reset()` (variable initialisée à `False` en début de reset, set à `True` après échec)
+- [x] **Reward `nav_failed = 0.0`** au lieu de -50 — `finish_episode()` court-circuite si `env._nav_failed=True`, retourne `(0.0, info)` avec `info['nav_failed']=True` pour que les training scripts puissent filtrer ces épisodes des stats
+- [x] **Retry auto navigation** : si `_navigate_to('phase_attaque')` échoue, `reset()` attend 3s et retente une fois avant de marquer `nav_failed`. Cause fréquente = matchmaker bloqué sur `recherche_adversaire`, le retry suffit souvent
 
 ### ⚠️ CRITIQUE : Amélioration heuristique sorts (apprentissages Session 7)
 
@@ -163,7 +163,13 @@
 - [x] **Fix capture fenêtre émulateur occluded** (Session 12) — voir bloc dédié ci-dessous
 - [x] **Mode `--test`** (Session 12) : `uv run python tools/train_rl_v4.py --test` lance 1 épisode heuristique et sauvegarde 5 captures annotées dans `logs/test_run/` : `village_home.png` (état CNN), `prep_attaque.png` (+ barre troupes YOLO + compteurs OCR), `debut_attaque.png` (+ bboxes bâtiments colorées par catégorie + hull deploy + points numérotés), `attaque_30s.png` / `attaque_60s.png` (+ bâtiments détruits surlignés en croix rouge + troupes YOLO combat). Module : `clashai/perception/test_run_capture.py::TestRunCapture`. Hooks dans `environment_v4.py` (`_get_screen_state` override + `_update_combat_observation`). Rapport `[OK]/[--]` à la fin pour voir quelles captures ont été atteintes
 - [ ] Tester + valider en conditions réelles, ajuster conf YOLO si faux positifs
-- [ ] **Fix demande de troupes château de clan** : l'agent ignore cette feature en production (jamais déclenchée). Debug pourquoi `ClanCastleManager.request_troops()` n'est pas appelé dans le flow training/brain — vérifier cooldown, état CC plein/vide, hook dans `brain.py` avant chaque attaque (voir V4.1 — code écrit mais setup template `templates/clan_castle/request.png` + calibrate `cdc_confirmation` peut-être incomplet)
+- [x] **Fix demande de troupes château de clan** (Session 13) : root cause = **4 bugs** (3 dans `tools/train_rl_v4.py` + 1 dans le code applicatif) :
+  - `verbose=False` sur le CC manager → toutes les failures silencieuses (CC pas trouvé, cooldown, CC FULL — aucun log visible). Fix : `verbose=True`.
+  - Pas de check `screen == village_home` avant l'appel → YOLO ne trouvait pas le château quand on était sur `resultats_attaque` ou `recherche_adversaire`. Fix : guard `classify_screen() == 'village_home'` avant `request_if_needed`.
+  - `try/except Exception: pass` → toute exception silencieusement avalée. Fix : log explicite avec nom de la classe + message.
+  - **Mismatch nom de classe YOLO** : `ClanCastleManager._find_clan_castle()` cherchait `b['class'] == 'clan_castle'` (anglais), mais le modèle YOLO bâtiments utilise `'chateau_clan'` (français, cf `weights/classes.json`). → Match jamais → CC jamais trouvé. **C'était la vraie raison pour laquelle l'agent ignorait totalement le CC.** Fix : `CC_CLASSES = ('chateau_clan', 'clan_castle')` (tuple, accepte les deux pour robustesse aux retrains futurs).
+  - Setup (`templates/clan_castle/request.png` + `cdc_confirmation` dans `configs/ui_positions.json`) vérifié OK Session 13.
+  - `brain.py` faisait déjà bien (`_ensure_at_village()` avant l'appel) — mais souffrait aussi du bug class name → CC ignoré là aussi.
 - [x] **Hard cap héros uniques à 1** (Session 12) : `UNIQUE_HEROES = {roi, reine, grand_gardien, championne, prince_gargouille, duc_draconique}` dans `troop_bar_detector.py`. `to_counts()` et `_read_count()` forcent count=1 pour ces classes peu importe ce que l'OCR lit (les badges héros affichent un nombre que l'OCR confond souvent avec 11/23). Évite que `_remaining_troops['reine'] = 23` après une mauvaise lecture
 - [x] **Suppression rescan périodique** (Session 12) : avec YOLO troop bar tournant à chaque frame dans `PerceptionThread`, plus besoin du rescan tous les 10 steps qui prenait un screenshot dédié + relançait YOLO. Nouveau : `_sync_remaining_from_perception()` lit `state['troop_bar']` du cache (gratuit, déjà calculé) et met à jour `_remaining_troops` à chaque `_update_combat_observation()`. Plus réactif (chaque observe vs tous les 10 steps) et plus rapide (0 screenshot supplémentaire). Le rescan one-shot dans `_all_resources_exhausted()` est conservé comme sanity avant déclaration de fin d'épisode
 
@@ -245,12 +251,12 @@ Objectif : valider visuellement que **tous les CNN voient correctement** avant d
 
 > **Objectif** : clore proprement le cluster V4 avec les derniers irritants de perception, puis lancer un gros run de validation avant d'attaquer la refonte architecturale V5.
 
-- [ ] **Mini CNN classificateur de chiffres** (remplace EasyOCR pour compteurs troop bar)
-  - Pipeline : YOLO troop bar détecte les icônes → crop du badge compteur → mini CNN (LeNet ou MobileNetV3-Small) → chiffre
-  - **Pourquoi** : EasyOCR est générique et peu fiable sur les petits badges blanc/noir des icônes troupes. Le `snapshot OCR + manual decrement` ne marche pas non plus car parfois l'agent tape hors zone de déploiement → la troupe n'est PAS déployée mais le compteur manuel décrémente → drift inverse.
-  - **Data** : collecter ~500-1000 crops annotés (depuis screenshots de tests existants + run heuristique) → split 80/20 train/val
-  - **Model** : ~50-200k params, 0-99 classes (ou regression chiffre simple)
-  - **Intégration** : remplace l'appel EasyOCR dans `TroopBarDetector._read_count()`. Fallback OCR si confiance basse.
+- [ ] **Mini CNN classificateur de chiffres** (remplace EasyOCR pour compteurs troop bar) — découpé en 4 phases :
+  - [x] **Phase 1** (Session 13) : tool de collecte `tools/collect_digit_crops.py` — walk `logs/episode_*/` + `logs/test_run/`, run YOLO troop bar sur chaque jpg, crop le badge compteur de chaque détection countable (skip héros + abilities + siege déployés), save dans `needLabelisation/digits/<class>_<frameid>_<bbox>_<position>.png`. **Mode `--position auto` (défaut)** classifie l'écran source (CNN screen) et crop UNIQUEMENT la position pertinente : `prep_attaque` → badge top-LEFT, `phase_attaque` → badge top-RIGHT. Mode `--position both` disponible pour max recall (mais 50% des crops sont vides). Idempotent. Commande : `uv run python tools/collect_digit_crops.py --limit 200`
+  - [ ] **Phase 2** : labelisation (manuelle ou semi-auto avec EasyOCR comme 1ère estimation). Cible : 500-1000 crops annotés, split 80/20 train/val.
+  - [ ] **Phase 3** : entraîner un mini CNN (LeNet ou MobileNetV3-Small, ~50-200k params, 100 classes 0-99 ou regression). Notebook ou `tools/train_digit_cnn.py`.
+  - [ ] **Phase 4** : intégrer dans `TroopBarDetector._read_count()` avec fallback EasyOCR si confiance basse.
+  - **Pourquoi** : EasyOCR est générique et peu fiable sur les petits badges blanc/noir des icônes. Le `snapshot OCR + manual decrement` ne marche pas non plus car parfois l'agent tape hors zone de déploiement → la troupe n'est PAS déployée mais le compteur manuel décrémente → drift inverse.
 - [x] **Fix `Fatal Python error: PyInterpreterState_Delete: remaining threads`** au Ctrl+C (Session 12)
   - Cause : `windows_capture.start_free_threaded()` lance un thread Rust qui ne se termine pas quand Python finalise
   - Fix : `start_free_threaded()` retourne un `CaptureControl` ; on stocke `self._wgc_control` et on enregistre `atexit.register(self._stop_wgc)` qui appelle `ctrl.stop()` + `ctrl.wait()` avec try/except (par défense, certains modules peuvent déjà être partiellement déchargés à ce stade)
@@ -260,16 +266,16 @@ Objectif : valider visuellement que **tous les CNN voient correctement** avant d
 
     | Modèle | Constante | Valeur | Module | Note |
     |---|---|---|---|---|
-    | troop bar | `YOLO_IMGSZ` | **640** ⚠️ | `troop_bar_detector.py` | Reverté de 1600→640 après test Session 13 : à 1600 le modèle ne trouvait plus que 0-1 icônes sur ~9. Voir bloc troubleshooting ci-dessous. |
+    | troop bar | `YOLO_IMGSZ` | **1088** | `troop_bar_detector.py` | Session 13 : retrain dédié à imgsz=1088 → détection mieux qu'à 640 ou 1600. Voir historique ci-dessous. |
     | bâtiments | `YOLO_BUILDINGS_IMGSZ` | 1600 | `game_loop.py` | OK à 1600 |
     | troupes combat | `YOLO_TROOPS_IMGSZ` | 640 | `troop_detector.py` | Default Ultralytics |
     | walls seg | `YOLO_WALLS_IMGSZ` | 640 | `deploy_zone.py` | Default Ultralytics |
 
-  **⚠️ Troop bar — pourquoi 640 et pas 1600 (la valeur du training script)**
-  - Symptôme : à `imgsz=1600` (en théorie l'imgsz du training), le YOLO troop bar ne trouve plus que 0-1 icônes sur ~9 visibles (conf~0.39, juste au-dessus du seuil 0.30). À `imgsz=640`, on retrouve 9/9 (conf 0.35-0.96)
-  - Cause probable : double-resize WGC 2451x1411 → LANCZOS 1920x1080 → YOLO letterbox 1600x1600 → blur excessif sur les petites icônes. OU le checkpoint actuel a été entraîné à un imgsz différent que ce qui est codé dans `tools/train_yolo_troop_bar.py::IMG_SIZE`
-  - Décision : garder 640 (empirique fonctionne) jusqu'à ce qu'un retrain valide explicitement un imgsz plus élevé avec benchmark train→infer parity
-- [ ] **Fix demande de troupes château de clan** (migré depuis V4.3 — voir détail dans V4.3)
+  **📜 Historique imgsz troop bar**
+  - 1ère tentative : ROADMAP avait noté `1600` (cf `tools/train_yolo_troop_bar.py::IMG_SIZE`) → en prod le YOLO ne trouvait que 0-1 icônes / 9 (conf~0.39). Cause probable : double-resize WGC 2451x1411 → LANCZOS 1920x1080 → YOLO letterbox 1600x1600 trop blur.
+  - 2ème tentative (Session 13) : revert à `640` (default Ultralytics) → 9/9 détections (conf 0.35-0.96). Empiriquement OK mais qualité moyenne.
+  - 3ème tentative (Session 13, fin) : retrain dédié à `imgsz=1088` → mieux que 640 mais pas encore parfait. Le modèle mérite plus de data / plus d'epochs (item séparé hors refactor).
+- [x] **Fix demande de troupes château de clan** (Session 13, fait — voir détail dans V4.3)
 - [ ] **Gros run V4 final** : 300-500 épisodes une fois tous les fixes ci-dessus en place. Baseline solide avant V5.
 
 ---

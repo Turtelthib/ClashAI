@@ -81,9 +81,35 @@ def wait_for_battle_end(env):
     Note: green bars naturally decrease when troops take damage
     (green → orange). The threshold is therefore very low — an injured
     troop (orange bar) is still alive and fighting.
+
+    Phase F.1 guard: if reset() couldn't reach phase_attaque (nav_failed
+    flag set on env), the battle never happened. Returning None here lets
+    finish_episode() short-circuit to a neutral 0.0 reward instead of
+    surrendering on a UI it mistakes for a real fight.
     """
+    if getattr(env, '_nav_failed', False):
+        if env.verbose:
+            print(" wait_for_battle_end: nav_failed=True → skipping battle wait")
+        return None
+
     if env.verbose:
         print(" Waiting for battle end...")
+
+    # Phase F.1: extra safety — verify we ARE in a battle before any
+    # surrender / monitoring loop. If the env state lies and we're still
+    # on village_home / recherche_adversaire / prep_attaque (i.e. the
+    # match never launched), don't surrender on phantom UI bars.
+    state, _, _ = env._get_screen_state()
+    NON_BATTLE_STATES = {
+        'village_home', 'recherche_adversaire', 'prep_attaque',
+        'chargement', 'gdc_ally', 'gdc_enemy', 'gdc_ended',
+        'menu_boutique', 'profil', 'chat_clan',
+    }
+    if state in NON_BATTLE_STATES:
+        if env.verbose:
+            print(f" wait_for_battle_end: screen='{state}' ≠ phase_attaque → "
+                  f"no battle happened, returning None (no surrender)")
+        return None
 
     surrendered = False
     if env._no_troops_count >= NO_TROOPS_CHECKS_THRESHOLD:
@@ -160,6 +186,13 @@ def finish_episode(env):
     """
     Block until the battle ends, read results, compute reward + info dict.
     Returns (reward, info).
+
+    Phase F.1: if `env._nav_failed` is set (reset() couldn't reach the
+    attack screen), short-circuit to a NEUTRAL outcome:
+      - reward = 0.0  (NOT -50: the agent isn't responsible for nav bugs)
+      - stars = 0, percentage = 0
+      - info['nav_failed'] = True so training scripts can filter these
+        episodes out of stats.
     """
     if env.verbose:
         remaining = int(np.sum(env._remaining_troops))
@@ -168,6 +201,25 @@ def finish_episode(env):
               f" {env._combat_step_count} combat,"
               f" {remaining} remaining,"
               f" {env._hero_manager.num_activated()} abilities)")
+
+    # Short-circuit for failed navigation — no battle happened.
+    if getattr(env, '_nav_failed', False):
+        if env.verbose:
+            print(" nav_failed=True → returning neutral reward 0.0 "
+                  "(no -50 penalty, no result read)")
+        info = {
+            'stars': 0, 'percentage': 0, 'reward': 0.0,
+            'success': False,
+            'steps': env._step_count,
+            'deploy_steps': env._step_count - env._combat_step_count,
+            'combat_steps': env._combat_step_count,
+            'troops_remaining': int(np.sum(env._remaining_troops)),
+            'abilities_used': env._hero_manager.num_activated(),
+            'episode': env._episode_count,
+            'early_retreat': False,
+            'nav_failed': True,
+        }
+        return 0.0, info
 
     # If in combat phase, battle may already be over; otherwise wait passively
     result_img = wait_for_battle_end(env)
@@ -209,6 +261,7 @@ def finish_episode(env):
         'abilities_used': env._hero_manager.num_activated(),
         'episode': env._episode_count,
         'early_retreat': env._no_troops_count >= NO_TROOPS_CHECKS_THRESHOLD,
+        'nav_failed': False,
     }
 
     return reward, info

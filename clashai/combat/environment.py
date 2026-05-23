@@ -983,6 +983,11 @@ class ClashEnvV3:
         self._combat_features = np.zeros(COMBAT_FEATURES_SIZE, dtype=np.float32)
         self._no_troops_count = 0
 
+        # Phase F.1: navigation failure flag. When True, the episode is a
+        # no-op for RL purposes — finish_episode() returns reward=0 and
+        # _wait_for_battle_end() skips the surrender path.
+        self._nav_failed = False
+
         # Reset V3 modules
         self._hero_manager.reset()
         self._deploy_failed_count = 0
@@ -1004,11 +1009,20 @@ class ClashEnvV3:
         if self._episode_count > 1:
             self._human_idle()
 
-        # 1. Navigate to enemy village
+        # 1. Navigate to enemy village — F.1: retry once on failure before
+        # giving up. A common cause is the matchmaker getting stuck on
+        # `recherche_adversaire`; a short pause then a fresh attempt often
+        # recovers without a `_human_idle()` (which is slow).
         success, img_pil = self._navigate_to('phase_attaque')
         if not success:
             if self.verbose:
-                print("ERROR: Unable to reach an enemy village")
+                print(" Navigation to phase_attaque failed — retrying once...")
+            time.sleep(3.0)
+            success, img_pil = self._navigate_to('phase_attaque')
+        if not success:
+            if self.verbose:
+                print("ERROR: Unable to reach an enemy village — marking nav_failed")
+            self._nav_failed = True
             self._grid = np.zeros(
                 (GRID_CHANNELS, GRID_SIZE, GRID_SIZE), dtype=np.float32
             )
