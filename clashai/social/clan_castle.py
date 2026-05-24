@@ -347,7 +347,7 @@ class ClanCastleManager:
         return True
 
     def _close_menu(self, tap_fn):
-        tap_fn(30, 540)
+        tap_fn(5, 5)
         time.sleep(DELAY_CLOSE)
 
 

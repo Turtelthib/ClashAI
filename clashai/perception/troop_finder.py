@@ -277,10 +277,12 @@ class TroopFinder:
             True if found and clicked, False otherwise.
         """
         if troop_name not in self.positions:
-            # Do not spam warnings
             return False
 
         x, y, conf = self.positions[troop_name]
+        if y < 950 or y > 1080:
+            print(f" WARNING: troop_finder.select({troop_name}) at ({x},{y}) — "
+                  f"y outside expected bar range (950-1080), conf={conf:.2f}")
         adb_tap(x, y, delay=delay)
         return True
 
