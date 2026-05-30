@@ -116,6 +116,16 @@ class ScreenCapture:
         self._wgc_lock = threading.Lock()
         self._hwnd = None
 
+        # V5.3 push pipeline: any number of callbacks fire on each new
+        # frame. For WGC, callbacks fire on the Rust capture thread
+        # (native push). For non-WGC backends, a fallback polling thread
+        # is started on first subscription and emulates push at ~30fps.
+        self._frame_callbacks = []
+        self._frame_callbacks_lock = threading.Lock()
+        self._fallback_poll_thread = None
+        self._fallback_poll_stop = threading.Event()
+        self._fallback_poll_fps = 30
+
         self._init_backend()
 
     def _init_backend(self):
@@ -423,6 +433,107 @@ class ScreenCapture:
             cropped = cropped.resize((self.CANONICAL_W, self.CANONICAL_H), Image.LANCZOS)
         return cropped
 
+    # ------------------------------------------------------------------
+    # V5.3 push pipeline — frame subscription
+    # ------------------------------------------------------------------
+
+    def subscribe_to_frames(self, callback):
+        """
+        Register a callback fired on every new captured frame.
+
+        Signature: callback(img_pil) where img_pil is a 1920x1080 RGB
+        PIL.Image (already normalized — matches what grab() returns).
+
+        On WGC backend, callbacks fire on the Rust capture thread at the
+        emulator's native frame rate (typically 30-60 fps). On other
+        backends, a fallback polling thread is started on first
+        subscription and emulates push at ~30fps.
+
+        Subscribers must be FAST (microseconds): read latest frame,
+        enqueue work, return. Any blocking will stall the capture
+        pipeline. Exceptions are caught and logged so a buggy subscriber
+        cannot kill the producer thread.
+        """
+        with self._frame_callbacks_lock:
+            if callback not in self._frame_callbacks:
+                self._frame_callbacks.append(callback)
+        # For non-WGC backends, kick off the polling fallback so the
+        # subscriber actually receives frames.
+        if self._backend != 'wgc' and self._fallback_poll_thread is None:
+            self._start_fallback_polling()
+
+    def unsubscribe_from_frames(self, callback) -> bool:
+        with self._frame_callbacks_lock:
+            try:
+                self._frame_callbacks.remove(callback)
+                return True
+            except ValueError:
+                return False
+
+    def num_frame_subscribers(self) -> int:
+        with self._frame_callbacks_lock:
+            return len(self._frame_callbacks)
+
+    def _fire_frame_callbacks(self, img_pil):
+        """Dispatch a ready-to-use PIL.Image to every frame subscriber."""
+        with self._frame_callbacks_lock:
+            callbacks = list(self._frame_callbacks)
+        for cb in callbacks:
+            try:
+                cb(img_pil)
+            except Exception as e:
+                # Don't let a buggy subscriber crash the WGC thread.
+                cb_name = getattr(cb, '__name__', repr(cb))
+                print(f"WARNING: frame subscriber {cb_name} raised: {e}")
+
+    def _fire_frame_callbacks_from_bgra(self, bgra):
+        """WGC arrives with raw BGRA. Convert + normalise once, then
+        dispatch the same PIL.Image to every subscriber."""
+        try:
+            rgb = bgra[:, :, [2, 1, 0]]
+            img = Image.fromarray(rgb)
+            img = self._normalize_to_canonical(img)
+        except Exception as e:
+            print(f"WARNING: BGRA→PIL conversion failed: {e}")
+            return
+        self._fire_frame_callbacks(img)
+
+    def _start_fallback_polling(self):
+        """For backends without a native push event (PrintWindow, dxcam,
+        mss, ADB), spin a daemon thread that calls grab() at
+        ~_fallback_poll_fps and fires subscriber callbacks."""
+        if self._fallback_poll_thread is not None:
+            return
+        interval = 1.0 / max(1, self._fallback_poll_fps)
+
+        def _loop():
+            if self.verbose:
+                print(f"ScreenCapture: fallback polling thread started "
+                      f"(~{self._fallback_poll_fps}fps) for backend={self._backend}")
+            while not self._fallback_poll_stop.is_set():
+                t0 = time.time()
+                try:
+                    img = self.grab()
+                    if img is not None:
+                        self._fire_frame_callbacks(img)
+                except Exception as e:
+                    print(f"WARNING: fallback polling grab failed: {e}")
+                sleep = interval - (time.time() - t0)
+                if sleep > 0:
+                    self._fallback_poll_stop.wait(timeout=sleep)
+
+        self._fallback_poll_thread = threading.Thread(
+            target=_loop, name='ScreenCaptureFallbackPoll', daemon=True,
+        )
+        self._fallback_poll_thread.start()
+
+    def stop_fallback_polling(self):
+        """Stop the fallback polling thread (no-op if not running)."""
+        self._fallback_poll_stop.set()
+        if self._fallback_poll_thread is not None:
+            self._fallback_poll_thread.join(timeout=1.0)
+            self._fallback_poll_thread = None
+
     def _init_wgc(self, hwnd):
         """
         Spin up a Windows.Graphics.Capture session against `hwnd` and keep
@@ -452,8 +563,15 @@ class ScreenCapture:
                 # frame.frame_buffer is a (H, W, 4) BGRA uint8 view that gets
                 # reused for the next frame — copy before releasing the lock.
                 buf = frame.frame_buffer
+                buf_copy = buf.copy()
                 with self._wgc_lock:
-                    self._wgc_latest = buf.copy()
+                    self._wgc_latest = buf_copy
+                # V5.3 push pipeline: notify subscribers natively, no
+                # extra polling thread needed. Conversion to PIL +
+                # normalisation happens in _fire_frame_callbacks_from_bgra
+                # so subscribers receive the canonical 1920x1080 RGB.
+                if self._frame_callbacks:
+                    self._fire_frame_callbacks_from_bgra(buf_copy)
 
             @wgc.event
             def on_closed():

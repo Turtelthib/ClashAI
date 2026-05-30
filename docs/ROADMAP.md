@@ -335,6 +335,17 @@ Objectif : valider visuellement que **tous les CNN voient correctement** avant d
 - Collecter ressources (mines, coffres)
 - Type : règles + queue de priorité
 
+### 🔧 CNN barre d'options bâtiment (perception robuste)
+
+> Idée Session 13 : quand on tape n'importe quel bâtiment du village (CC, mine, défense, labo, etc.), une **barre d'options** apparaît en bas de l'écran avec ~6-8 boutons (`Demander`, `Renforcer`, `Améliorer`, `Trésorerie`, `Dormir`, `Infos`, etc.). Le contenu et l'ordre des boutons varient selon le type de bâtiment. Le template matching actuel sur le bouton `Demande` du CC est fragile (~50% de réussite).
+
+- [ ] **CNN options bar** dédié : input = crop de la barre du bas (y~860-1080), output = liste `{name, x, y, conf}` des boutons détectés
+- [ ] Classes : `demander`, `renforcer`, `ameliorer`, `tresorerie`, `dormir`, `infos`, `rechercher`, `collecter`, `acheter`, ... (à compléter avec inventaire complet en parcourant chaque type de bâtiment)
+- [ ] Pipeline : tap bâtiment → screenshot → CNN options bar → décider quel bouton presser selon l'intention de l'agent
+- [ ] **Unlock** : remplace le template matching CC fragile + débloque l'agent gestion village (gérer constructeurs, labo, ressources sans hardcoded coords)
+- [ ] **Data** : collecter ~200-500 crops de barres d'options annotés (script de capture interactive : "tape ce bâtiment, je save la barre", puis labellisation manuelle)
+- [ ] **Model** : YOLO petit (nano) sur la zone de la barre, similaire à `troop_bar_detector` mais sur une zone légèrement plus haute
+
 ### Orchestrateur `brain.py`
 
 - [ ] Boucle principale : check chaque agent selon `priority()` + `can_run()`
@@ -344,7 +355,9 @@ Objectif : valider visuellement que **tous les CNN voient correctement** avant d
 
 ---
 
-## V5.3 — Mode "en direct" (réactif temps réel)
+## V5.0 — Mode "en direct" (réactif temps réel)
+
+> **Note** : numéroté V5.0 car livré AVANT V5.1/V5.2 dans l'ordre chronologique (Session 13). Le push pipeline était la priorité #1 pour la suite multi-agents.
 
 > **Objectif** : passer du modèle actuel `screenshot → décision → tap → sleep` à un vrai pipeline vidéo continu où l'agent voit le jeu comme une vidéo, pas comme des photos.
 
@@ -352,18 +365,16 @@ Objectif : valider visuellement que **tous les CNN voient correctement** avant d
 
 > **Aujourd'hui** : `PerceptionThread._capture_loop` appelle `cap.grab()` 20 fois par seconde. C'est 20 screenshots/s, **pas** un stream vidéo. Le screenshot est instantané mais ça reste une succession de captures discrètes commandées par le code.
 >
-> **V5.3** : la fenêtre émulateur est vue comme un **flux vidéo continu** (WGC fournit déjà ça via `on_frame_arrived` — chaque frame de l'émulateur déclenche un callback). On bascule en mode **push** : chaque frame WGC qui arrive déclenche directement le pipeline d'inférence. Plus de `grab() + sleep`, juste un consommateur qui traite ce qui arrive.
+> **V5.0** : la fenêtre émulateur est vue comme un **flux vidéo continu** (WGC fournit déjà ça via `on_frame_arrived` — chaque frame de l'émulateur déclenche un callback). On bascule en mode **push** : chaque frame WGC qui arrive déclenche directement le pipeline d'inférence. Plus de `grab() + sleep`, juste un consommateur qui traite ce qui arrive.
 
 ### Tâches
 
-- [ ] Refactorer `PerceptionThread._capture_loop` : supprimer le polling fixé à 20fps, brancher directement sur le callback `on_frame_arrived` de `windows-capture`
-- [ ] L'inférence devient le bottleneck (60Hz natif émulateur → ~10-15 Hz inférence GPU pratique). C'est OK, le frame le plus récent est toujours utilisé.
-- [ ] **Decision tick** : un thread agent qui tick à 80-100ms en lisant le cache PerceptionThread + déclenche une action si l'état a changé significativement (event-driven, pas time-driven)
-- [ ] Définir "changement significatif" : nouveau bâtiment détruit, nouvelle troupe morte, hero ability disponible, etc.
-- [ ] **PPO inchangé** côté training : on garde des steps discrets pour ne pas casser la rétrocompat des checkpoints. C'est uniquement l'inférence en prod qui devient continue.
-- [ ] Mesurer : temps de réaction agent (événement → action) doit passer de ~500ms à ~150ms
+- [x] **Phase 1** (Session 13) : `ScreenCapture.subscribe_to_frames(callback)` — API push universelle. Sur WGC, callbacks fire nativement sur le thread Rust quand `on_frame_arrived` se déclenche (= rythme natif de l'émulateur, 30-60fps). Sur autres backends (PrintWindow/dxcam/mss/ADB), un thread fallback polling à 30fps émule l'API push. `unsubscribe_from_frames()` + `num_frame_subscribers()` aussi exposés. `_fire_frame_callbacks_from_bgra()` fait la conversion BGRA→PIL+normalize une seule fois pour tous les subscribers.
+- [x] **Phase 2** (Session 13) : `PerceptionThread._capture_loop` ne polle plus — il s'abonne via `cap.subscribe_to_frames(self._on_new_frame)` et bloque sur un wait. Les frames arrivent directement du thread WGC (ou du fallback poller). `_on_new_frame` est rapide : juste push dans la queue d'inférence avec dédup (max 1 frame en attente, on jette les vieilles).
+- [ ] **Phase 3 (optionnel)** : decision tick agent event-driven (separate thread qui réagit aux events PerceptionEventBus au lieu de step discrets). Pour le mode prod uniquement, RL training reste sur steps discrets.
+- [ ] **Phase 4 (optionnel)** : mesurer latency end-to-end (event → action). Cible : ~150ms vs ~500ms avant V5.0.
 
-### Avant de coder V5.3
+### Avant de coder V5.0 Phase 3 (decision tick event-driven)
 
 À définir clairement avec l'utilisateur :
 - Critères de "changement significatif" déclenchant une décision
@@ -372,7 +383,7 @@ Objectif : valider visuellement que **tous les CNN voient correctement** avant d
 
 ---
 
-## V5.4 — Dashboard web temps réel
+## V5.3 — Dashboard web temps réel
 
 > **Objectif** : suivre tout ce qui se passe (multi-agents, training, vision agent) depuis une page web sur le réseau local.
 
@@ -388,7 +399,7 @@ Objectif : valider visuellement que **tous les CNN voient correctement** avant d
 - [ ] **Onglet Training** — Courbe reward/étoiles en temps réel, dernière image de debug overlay, PPO stats (value_loss, entropy, policy_loss)
 - [ ] **Onglet Replay** — Les N dernières images de debug overlay par épisode (timeline visuelle d'une attaque)
 - [ ] **Onglet Village** — État constructeurs, labo, ressources (lecture depuis logs agents)
-- [ ] **Onglet Vision Agent** — **Flux vidéo en temps réel** de ce que l'agent perçoit, avec overlays annotés (bboxes YOLO bâtiments colorées par classe, masques walls seg, hull deploy zone + points numérotés, positions troupes YOLO, cluster principal, sorts restants en overlay texte). Alimenté par le flux V5.3.
+- [ ] **Onglet Vision Agent** — **Flux vidéo en temps réel** de ce que l'agent perçoit, avec overlays annotés (bboxes YOLO bâtiments colorées par classe, masques walls seg, hull deploy zone + points numérotés, positions troupes YOLO, cluster principal, sorts restants en overlay texte). Alimenté par le flux V5.0 (push pipeline) : subscribe au `frame_callback` de `ScreenCapture` + au `PerceptionEventBus`.
 
 ### Stack proposée (à valider)
 
@@ -529,10 +540,10 @@ Objectif : valider visuellement que **tous les CNN voient correctement** avant d
 | V4.2.1 | ✅ Fix | PPO value loss, BC loss, ability deadlock, deploy zone walls seg (Session 10-11) |
 | V4.3 | ✅ Terminé | YOLO barre troupes, perception async, WGC + normalize, debug overlay, mode --test, screen trace, hard cap héros, suppression rescan périodique (Session 12) |
 | V4.4 | 🔄 À faire | Polish perception : mini CNN chiffres (remplace EasyOCR), fix atexit WGC, imgsz aligné par modèle, fix CC, gros run final |
-| V5.1 | 💡 Vision | Foundation multi-agents : ADB zéro screenshot + BaseAgent interface |
-| V5.2 | 💡 Vision | Nouveaux agents : jeux de clan + gestion village + orchestrateur intelligent |
-| V5.3 | 💡 Vision | Mode "en direct" : vrai flux vidéo (WGC push) + decision tick event-driven |
-| V5.4 | 💡 Vision | Dashboard web temps réel (FastAPI + WebSocket + page Vision Agent) |
+| V5.0 | ✅ Phase 1+2 | Mode "en direct" : push pipeline WGC → PerceptionThread event-driven (Session 13). Phases 3-4 optionnelles. |
+| V5.1 | 💡 Vision | Foundation multi-agents : ADB zéro screenshot + BaseAgent interface (BaseAgent déjà créé en Session 13 refactor) |
+| V5.2 | 💡 Vision | Nouveaux agents : jeux de clan + gestion village + orchestrateur intelligent + CNN options bar bâtiment |
+| V5.3 | 💡 Vision | Dashboard web temps réel (FastAPI + WebSocket + page Vision Agent) |
 | V6 | 💡 Vision | Multi-compo, scouting base, ligue auto, curriculum learning |
 | V7 | 💡 Vision | Loot decision, calibration auto UI, donation, comportement humain |
 | V END | 🎯 Objectif | IA autonome complète — joue, gère, recrute, s'améliore seule

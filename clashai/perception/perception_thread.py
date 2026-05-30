@@ -1,16 +1,25 @@
 # clashai/perception/perception_thread.py
 # Async perception pipeline — runs YOLO + CNNs in background threads.
 #
-# Architecture (exploits the 20-core i7 Ultra 25Hx):
+# Architecture V5.3 (push-based, was polling):
 #
-#   Thread 1 — FrameCapture  : mss.grab() at ~30fps → frame queue
-#   Thread 2 — InferenceWorker: YOLO buildings + YOLO troops + CNN screen
-#                               (GPU, releases Python GIL → true parallel)
+#   Backend push → FrameCallback → frame queue → InferenceWorker
+#
+#   On WGC: WGC's Rust thread fires `on_frame_arrived` at the emulator's
+#           native render rate (~30-60fps). ScreenCapture relays the
+#           frame to every subscriber. PerceptionThread is one such
+#           subscriber.
+#   On other backends: ScreenCapture spins a fallback polling thread at
+#           ~30fps to emulate the push API. Same consumer code.
 #
 # The main agent thread never blocks on perception:
 #   - env.step(action) executes ADB tap immediately (~70ms)
 #   - env._update_combat_observation() reads cached state (instant)
 #   - DELAY_OBSERVE drops from 2.0s → 0.1s
+#
+# In addition to the get_latest() pull API, this thread emits perception
+# events via clashai.perception.events (PerceptionEventBus) so consumers
+# can react to changes without polling.
 #
 # Usage:
 #   pt = PerceptionThread(models)
@@ -162,39 +171,59 @@ class PerceptionThread:
         return self._running
 
     # ------------------------------------------------------------------
-    # Thread 1: Frame capture
+    # Thread 1: Frame capture (V5.3 — push-based, was polling)
     # ------------------------------------------------------------------
 
     def _capture_loop(self):
-        """Captures frames at ~CAPTURE_FPS and pushes to the inference queue."""
+        """
+        V5.3 — subscribes to ScreenCapture's frame stream instead of
+        polling.
+
+        On WGC backend, frames arrive natively from the Rust capture
+        thread at the emulator's render rate (~30-60fps).
+        On other backends, ScreenCapture spins a fallback polling thread
+        at ~30fps and pushes to subscribers — same API for the consumer.
+
+        This thread now just registers the callback, waits for stop, and
+        unsubscribes on shutdown. The actual frame handling happens
+        inside `_on_new_frame` on whichever thread the capture backend
+        uses.
+        """
         from clashai.perception.screen_capture import get_capture
         cap = get_capture()
-        interval = 1.0 / self.CAPTURE_FPS
+        cap.subscribe_to_frames(self._on_new_frame)
 
+        if self.verbose:
+            print(f"PerceptionCapture: subscribed to {cap.backend} push stream")
+
+        # Block until stop. The capture work happens on the backend's
+        # own thread via _on_new_frame.
         while self._running:
-            t0 = time.time()
+            time.sleep(0.1)
 
+        cap.unsubscribe_from_frames(self._on_new_frame)
+
+    def _on_new_frame(self, frame):
+        """Frame callback fired by ScreenCapture on each new frame.
+
+        Pushes the frame to the inference queue, dropping the previous
+        one if the inference worker is lagging behind. Must be fast.
+        """
+        if not self._running:
+            return
+        try:
+            self._frame_q.put_nowait(frame)
+        except queue.Full:
+            # Inference is slower than capture — discard the stale frame
+            # and replace with the fresh one.
             try:
-                frame = cap.grab()
-                if frame is not None:
-                    # Drop stale frame if inference is slower than capture
-                    try:
-                        self._frame_q.put_nowait(frame)
-                    except queue.Full:
-                        try:
-                            self._frame_q.get_nowait()  # discard old
-                        except queue.Empty:
-                            pass
-                        self._frame_q.put_nowait(frame)
-            except Exception as e:
-                if self.verbose:
-                    print(f"WARNING: PerceptionCapture error: {e}")
-
-            # Rate-limit to target fps
-            elapsed = time.time() - t0
-            sleep = max(0.0, interval - elapsed)
-            if sleep > 0:
-                time.sleep(sleep)
+                self._frame_q.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                self._frame_q.put_nowait(frame)
+            except queue.Full:
+                pass
 
     # ------------------------------------------------------------------
     # Thread 2: Inference
