@@ -228,14 +228,16 @@ class ClashEnvV3:
         try:
             from clashai.perception.troop_detector import TroopDetector, YOLO_TROOPS_PATH
             import os
+            from clashai.config.logging import pp
             if os.path.exists(YOLO_TROOPS_PATH):
                 detector = TroopDetector(verbose=True)
-                print(" TroopDetector YOLO chargé (mode V4)")
+                pp(" TroopDetector YOLO chargé (mode V4)", tag='yolo')
                 return detector
             else:
-                print(f" WARNING: YOLO troupes introuvable ({YOLO_TROOPS_PATH}), fallback barres de vie")
+                pp(f" WARNING: YOLO troupes introuvable ({YOLO_TROOPS_PATH}), fallback barres de vie", tag='warning')
         except ImportError:
-            print(" WARNING: TroopDetector non disponible, fallback barres de vie")
+            from clashai.config.logging import pp
+            pp(" WARNING: TroopDetector non disponible, fallback barres de vie", tag='warning')
         return None
 
     def _human_idle(self):
@@ -1110,10 +1112,12 @@ class ClashEnvV3:
 
         # 6. YOLO+CNN
         if self.verbose:
-            print(" YOLO+CNN village analysis...")
+            from clashai.config.logging import pp, styled
+            pp(" YOLO+CNN village analysis...", tag='yolo')
         buildings = self._analyze_village(img_pil, self.models)
         if self.verbose:
-            print(f" {len(buildings)} buildings detected")
+            count_str = styled(f"{len(buildings)} buildings", 'yolo_alt')
+            pp(f" {count_str} detected")
 
         self._buildings = buildings
         state = encode_state(buildings)

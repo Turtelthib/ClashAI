@@ -178,10 +178,11 @@ class TroopFinder:
         detections = self._detector.detect(screenshot_pil, screen=screen)
         self.positions = self._detector.to_positions(detections)
 
+        from clashai.config.logging import pp, styled
         found = len(self.positions)
-        print(f"Troops detected: {found} (YOLO)")
+        pp(f"Troops detected: {styled(str(found), 'yolo_alt')} (YOLO)", tag='yolo')
         for name, (x, y, conf) in sorted(self.positions.items(), key=lambda i: i[1][0]):
-            print(f" {name:<25s} -> ({x:4d}, {y:4d}) conf: {conf:.2f}")
+            pp(f" {name:<25s} -> ({x:4d}, {y:4d}) conf: {conf:.2f}", tag='yolo_dim')
 
     def _update_template(self, screenshot_pil):
         """Template matching fallback — legacy path."""

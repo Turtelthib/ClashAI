@@ -111,7 +111,8 @@ class TroopDetector:
         from ultralytics import YOLO
         self._model = YOLO(self._weights_path)
         if self.verbose:
-            print(f" YOLO troupes chargé : {self._weights_path}")
+            from clashai.config.logging import pp
+            pp(f" YOLO troupes chargé : {self._weights_path}", tag='yolo')
 
     def detect(self, screenshot_pil, filter_ui: bool = True) -> list[Detection]:
         """
@@ -168,11 +169,12 @@ class TroopDetector:
         detections.sort(key=lambda d: d.conf, reverse=True)
 
         if self.verbose and detections:
+            from clashai.config.logging import pp, styled
             counts = {}
             for d in detections:
                 counts[d.class_name] = counts.get(d.class_name, 0) + 1
             summary = ', '.join(f"{v}×{k}" for k, v in counts.items())
-            print(f" YOLO troupes: {summary}")
+            pp(f" YOLO troupes: {styled(summary, 'yolo_alt')}", tag='yolo')
 
         return detections
 

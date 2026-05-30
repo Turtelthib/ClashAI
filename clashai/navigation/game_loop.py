@@ -50,10 +50,11 @@ from clashai.config import (  # noqa: E402
 
 def load_models():
     """Loads the 3 models: screen CNN, YOLO, building CNN."""
+    from clashai.config.logging import pp
     models = {}
 
     # --- 1) Screen state CNN ---
-    print(" Loading screen state CNN...")
+    pp(" Loading screen state CNN...", tag='init')
     screen_classes_path = os.path.join(WEIGHTS_DIR, 'classification', 'screen_classes.json')
     screen_weights_path = os.path.join(WEIGHTS_DIR, 'classification', 'cnn_screen_classification.pt')
 
@@ -77,10 +78,10 @@ def load_models():
     screen_cnn = screen_cnn.to(DEVICE)
     screen_cnn.eval()
     models['screen_cnn'] = screen_cnn
-    print(f" {num_screen_classes} states loaded: {models['screen_classes']}")
+    pp(f" {num_screen_classes} states loaded: {models['screen_classes']}", tag='init_done')
 
     # --- 2) YOLO Detection ---
-    print("Loading YOLO11...")
+    pp("Loading YOLO11...", tag='init')
     yolo_path = os.path.join(WEIGHTS_DIR, 'best.pt')
     if not os.path.exists(yolo_path):
         # Fallback: look in runs/
@@ -90,10 +91,10 @@ def load_models():
         sys.exit(1)
 
     models['yolo'] = YOLO(yolo_path)
-    print(" YOLO chargé")
+    pp(" YOLO chargé", tag='yolo')
 
     # --- 3) Building CNN ---
-    print("Loading building CNN...")
+    pp("Loading building CNN...", tag='init')
     building_classes_path = os.path.join(WEIGHTS_DIR, 'classes.json')
     building_weights_path = os.path.join(WEIGHTS_DIR, 'building_cnn.pth')
 
@@ -108,16 +109,16 @@ def load_models():
     building_cnn.load_state_dict(torch.load(building_weights_path, map_location=DEVICE))
     building_cnn.eval()
     models['building_cnn'] = building_cnn
-    print(f" {len(models['building_classes'])} building classes loaded")
+    pp(f" {len(models['building_classes'])} building classes loaded", tag='init_done')
 
     # --- 4) YOLO Walls segmentation ---
     walls_path = os.path.join(WEIGHTS_DIR, 'yolo_walls_seg', 'walls_detection.pt')
     if os.path.exists(walls_path):
         models['yolo_walls'] = YOLO(walls_path)
-        print(" YOLO walls loaded")
+        pp(" YOLO walls loaded", tag='yolo')
     else:
         models['yolo_walls'] = None
-        print(f"WARNING: yolo_walls not found at {walls_path} — deploy zone will use building hull fallback")
+        pp(f"WARNING: yolo_walls not found at {walls_path} — deploy zone will use building hull fallback", tag='warning')
 
     # --- 5) YOLO Troop Bar Detector ---
     troop_bar_path = os.path.join(WEIGHTS_DIR, 'yolo_troupes_barre', 'troop_bar.pt')
@@ -133,7 +134,7 @@ def load_models():
     models['perception_thread'] = PerceptionThread(models, verbose=False)
     models['perception_thread'].start()
 
-    print(f"\nTous les modèles sont chargés sur {DEVICE}\n")
+    pp(f"\nTous les modèles sont chargés sur {DEVICE}\n", tag='init_done')
     return models
 
 

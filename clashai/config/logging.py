@@ -26,7 +26,6 @@ from typing import Optional
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.theme import Theme
-from rich.text import Text
 from rich.panel import Panel
 from rich.traceback import install as install_rich_tracebacks
 
@@ -197,17 +196,13 @@ def set_level(level: str) -> None:
 
 def pp(message: str, tag: Optional[str] = None) -> None:
     """
-    Print a styled inline message using the theme tag.
-
-    Tags available (see configs/logs/theme.yaml): banner, section, step,
-    deploy, spell, ability, observe, wait, reward, done, warning, error,
-    ok, skip. Unknown tags fall back to no styling.
+    Print a styled inline message using the theme tag. Rich markup
+    (e.g. produced by styled()) inside `message` is still interpreted —
+    inner styles win over the outer tag for the spans they cover.
     """
     _configure_once()
-    if tag and tag in _theme_cfg['tags']:
-        _console.print(Text(message, style=_theme_cfg['tags'][tag]))
-    else:
-        _console.print(message)
+    style = _theme_cfg['tags'].get(tag) if tag else None
+    _console.print(message, style=style)
 
 
 def banner(title: str, subtitle: Optional[str] = None,
@@ -226,3 +221,30 @@ def section(title: str) -> None:
     _configure_once()
     style = _theme_cfg['tags'].get('section', 'bold magenta')
     _console.rule(f"[{style}]{title}[/{style}]", style=style)
+
+
+def priority_tag(prio: int, max_prio: int = 10) -> str:
+    """
+    Map a priority value (1..max_prio) to a theme tag for color coding.
+    Higher = more critical (red), lower = safe (green).
+    """
+    if max_prio <= 0:
+        return 'step'
+    ratio = prio / max_prio
+    if ratio >= 0.85:
+        return 'prio_max'
+    if ratio >= 0.65:
+        return 'prio_high'
+    if ratio >= 0.35:
+        return 'prio_med'
+    return 'prio_low'
+
+
+def styled(text: str, tag: str) -> str:
+    """Wrap `text` with rich markup for the given tag (for use inside
+    larger pp/log messages where you want a single token highlighted)."""
+    _configure_once()
+    style = _theme_cfg['tags'].get(tag)
+    if not style:
+        return text
+    return f"[{style}]{text}[/{style}]"

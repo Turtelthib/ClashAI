@@ -651,8 +651,11 @@ class ClashEnvV4(ClashEnvV3):
                 self._hero_manager.scan(screenshot)
 
                 if self.verbose:
-                    print(f" Perception cache: {len(new_buildings)} bldg | "
-                          f"{state['inference_ms']:.0f}ms (async)")
+                    from clashai.config.logging import pp, styled
+                    bldg_str = styled(f"{len(new_buildings)} bldg", 'yolo_alt')
+                    pp(f" Perception cache: {bldg_str} | "
+                       f"{state['inference_ms']:.0f}ms (async)",
+                       tag='yolo_dim')
 
                 # Debug overlay
                 if self._debug_overlay:

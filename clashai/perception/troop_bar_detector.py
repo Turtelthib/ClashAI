@@ -8,10 +8,8 @@
 # Interface compatible with TroopFinder.positions:
 #   positions = {name: (x, y, conf, count)}  — only active (non-grayed) slots
 
-import os
 import cv2
 import numpy as np
-from PIL import Image
 
 # HSV saturation below this threshold = icon is grayed out (depleted/upgrading)
 GRAYED_SAT_THRESHOLD = 30
@@ -75,7 +73,8 @@ class TroopBarDetector:
         self.model = YOLO(model_path)
         self.verbose = verbose
         self._last_detections = []
-        print(f" TroopBarDetector loaded: {len(self.model.names)} classes")
+        from clashai.config.logging import pp
+        pp(f" TroopBarDetector loaded: {len(self.model.names)} classes", tag='yolo')
 
     def detect(self, screenshot_pil, screen='combat', prev_counts=None):
         """

@@ -250,10 +250,13 @@ class SpellCaster:
         self._defense_targets.sort(key=lambda t: t[3], reverse=True)
 
         if self.verbose and self._defense_targets:
-            print(f" SpellCaster V2 : {len(self._defense_targets)} "
-                  f"freeze targets registered")
+            from clashai.config.logging import pp, priority_tag, styled
+            pp(f" SpellCaster V2 : {len(self._defense_targets)} freeze targets registered",
+               tag='init_done')
             for x, y, name, prio in self._defense_targets[:5]:
-                print(f" {name} at ({x}, {y}) prio={prio:.0f}")
+                name_str = styled(name, 'def_name')
+                prio_str = styled(f"prio={prio:.0f}", priority_tag(int(prio)))
+                pp(f" {name_str} at ({x}, {y}) {prio_str}")
 
     def analyze_battlefield(self, screenshot_pil, village_center_adb=None):
         """
