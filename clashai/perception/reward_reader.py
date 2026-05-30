@@ -268,8 +268,9 @@ def load_digit_templates():
                                     max(0, x - pad):x + w + pad * 2]
 
     if digit_templates:
-        print(f"{len(digit_templates)} digit templates loaded"
-              f"{' + %' if pct_mask is not None else ''}")
+        from clashai.config.logging import pp
+        pp(f"{len(digit_templates)} digit templates loaded"
+           f"{' + %' if pct_mask is not None else ''}", tag='init_done')
 
     return digit_templates, pct_mask
 

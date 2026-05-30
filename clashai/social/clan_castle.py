@@ -317,7 +317,8 @@ class ClanCastleManager:
 
         if result is None:
             if self.verbose:
-                print(" WARNING: Bouton 'Demande' non trouvé dans la barre")
+                from clashai.config.logging import pp
+                pp(" WARNING: Bouton 'Demande' non trouvé dans la barre", tag='warning')
             self._close_menu(tap_fn)
             return False
 

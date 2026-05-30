@@ -20,8 +20,18 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from logging.handlers import RotatingFileHandler
 from typing import Optional
+
+# Force stdout/stderr UTF-8 on Windows so we can print Unicode (→, ⭐, …)
+# without hitting the legacy cp1252 codec.
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 from rich.console import Console
 from rich.logging import RichHandler
@@ -238,6 +248,24 @@ def priority_tag(prio: int, max_prio: int = 10) -> str:
     if ratio >= 0.35:
         return 'prio_med'
     return 'prio_low'
+
+
+def result_tag(value: float, vmin: float = 0, vmax: float = 1) -> str:
+    """
+    Map a result value (e.g. ratio in [0,1]) to a tag going
+    red → orange → yellow → gold as it improves.
+    """
+    if vmax <= vmin:
+        return 'result_meh'
+    ratio = (value - vmin) / (vmax - vmin)
+    ratio = max(0.0, min(1.0, ratio))
+    if ratio >= 0.85:
+        return 'result_excellent'
+    if ratio >= 0.55:
+        return 'result_good'
+    if ratio >= 0.25:
+        return 'result_meh'
+    return 'result_bad'
 
 
 def styled(text: str, tag: str) -> str:

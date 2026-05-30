@@ -243,7 +243,8 @@ class TroopManager:
             village_center: (x,y) — fallback
         """
         if self.verbose:
-            print("\n Cleanup: rescanning bar...")
+            from clashai.config.logging import section
+            section("Cleanup: rescanning bar")
 
         img = self._screenshot()
         if img is None:
@@ -318,16 +319,18 @@ class TroopManager:
             self._last_troop_name = None
 
             if self.verbose:
+                from clashai.config.logging import pp
                 status = 'grayed' if taps < MAX_CLEANUP_ROUNDS * 3 else 'max reached'
-                print(f" {name} -> {taps} taps ({status})")
+                pp(f" {name} -> {taps} taps ({status})", tag='cleanup')
 
         if self.verbose:
+            from clashai.config.logging import pp
             remaining = int(np.sum([
                 remaining_troops[i] for i, t in enumerate(self._troop_types)
                 if t['role'] != 'spell'
             ]))
-            print(f" Cleanup done: {deployed} actions"
-                  f" ({remaining} still in counter)")
+            pp(f" Cleanup done: {deployed} actions ({remaining} still in counter)",
+               tag='done')
 
     # -----------------------------------------------------------------
     # Utility: position from V4 sector

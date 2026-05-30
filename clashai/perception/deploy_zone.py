@@ -236,7 +236,8 @@ def detect_village_boundary(img_cv):
 
         # Success — use this contour
         if strategy_name != "warm":
-            print(f" WARNING: Overlay rouge faible, fallback {strategy_name}")
+            from clashai.config.logging import pp
+            pp(f" WARNING: Overlay rouge faible, fallback {strategy_name}", tag='warning')
 
         hull = cv2.convexHull(largest)
 

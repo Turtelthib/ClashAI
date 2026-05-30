@@ -371,11 +371,13 @@ class CombatObserver:
         }
 
         if self.verbose:
+            from clashai.config.logging import pp, styled
             counts = {}
             for d in all_dets:
                 counts[d.class_name] = counts.get(d.class_name, 0) + 1
             summary = ', '.join(f"{v}x{k}" for k, v in counts.items())
-            print(f" YOLO: {summary} | {num_hurt} injured | {len(clusters)} clusters")
+            pp(f" YOLO: {styled(summary, 'yolo_alt')} | {num_hurt} injured | {len(clusters)} clusters",
+               tag='yolo')
 
         return raw_data
 

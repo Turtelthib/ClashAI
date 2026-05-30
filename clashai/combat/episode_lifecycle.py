@@ -87,13 +87,14 @@ def wait_for_battle_end(env):
     finish_episode() short-circuit to a neutral 0.0 reward instead of
     surrendering on a UI it mistakes for a real fight.
     """
+    from clashai.config.logging import pp, styled
     if getattr(env, '_nav_failed', False):
         if env.verbose:
-            print(" wait_for_battle_end: nav_failed=True → skipping battle wait")
+            pp(" wait_for_battle_end: nav_failed=True → skipping battle wait", tag='warning')
         return None
 
     if env.verbose:
-        print(" Waiting for battle end...")
+        pp(" Waiting for battle end...", tag='observe')
 
     # Phase F.1: extra safety — verify we ARE in a battle before any
     # surrender / monitoring loop. If the env state lies and we're still
@@ -107,8 +108,8 @@ def wait_for_battle_end(env):
     }
     if state in NON_BATTLE_STATES:
         if env.verbose:
-            print(f" wait_for_battle_end: screen='{state}' ≠ phase_attaque → "
-                  f"no battle happened, returning None (no surrender)")
+            pp(f" wait_for_battle_end: screen='{state}' ≠ phase_attaque → "
+               f"no battle happened, returning None (no surrender)", tag='warning')
         return None
 
     surrendered = False
@@ -117,7 +118,7 @@ def wait_for_battle_end(env):
         surrendered = True
         min_wait = NO_TROOPS_MIN_WAIT
         if env.verbose:
-            print(f" Active retreat → reduced wait ({min_wait:.0f}s min)")
+            pp(f" Active retreat → reduced wait ({min_wait:.0f}s min)", tag='retreat')
     else:
         min_wait = 15.0 if env._phase == 'combat' else 30.0
 
@@ -131,11 +132,11 @@ def wait_for_battle_end(env):
         state, confidence, img_pil = env._get_screen_state()
 
         if env.verbose and int(elapsed) % 10 == 0:
-            print(f" {elapsed:.0f}s — screen: {state} ({confidence:.0%})")
+            pp(f" {elapsed:.0f}s — screen: {state} ({confidence:.0%})", tag='observe')
 
         if state == 'resultats_attaque' and elapsed >= min_wait:
             if env.verbose:
-                print(f" Battle ended after {elapsed:.0f}s")
+                pp(f" Battle ended after {elapsed:.0f}s", tag='done')
             time.sleep(WAIT_RESULT_SCREEN)
             final_img = env._adb_screenshot()
             return final_img if final_img else img_pil
@@ -150,22 +151,24 @@ def wait_for_battle_end(env):
                 green_count = len(green_pos) + len(hero_pos)
 
                 if env.verbose:
-                    print(f" Scan: {len(green_pos)} green, "
-                          f"{len(hero_pos)} heroes → alive={green_count}")
+                    pp(f" Scan: {len(green_pos)} green, "
+                       f"{len(hero_pos)} heroes → alive={green_count}",
+                       tag='scan')
 
                 if green_count <= GREEN_DEAD_THRESHOLD:
                     no_troops_consecutive += 1
                     if env.verbose:
-                        print(f" Below threshold "
-                              f"({no_troops_consecutive}/{NO_TROOPS_CHECKS_THRESHOLD})")
+                        pp(f" Below threshold "
+                           f"({no_troops_consecutive}/{NO_TROOPS_CHECKS_THRESHOLD})",
+                           tag='warning')
                 else:
                     no_troops_consecutive = 0
 
                 if no_troops_consecutive >= NO_TROOPS_CHECKS_THRESHOLD:
                     if env.verbose:
-                        print(f" Troops dead "
-                              f"(green<={GREEN_DEAD_THRESHOLD} "
-                              f"x{NO_TROOPS_CHECKS_THRESHOLD})")
+                        pp(f" Troops dead "
+                           f"(green<={GREEN_DEAD_THRESHOLD} "
+                           f"x{NO_TROOPS_CHECKS_THRESHOLD})", tag='retreat')
                     env._surrender()
                     surrendered = True
                     min_wait = NO_TROOPS_MIN_WAIT
@@ -241,11 +244,17 @@ def finish_episode(env):
     reward = compute_reward(stars, percentage)
 
     if env.verbose:
-        from clashai.config.logging import banner, pp
+        from clashai.config.logging import banner, pp, styled, result_tag
         retreat_str = "  (retreat)" if env._no_troops_count >= NO_TROOPS_CHECKS_THRESHOLD else ""
+        stars_str = styled(f"⭐ {stars}/3", result_tag(stars, 0, 3))
+        pct_str = styled(f"{percentage}%", result_tag(percentage, 0, 100))
+        # Reward: typical range [-50, +300+]. Center 0 = bad, +200+ = great.
+        reward_str = styled(f"{reward:+.0f}", result_tag(reward, -50, 300))
+        label_d = styled("Destruction:", 'banner_label')
+        label_r = styled("Reward:", 'banner_label')
         banner(
             f"RESULTS{retreat_str}",
-            f"⭐ {stars}/3   Destruction: {percentage}%   Reward: {reward:.0f}",
+            f"{stars_str}   {label_d} {pct_str}   {label_r} {reward_str}",
             tag='reward',
         )
         pp(" Returning to village...", tag='observe')

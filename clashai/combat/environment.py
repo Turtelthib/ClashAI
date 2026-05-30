@@ -509,7 +509,8 @@ class ClashEnvV3:
             success: bool (True if buttons were pressed successfully)
         """
         if self.verbose:
-            print(" Surrendering combat...")
+            from clashai.config.logging import pp
+            pp(" Surrendering combat...", tag='retreat')
 
         # 1. Press the white flag (FF button)
         self._adb_tap(*self._ui['ff_button'])
@@ -520,7 +521,8 @@ class ClashEnvV3:
         time.sleep(0.5)
 
         if self.verbose:
-            print(" Retreat confirmed, waiting for results screen...")
+            from clashai.config.logging import pp
+            pp(" Retreat confirmed, waiting for results screen...", tag='retreat')
 
         return True
 

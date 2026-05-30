@@ -809,7 +809,8 @@ class ClashEnvV4(ClashEnvV3):
             path = os.path.join(ep_dir, f'{label}.jpg')
             cv2.imwrite(path, img_cv, [cv2.IMWRITE_JPEG_QUALITY, 90])
             if self.verbose:
-                print(f" Episode capture: {path}")
+                from clashai.config.logging import pp
+                pp(f" Episode capture: {path}", tag='init')
         except Exception as e:
             if self.verbose:
                 print(f" WARNING: episode capture failed: {e}")
