@@ -31,12 +31,6 @@ YOLO_CONF = 0.45
 # higher imgsz with explicit train→infer parity benchmarking.
 YOLO_IMGSZ = 1088
 
-# Counter position differs by screen:
-#   prep_attaque  → top-LEFT  corner of the icon (army selection screen)
-#   phase_attaque → top-RIGHT corner of the icon (battle bar during combat)
-# Expressed as fraction of the bbox size.
-COUNTER_CROP_Y_FRAC = 0.40   # top portion height (same for both)
-
 # Classes that should NEVER be tapped even if detected (deployed siege machines)
 NO_TAP_CLASSES = {
     'demolisseur_deploye', 'dirigeable_deploye', 'broyeur_pierre_deploye',
@@ -61,14 +55,19 @@ UNIQUE_HEROES = {
 
 class TroopBarDetector:
     """
-    YOLO-based troop bar icon detector with counter reading.
+    YOLO-based troop bar icon detector.
 
     Pipeline per frame:
       1. YOLO → bboxes + class names
       2. HSV saturation → is_grayed (depleted/upgrading)
-      3. EasyOCR on counter crop → count (how many left)
 
-    Replaces both TroopFinder (template matching) and TroopCounter (OCR).
+    Returns presence + active/grayed state. EasyOCR-based counter reading
+    was removed Session 13 (counts were unreliable — typical misreads like
+    "sorcier x74" overwrote correct manual-decrement counters and broke
+    the cleanup phase). Counts come from manual decrement in the env;
+    F.3 mini-CNN (planned) will eventually provide reliable counts.
+
+    Replaces TroopFinder (template matching).
     """
 
     def __init__(self, model_path, verbose=False):
@@ -76,16 +75,7 @@ class TroopBarDetector:
         self.model = YOLO(model_path)
         self.verbose = verbose
         self._last_detections = []
-        self._ocr = None  # lazy init — EasyOCR is slow to load
         print(f" TroopBarDetector loaded: {len(self.model.names)} classes")
-
-    def _get_ocr(self):
-        """Lazy-loads EasyOCR reader (only digits, fast inference)."""
-        if self._ocr is None:
-            import easyocr
-            self._ocr = easyocr.Reader(['en'], gpu=True, verbose=False)
-            print(" TroopBarDetector: EasyOCR loaded")
-        return self._ocr
 
     def detect(self, screenshot_pil, screen='combat', prev_counts=None):
         """
@@ -93,11 +83,9 @@ class TroopBarDetector:
 
         Args:
             screenshot_pil: PIL.Image of the full screen (any resolution)
-            screen: 'combat'  → counter at top-RIGHT of icon (battle bar)
-                    'prep'    → counter at top-LEFT  of icon (army selection)
-            prev_counts: dict {name: int} — last known counts (from remaining_troops).
-                         Used as upper bound: OCR reading > prev+2 is rejected.
-                         Enables monotonic validation without any hardcoded limits.
+            screen: kept for API back-compat; no longer affects detection
+                    (was used for OCR crop position, now unused).
+            prev_counts: kept for API back-compat; no longer used.
 
         Returns:
             List of dicts:
@@ -106,7 +94,7 @@ class TroopBarDetector:
                 'bbox':      (x1, y1, x2, y2)
                 'center':    (cx, cy)
                 'conf':      float
-                'count':     int   — number remaining (1 if unreadable)
+                'count':     int   — 0 if grayed, 1 otherwise (presence only)
                 'is_grayed': bool  — depleted/unavailable
                 'no_tap':    bool  — clicking would be destructive
             }
@@ -132,12 +120,9 @@ class TroopBarDetector:
             crop = screenshot_pil.crop((x1, y1, x2, y2))
             is_grayed = self._is_grayed(crop)
 
-            # Read counter — pass prev_count for monotonic validation
-            prev = prev_counts.get(name) if prev_counts else None
-            count = 0 if is_grayed else self._read_count(
-                screenshot_pil, x1, y1, x2, y2, name,
-                screen=screen, prev_count=prev
-            )
+            # Count = presence flag only (OCR removed Session 13).
+            # The env keeps the authoritative count via manual decrement.
+            count = 0 if is_grayed else 1
 
             detections.append({
                 'name':      name,
@@ -179,10 +164,11 @@ class TroopBarDetector:
 
     def to_counts(self, detections=None, prev_counts=None):
         """
-        Returns {name: count} for all active icons.
-        Useful for updating remaining_troops in the environment.
+        Returns {name: count} for all active icons. Since OCR was removed
+        (Session 13), count is presence-based: 1 if visible & active,
+        0 (omitted) if grayed.
 
-        Example: {'golem': 2, 'sorcier': 12, 'soin': 2, 'rage': 3}
+        Args kept for API back-compat.
         """
         if detections is None:
             detections = self._last_detections
@@ -191,96 +177,8 @@ class TroopBarDetector:
         for d in detections:
             if d['is_grayed'] or d['no_tap']:
                 continue
-            name = d['name']
-            # Hero abilities + heroes themselves are always exactly 1 (you
-            # can only have 1 of each in your army) — clamp regardless of OCR
-            if name in NO_COUNTER_CLASSES or name in UNIQUE_HEROES:
-                counts[name] = 1
-            else:
-                counts[name] = max(counts.get(name, 0), d['count'])
-
+            counts[d['name']] = 1
         return counts
-
-    def _read_count(self, screenshot_pil, x1, y1, x2, y2, name, screen='combat',
-                    prev_count=None):
-        """
-        Reads the troop counter ("x2", "x11"...) from the icon.
-
-        Production approach — no hardcoded limits:
-          - 3 preprocessing strategies, consensus vote
-          - Monotonic validation: counts only decrease during combat.
-            If OCR reads > prev_count+2 it's a misread → keep prev_count.
-          - Upper bound = prev_count (set dynamically from remaining_troops)
-        """
-        if name in NO_COUNTER_CLASSES or name in UNIQUE_HEROES:
-            return 1
-
-        w = x2 - x1
-        h = y2 - y1
-        cy2 = y1 + int(h * COUNTER_CROP_Y_FRAC)
-        margin = 4
-
-        if screen == 'prep':
-            crop_x1 = max(0, x1 - margin)
-            crop_x2 = min(screenshot_pil.width, x1 + int(w * 0.45) + margin)
-        else:
-            crop_x1 = max(0, x1 + int(w * 0.55) - margin)
-            crop_x2 = min(screenshot_pil.width, x2 + margin)
-
-        crop = screenshot_pil.crop((
-            crop_x1,
-            max(0, y1 - margin),
-            crop_x2,
-            min(screenshot_pil.height, cy2 + margin),
-        ))
-
-        if crop.width < 8 or crop.height < 8:
-            return prev_count if prev_count is not None else 1
-
-        try:
-            crop_cv = cv2.cvtColor(np.array(crop), cv2.COLOR_RGB2BGR)
-            crop_cv = cv2.resize(crop_cv, None, fx=4, fy=4,
-                                 interpolation=cv2.INTER_CUBIC)
-            gray = cv2.cvtColor(crop_cv, cv2.COLOR_BGR2GRAY)
-
-            # 3 preprocessing strategies for robustness
-            _, s1 = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
-            clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(4, 4))
-            _, s2 = cv2.threshold(clahe.apply(gray), 0, 255,
-                                  cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-            s3 = cv2.bitwise_not(s1)
-
-            ocr = self._get_ocr()
-            candidates = []
-            for preprocessed in (s1, s2, s3):
-                result = ocr.readtext(preprocessed, allowlist='0123456789',
-                                      detail=0, paragraph=False)
-                if result:
-                    text = ''.join(result).strip().lstrip('xX')
-                    if text.isdigit():
-                        val = int(text)
-                        if val > 0:
-                            candidates.append(val)
-
-            if not candidates:
-                return prev_count if prev_count is not None else 1
-
-            from collections import Counter as _Counter
-            best = _Counter(candidates).most_common(1)[0][0]
-
-            # Monotonic validation (no hardcoded limits):
-            # prev_count is the ground truth upper bound.
-            if prev_count is not None and prev_count > 0:
-                if best > prev_count + 2:
-                    return prev_count   # misread — keep last known value
-                return min(best, prev_count)
-
-            return best
-
-        except Exception:
-            pass
-
-        return prev_count if prev_count is not None else 1
 
     def _is_grayed(self, crop_pil):
         """

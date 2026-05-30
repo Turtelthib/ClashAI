@@ -195,18 +195,20 @@ def finish_episode(env):
         episodes out of stats.
     """
     if env.verbose:
+        from clashai.config.logging import pp
         remaining = int(np.sum(env._remaining_troops))
-        print(f"\n Episode over!"
-              f" ({env._step_count} steps,"
-              f" {env._combat_step_count} combat,"
-              f" {remaining} remaining,"
-              f" {env._hero_manager.num_activated()} abilities)")
+        pp(f" Episode over: {env._step_count} steps, "
+           f"{env._combat_step_count} combat, "
+           f"{remaining} remaining, "
+           f"{env._hero_manager.num_activated()} abilities",
+           tag='done')
 
     # Short-circuit for failed navigation — no battle happened.
     if getattr(env, '_nav_failed', False):
         if env.verbose:
-            print(" nav_failed=True → returning neutral reward 0.0 "
-                  "(no -50 penalty, no result read)")
+            from clashai.config.logging import pp
+            pp(" nav_failed=True → returning neutral reward 0.0 "
+               "(no -50 penalty, no result read)", tag='warning')
         info = {
             'stars': 0, 'percentage': 0, 'reward': 0.0,
             'success': False,
@@ -239,14 +241,14 @@ def finish_episode(env):
     reward = compute_reward(stars, percentage)
 
     if env.verbose:
-        retreat_str = " (retreat)" if env._no_troops_count >= NO_TROOPS_CHECKS_THRESHOLD else ""
-        print(f"\n RESULTS{retreat_str}:")
-        print(f" * Stars: {stars}/3")
-        print(f" Percentage: {percentage}%")
-        print(f" Reward: {reward:.0f}")
-
-    if env.verbose:
-        print(" Returning to village...")
+        from clashai.config.logging import banner, pp
+        retreat_str = "  (retreat)" if env._no_troops_count >= NO_TROOPS_CHECKS_THRESHOLD else ""
+        banner(
+            f"RESULTS{retreat_str}",
+            f"⭐ {stars}/3   Destruction: {percentage}%   Reward: {reward:.0f}",
+            tag='reward',
+        )
+        pp(" Returning to village...", tag='observe')
     env._return_to_village()
 
     info = {

@@ -408,8 +408,12 @@ class ClashEnvV4(ClashEnvV3):
             self._combat_step_count += 1
 
         if self.verbose:
+            from clashai.config.logging import pp
             sh = f" ({shaping:+.0f})" if shaping != 0 else ""
-            print(f" Step {self._step_count:2d} [{action_type}]: {action_desc}{sh}")
+            tag = action_type if action_type in (
+                'deploy', 'spell', 'ability', 'observe', 'done'
+            ) else 'wait' if action_type.startswith('wait') else 'step'
+            pp(f" Step {self._step_count:2d} [{action_type}]: {action_desc}{sh}", tag=tag)
 
         # V4.3: periodic rescan removed — TroopBarDetector runs every frame
         # in PerceptionThread, and _sync_remaining_from_perception() is called
@@ -582,17 +586,14 @@ class ClashEnvV4(ClashEnvV3):
         V4.3 — sync `_remaining_troops` with the YOLO troop bar detector
         running in PerceptionThread. Replaces the periodic `rescan()` call.
 
-        For each detected slot:
-          - is_grayed → that troop is depleted, force count = 0
-          - active   → use the OCR count (with hero hardcap at 1)
-
-        Manual decrement after each deploy still happens; this just corrects
-        drift when YOLO+OCR sees a different reality.
+        Session 13 cleanup: OCR-based count overwrite removed (counts
+        were unreliable, e.g. "sorcier x74" misreads corrupted the
+        correct manual-decrement counters and broke the cleanup phase).
+        Now we only use YOLO's `is_grayed` signal to detect depletion;
+        manual decrement after each deploy remains the authoritative
+        source of remaining counts.
         """
         if not troop_bar_detections:
-            return
-        bar = self.models.get('troop_bar_detector') if self.models else None
-        if bar is None:
             return
 
         try:
@@ -600,29 +601,12 @@ class ClashEnvV4(ClashEnvV3):
         except ImportError:
             ALIAS_MAP = {}
 
-        # Set of names actually visible in the bar (post-grey filter)
-        visible_active = set()
         for d in troop_bar_detections:
-            if d.get('no_tap'):
+            if d.get('no_tap') or not d.get('is_grayed'):
                 continue
             name = ALIAS_MAP.get(d['name'], d['name'])
-            if name not in TROOP_NAME_TO_IDX:
-                continue
-            idx = TROOP_NAME_TO_IDX[name]
-            if d.get('is_grayed'):
-                self._remaining_troops[idx] = 0
-            else:
-                visible_active.add(name)
-
-        # Counts (with hero hardcap inside to_counts())
-        try:
-            counts = bar.to_counts(troop_bar_detections)
-        except Exception:
-            counts = {}
-        for raw_name, cnt in counts.items():
-            name = ALIAS_MAP.get(raw_name, raw_name)
             if name in TROOP_NAME_TO_IDX:
-                self._remaining_troops[TROOP_NAME_TO_IDX[name]] = float(cnt)
+                self._remaining_troops[TROOP_NAME_TO_IDX[name]] = 0
 
     def _update_combat_observation(self):
         """

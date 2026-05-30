@@ -63,16 +63,15 @@ def main():
     if args.test:
         mode = 'test (diagnostic, 1 ep)'
 
-    print(f"\n{'='*60}")
-    print(" ClashAI V4 — Entraînement RL")
-    print(f" Mode : {mode}")
-    print(f" Episodes : {args.episodes}")
-    print(f" Actions : {TOTAL_ACTIONS}")
-    print(f" Vector : {VECTOR_SIZE} dims")
-    print(f"{'='*60}\n")
+    from clashai.config.logging import banner, section
+    banner(
+        f"ClashAI V4 — Entraînement RL",
+        f"Mode: {mode}  |  Episodes: {args.episodes}  |  "
+        f"Actions: {TOTAL_ACTIONS}  |  Vector: {VECTOR_SIZE} dims",
+    )
 
     # Load perception models
-    print("Chargement des modèles de perception...")
+    section("Loading perception models")
     from clashai.navigation import game_loop
     models = game_loop.load_models()
 
@@ -199,10 +198,11 @@ def main():
     # Training loop (heuristic or PPO)
     # =====================================================================
     for episode in range(1, args.episodes + 1):
-        print(f"\n{'='*60}")
-        print(f"  Épisode {episode}/{args.episodes}")
-        print(f" {datetime.now().strftime('%H:%M:%S')}")
-        print(f"{'='*60}")
+        banner(
+            f"Épisode {episode}/{args.episodes}",
+            datetime.now().strftime('%H:%M:%S'),
+            tag='section',
+        )
 
         # V4.1 + F.2: request CC troops only when on village_home and the
         # cooldown has actually passed. Without the screen check the call

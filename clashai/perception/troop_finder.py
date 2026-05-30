@@ -84,7 +84,11 @@ class TroopFinder:
         self.templates = {}
         self.positions = {}
         self._detector = detector  # TroopBarDetector — YOLO primary, template matching fallback
-        self._load_templates()
+        # Session 13 cleanup: only load template images if no YOLO detector
+        # is wired. When TroopBarDetector is present (V4.3+), templates are
+        # never consulted — loading them just spams the startup log.
+        if self._detector is None:
+            self._load_templates()
 
     def _load_templates(self):
         """Loads all templates from the troop_templates/ folder."""

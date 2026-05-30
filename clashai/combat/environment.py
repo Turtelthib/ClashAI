@@ -1001,9 +1001,8 @@ class ClashEnvV3:
         self._step_rewards = []
 
         if self.verbose:
-            print(f"\n{'='*60}")
-            print(f" EPISODE #{self._episode_count} — Reset V3")
-            print(f"{'='*60}")
+            from clashai.config.logging import section
+            section(f"EPISODE #{self._episode_count} — Reset V3")
 
         # Human-like behaviour between episodes
         if self._episode_count > 1:
