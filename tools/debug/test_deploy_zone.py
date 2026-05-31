@@ -1,10 +1,10 @@
-# tools/test_deploy_zone.py
+# tools/debug/test_deploy_zone.py
 # Quick test for the new wall-segmentation-based deploy zone.
 # Takes a live ADB screenshot, runs yolo_walls_seg, draws the result.
 #
 # Usage (on an enemy village screen, before attacking):
-#   uv run python tools/test_deploy_zone.py
-#   uv run python tools/test_deploy_zone.py --image path/to/screenshot.png
+#   uv run python tools/debug/test_deploy_zone.py
+#   uv run python tools/debug/test_deploy_zone.py --image path/to/screenshot.png
 
 import os
 import sys
@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
 from clashai.paths import WEIGHTS_DIR, ADB_DEVICE

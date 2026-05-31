@@ -14,12 +14,16 @@ import numpy as np
 # HSV saturation below this threshold = icon is grayed out (depleted/upgrading)
 GRAYED_SAT_THRESHOLD = 30
 
-# Confidence threshold for YOLO detection
-YOLO_CONF = 0.45
+# Confidence threshold for YOLO detection.
+# Session 13: lowered 0.45 → 0.40 after validating on real training frames.
+# At 0.45, borderline icons (e.g. golem @ 0.41) were dropped → the agent
+# missed troops the manual tool found. 0.40 catches all without false
+# positives (the troop bar is a controlled UI region). 0.50 starts missing.
+YOLO_CONF = 0.40
 # Inference image size.
 #
 # Session 13 finding: setting this to 1600 (the value in
-# tools/train_yolo_troop_bar.py::IMG_SIZE) TANKED detection — only 0-1
+# tools/train/train_yolo_troop_bar.py::IMG_SIZE) TANKED detection — only 0-1
 # icons found out of ~9 visible. At default 640 we recover 9/9 detections.
 # Likely cause: double-resize (WGC 2451x1411 → LANCZOS 1920x1080 → YOLO
 # letterbox 1600x1600) blurs small icons, OR the checkpoint was actually
@@ -98,10 +102,16 @@ class TroopBarDetector:
                 'no_tap':    bool  — clicking would be destructive
             }
         """
-        img_arr = np.array(screenshot_pil)
-        results = self.model.predict(
-            img_arr, conf=YOLO_CONF, imgsz=YOLO_IMGSZ, verbose=False
-        )
+        # CRITICAL (Session 13): pass the PIL image directly, NOT np.array(pil).
+        # Ultralytics reads a numpy array as BGR (cv2 convention) but PIL as
+        # RGB. Feeding np.array(rgb_pil) swapped the R/B channels → systematic
+        # misclassification of color-dependent icons (gel↔poison, soin↔clone,
+        # championne missed). PIL input keeps the channels correct.
+        from clashai.perception.inference_lock import INFERENCE_LOCK
+        with INFERENCE_LOCK:
+            results = self.model.predict(
+                screenshot_pil, conf=YOLO_CONF, imgsz=YOLO_IMGSZ, verbose=False
+            )
 
         detections = []
         r = results[0]

@@ -1,15 +1,15 @@
-# tools/debug_screen_cnn.py
+# tools/debug/debug_screen_cnn.py
 # Shows exactly what the screen CNN sees and what it classifies.
 # Run this to diagnose screen classification issues.
 #
 # Usage:
-#   uv run python tools/debug_screen_cnn.py
+#   uv run python tools/debug/debug_screen_cnn.py
 
 import os, sys, json, torch
 from torchvision import transforms
 from PIL import Image
 
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
 from clashai.paths import WEIGHTS_DIR

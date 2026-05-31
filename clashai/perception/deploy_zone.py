@@ -31,7 +31,7 @@ from clashai.config import ADB_WIDTH, ADB_HEIGHT  # noqa: E402
 # UI exclusion zones (in ADB coordinates 1920×1080)
 # Taps in these zones trigger buttons instead of deploying troops
 # YOLO walls segmentation trained at imgsz=640 (see
-# tools/train_yolo_walls_seg.py DEFAULT_IMG_SIZE). Set explicitly so a
+# tools/train/train_yolo_walls_seg.py DEFAULT_IMG_SIZE). Set explicitly so a
 # future retrain at 1280/1600 only requires bumping this constant.
 YOLO_WALLS_IMGSZ = 640
 
@@ -639,7 +639,9 @@ def get_perimeter_from_walls(screenshot_pil, yolo_walls_model,
     if yolo_walls_model is None:
         return None, fallback_center, False
 
-    img_arr = np.array(screenshot_pil)
+    # BGR for ultralytics (it reads numpy as BGR). np.array(pil) is RGB,
+    # so convert — otherwise R/B channels are swapped at inference.
+    img_arr = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
     img_h, img_w = img_arr.shape[:2]
     scale_x = ADB_WIDTH / img_w
     scale_y = ADB_HEIGHT / img_h

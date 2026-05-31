@@ -32,7 +32,7 @@ SCREEN_CONFIDENCE_THRESHOLD = 0.60
 BUILDING_CONFIDENCE_THRESHOLD = 0.50
 YOLO_CONF = 0.25
 YOLO_IOU = 0.50
-# YOLO buildings was trained at imgsz=1600 (see tools/train_yolo_buildings.py).
+# YOLO buildings was trained at imgsz=1600 (see tools/train/train_yolo_buildings.py).
 # Ultralytics defaults to 640 at predict if not specified, halving the input
 # resolution and degrading detection quality.
 YOLO_BUILDINGS_IMGSZ = 1600
@@ -60,7 +60,7 @@ def load_models():
 
     if not os.path.exists(screen_classes_path) or not os.path.exists(screen_weights_path):
         print("ERROR: cnn_screen_classification.pt or screen_classes.json not found!")
-        print(" Run: uv run python tools/train_screen_cnn.py")
+        print(" Run: uv run python tools/train/train_screen_cnn.py")
         sys.exit(1)
 
     with open(screen_classes_path) as f:
@@ -164,8 +164,9 @@ def classify_screen(img_pil, models):
     Determines the current screen state.
     Returns (state, confidence).
     """
+    from clashai.perception.inference_lock import INFERENCE_LOCK
     tensor = screen_transform(img_pil).unsqueeze(0).to(DEVICE)
-    with torch.no_grad():
+    with INFERENCE_LOCK, torch.no_grad():
         outputs = models['screen_cnn'](tensor)
         probs = torch.softmax(outputs, dim=1)
         idx = torch.argmax(probs, dim=1).item()
@@ -180,12 +181,16 @@ def analyze_village(img_pil, models):
     Detects and classifies all buildings in the image.
     Returns a list of dicts {class, confidence, bbox, center}.
     """
-    # YOLO detection
+    # YOLO detection — pass PIL directly. Ultralytics reads a numpy array
+    # as BGR but a PIL image as RGB; np.array(rgb_pil) would swap R/B
+    # channels. img_np is kept only for the clamp bounds below.
     img_np = np.array(img_pil)
-    results = models['yolo'].predict(
-        img_np, conf=YOLO_CONF, iou=YOLO_IOU,
-        imgsz=YOLO_BUILDINGS_IMGSZ, verbose=False,
-    )
+    from clashai.perception.inference_lock import INFERENCE_LOCK
+    with INFERENCE_LOCK:
+        results = models['yolo'].predict(
+            img_pil, conf=YOLO_CONF, iou=YOLO_IOU,
+            imgsz=YOLO_BUILDINGS_IMGSZ, verbose=False,
+        )
     
     buildings = []
     for box in results[0].boxes:
@@ -200,7 +205,8 @@ def analyze_village(img_pil, models):
         crop = img_pil.crop((x1, y1, x2, y2))
         tensor = building_transform(crop).unsqueeze(0).to(DEVICE)
 
-        with torch.no_grad():
+        from clashai.perception.inference_lock import INFERENCE_LOCK
+        with INFERENCE_LOCK, torch.no_grad():
             outputs = models['building_cnn'](tensor)
             probs = torch.softmax(outputs, dim=1)
             idx = torch.argmax(probs, dim=1).item()

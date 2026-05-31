@@ -1,12 +1,12 @@
-# tools/collect_digit_crops.py
+# tools/data/collect_digit_crops.py
 # Phase F.3 step 1 : walk every logs/episode_*/ frame, run YOLO troop bar
 # on it, crop the count badge for each (countable) detection, and save
 # the crop to needLabelisation/digits/. The labelisation pass (manual or
 # semi-auto) comes next.
 #
 # Run:
-#   uv run python tools/collect_digit_crops.py
-#   uv run python tools/collect_digit_crops.py --logs-dir logs --out needLabelisation/digits --limit 200
+#   uv run python tools/data/collect_digit_crops.py
+#   uv run python tools/data/collect_digit_crops.py --logs-dir logs --out needLabelisation/digits --limit 200
 #
 # What gets cropped:
 #   For each YOLO troop bar detection that is NOT in NO_COUNTER_CLASSES

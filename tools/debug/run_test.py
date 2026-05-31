@@ -1,15 +1,15 @@
-# tools/run_test.py
+# tools/debug/run_test.py
 # Diagnostic test — runs 1 attack episode and saves annotated captures
 # at key moments to logs/test_run/ so you can visually verify every CNN.
 #
 # Usage:
-#   uv run python tools/run_test.py
+#   uv run python tools/debug/run_test.py
 
 import os
 import sys
 import time
 
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
 OUT_DIR = os.path.join(project_root, 'logs', 'test_run')

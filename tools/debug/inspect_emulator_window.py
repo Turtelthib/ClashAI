@@ -1,10 +1,10 @@
-# tools/inspect_emulator_window.py
+# tools/debug/inspect_emulator_window.py
 # Diagnostic: inspect the emulator window's child window hierarchy and
 # PrintWindow-capture each candidate, so we can see which HWND actually
 # contains the rendered game (parent vs Crosvm/DirectX child).
 #
 # Run:
-#   uv run python tools/inspect_emulator_window.py
+#   uv run python tools/debug/inspect_emulator_window.py
 #
 # Outputs:
 #   _inspect_<hwnd>_<class>.png  — one per candidate HWND

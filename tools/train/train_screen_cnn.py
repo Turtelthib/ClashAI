@@ -1,4 +1,4 @@
-# tools/train_screen_cnn.py
+# tools/train/train_screen_cnn.py
 # Screen state CNN training.
 # Uses the project's MyCustomCNN — simple, fast, proven working.
 # Add more images to datasets/dataset_screen/<class>/ then retrain.

@@ -1,10 +1,10 @@
-# tools/capture_screen_state.py
+# tools/data/capture_screen_state.py
 # Captures screenshots for a specific screen state class.
 # Saves to datasets/dataset_screen/<state>/
 #
 # Usage:
-#   uv run python tools/capture_screen_state.py --state recherche_adversaire
-#   uv run python tools/capture_screen_state.py --state gdc_ended
+#   uv run python tools/data/capture_screen_state.py --state recherche_adversaire
+#   uv run python tools/data/capture_screen_state.py --state gdc_ended
 #
 # Navigate to the target screen in CoC, then press ENTER to capture.
 # Press Q to quit.
@@ -15,7 +15,7 @@ import time
 import argparse
 from datetime import datetime
 
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
 VALID_STATES = [
@@ -82,7 +82,7 @@ def main():
                 print("  WARNING: capture failed")
 
         print(f"\nDone — {count} images captured ({existing + count} total)")
-        print(f"Retrain: uv run python tools/train_screen_cnn.py")
+        print(f"Retrain: uv run python tools/train/train_screen_cnn.py")
 
 
 if __name__ == '__main__':

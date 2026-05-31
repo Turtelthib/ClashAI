@@ -192,19 +192,19 @@ uv run python -m clashai.brain --mode farm --episodes 1
 
 ```bash
 # Heuristic baseline (no learning)
-uv run python tools/train_rl_v4.py --heuristic --episodes 5
+uv run python tools/train/train_rl_v4.py --heuristic --episodes 5
 
 # Behavioral Cloning pre-training + PPO
-uv run python tools/train_rl_v4.py --pretrain 15 --bc-epochs 15 --episodes 500
+uv run python tools/train/train_rl_v4.py --pretrain 15 --bc-epochs 15 --episodes 500
 
 # Resume from checkpoint
-uv run python tools/train_rl_v4.py --resume --episodes 200
+uv run python tools/train/train_rl_v4.py --resume --episodes 200
 ```
 
 ### YOLO Buildings
 
 ```bash
-uv run python tools/train_yolo_buildings.py
+uv run python tools/train/train_yolo_buildings.py
 # Config: configs/coc.yaml — 48 classes
 # Output: runs/detect/FinishedTrain/weights/best.pt → weights/best.pt
 ```
@@ -212,7 +212,7 @@ uv run python tools/train_yolo_buildings.py
 ### YOLO Troops
 
 ```bash
-uv run python tools/train_yolo_troops.py --epochs 300 --batch 16
+uv run python tools/train/train_yolo_troops.py --epochs 300 --batch 16
 # Config: configs/coc_troops.yaml — 13 classes
 # Output: weights/yolo_troops.pt
 ```
@@ -220,7 +220,7 @@ uv run python tools/train_yolo_troops.py --epochs 300 --batch 16
 ### Screen Classifier CNN
 
 ```bash
-uv run python tools/train_screen_cnn.py
+uv run python tools/train/train_screen_cnn.py
 # Dataset: datasets/screen_states/
 # Output: weights/screen_cnn.pth
 ```
@@ -229,7 +229,7 @@ uv run python tools/train_screen_cnn.py
 
 ```bash
 # Capture live screenshots during combat for training data
-uv run python tools/capture_combat.py --max 300 --interval 2.0
+uv run python tools/data/capture_combat.py --max 300 --interval 2.0
 ```
 
 ---

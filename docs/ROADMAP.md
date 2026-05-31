@@ -37,7 +37,7 @@
 - [x] Pré-entraîner le PPO sur les épisodes heuristiques (behavioral cloning) — `agent_v4.py` + `train_rl_v4.py`
 - [x] Relancer 5 épisodes heuristiques avec les fixes V4.1 pour une nouvelle baseline
 - [x] **Run V4.1 de validation** : 192 épisodes PPO + 15 BC — ⭐ moy 1.34 (vs 1.16), 2+⭐ rate 42.7% (vs 29.3%), 0⭐ rate 19.3% (vs 25%). BC fonctionne (1.76⭐ sur ep 1-25), PPO plafonne ensuite → phases rigides sont le limitant → passer à V4.2
-- [x] Commande : `uv run python tools/train_rl_v4.py --pretrain 15 --episodes 200`
+- [x] Commande : `uv run python tools/train/train_rl_v4.py --pretrain 15 --episodes 200`
 
 ### Stratégie d'entraînement (décidée Session 7)
 
@@ -150,7 +150,7 @@
 - [x] `_update_combat_observation()` lit depuis le cache (non-bloquant)
 - [x] `DELAY_OBSERVE` 2.5s → 0.15s
 - [x] Délais deploy réduits (~65% plus rapide) : DELAY_SWITCH_TROOP, DELAY_DEPLOY, ADB_DELAY_TAP
-- [x] YOLO barre de troupes — 78 classes, `tools/train_yolo_troop_bar.py` (Kaggle-ready)
+- [x] YOLO barre de troupes — 78 classes, `tools/train/train_yolo_troop_bar.py` (Kaggle-ready)
 - [x] `TroopBarDetector` + filtre HSV grisé — `clashai/perception/troop_bar_detector.py`
 - [x] `TroopFinder.update()` → YOLO en priorité, template matching en fallback
 - [x] Chargé dans `load_models()` + `perception_thread` → détection fréquente sans bloquer
@@ -158,10 +158,10 @@
 ### Reste à faire (V4.3)
 
 - [x] **Bug séquence de récupération** : séquence **supprimée** purement et simplement (pas remplacée par un sleep). Testé : l'agent ne panique plus quand il rencontre un état imprévu, il continue son flow normal
-- [x] **Debug overlay basique** : flag `--debug-overlay` dans `tools/train_rl_v4.py`, `_save_debug_overlay()` dans `clashai/combat/environment_v4.py` save `logs/episode_N/tXs.jpg` à chaque `observe`. Vu en run Session 12 : `Episode capture: logs\episode_0001\t0s.jpg`. La version Phase D détaillée (village_home.png / prep_attaque.png / debut_attaque.png / attaque_30s.png avec bboxes annotées colorées) est l'objet du mode `--test` (item suivant, à faire)
+- [x] **Debug overlay basique** : flag `--debug-overlay` dans `tools/train/train_rl_v4.py`, `_save_debug_overlay()` dans `clashai/combat/environment_v4.py` save `logs/episode_N/tXs.jpg` à chaque `observe`. Vu en run Session 12 : `Episode capture: logs\episode_0001\t0s.jpg`. La version Phase D détaillée (village_home.png / prep_attaque.png / debut_attaque.png / attaque_30s.png avec bboxes annotées colorées) est l'objet du mode `--test` (item suivant, à faire)
 - [x] **OCR compteurs** : EasyOCR dans `TroopBarDetector._read_count()` — crop top-RIGHT (combat) ou top-LEFT (prep) selon l'écran, upscale ×3 + threshold → lecture du chiffre. `to_counts()` → `{name: count}`. `TroopManager.rescan()` utilise YOLO+OCR en priorité, legacy en fallback.
 - [x] **Fix capture fenêtre émulateur occluded** (Session 12) — voir bloc dédié ci-dessous
-- [x] **Mode `--test`** (Session 12) : `uv run python tools/train_rl_v4.py --test` lance 1 épisode heuristique et sauvegarde 5 captures annotées dans `logs/test_run/` : `village_home.png` (état CNN), `prep_attaque.png` (+ barre troupes YOLO + compteurs OCR), `debut_attaque.png` (+ bboxes bâtiments colorées par catégorie + hull deploy + points numérotés), `attaque_30s.png` / `attaque_60s.png` (+ bâtiments détruits surlignés en croix rouge + troupes YOLO combat). Module : `clashai/perception/test_run_capture.py::TestRunCapture`. Hooks dans `environment_v4.py` (`_get_screen_state` override + `_update_combat_observation`). Rapport `[OK]/[--]` à la fin pour voir quelles captures ont été atteintes
+- [x] **Mode `--test`** (Session 12) : `uv run python tools/train/train_rl_v4.py --test` lance 1 épisode heuristique et sauvegarde 5 captures annotées dans `logs/test_run/` : `village_home.png` (état CNN), `prep_attaque.png` (+ barre troupes YOLO + compteurs OCR), `debut_attaque.png` (+ bboxes bâtiments colorées par catégorie + hull deploy + points numérotés), `attaque_30s.png` / `attaque_60s.png` (+ bâtiments détruits surlignés en croix rouge + troupes YOLO combat). Module : `clashai/perception/test_run_capture.py::TestRunCapture`. Hooks dans `environment_v4.py` (`_get_screen_state` override + `_update_combat_observation`). Rapport `[OK]/[--]` à la fin pour voir quelles captures ont été atteintes
 - [ ] Tester + valider en conditions réelles, ajuster conf YOLO si faux positifs
 - [x] **Fix demande de troupes château de clan** (Session 13, **5 bugs**) :
   - `verbose=False` sur le CC manager → toutes les failures silencieuses (CC pas trouvé, cooldown, CC FULL — aucun log visible). Fix : `verbose=True`.
@@ -212,22 +212,22 @@
 uv run python -c "from clashai.perception.screen_capture import ScreenCapture; c = ScreenCapture(); print('backend=', c.backend); img = c.grab(); img.save('_wgc_smoketest.png') if img else print('FAIL')"
 
 # Test interactif 3 scénarios (visible / derrière / au choix)
-uv run python tools/test_screen_capture.py
+uv run python tools/debug/test_screen_capture.py
 
 # Diagnostic complet : énumère parent + tous les enfants, PrintWindow sur chacun
-uv run python tools/inspect_emulator_window.py
+uv run python tools/debug/inspect_emulator_window.py
 ```
 
 **Si WGC casse encore**
 1. Vérifier que la fenêtre émulateur n'est pas minimisée (`uv run python -c "import ctypes; print(ctypes.windll.user32.IsIconic(<hwnd>))"`)
 2. Vérifier que `windows-capture` est bien installé (`uv pip list | grep windows-capture`)
 3. Lire le log d'init : si `WGC backend (XXX)` montre un titre suspect (VS Code, navigateur), ajouter une exclusion dans `EXCLUDED_TITLE_SUBSTRINGS`
-4. Lancer `tools/inspect_emulator_window.py` → si TOUTES les fenêtres enfants capturent l'écran, l'émulateur a changé sa pile de rendu → vérifier la doc `windows-capture` pour un mode alternatif
+4. Lancer `tools/debug/inspect_emulator_window.py` → si TOUTES les fenêtres enfants capturent l'écran, l'émulateur a changé sa pile de rendu → vérifier la doc `windows-capture` pour un mode alternatif
 
 ### Mode `--test` (diagnostic visuel — à implémenter)
 
 ```
-uv run python tools/train_rl_v4.py --test
+uv run python tools/train/train_rl_v4.py --test
 ```
 
 Lance exactement **1 épisode** (pas d'entraînement PPO) avec captures annotées sauvegardées dans `logs/test_run/` :
@@ -253,9 +253,9 @@ Objectif : valider visuellement que **tous les CNN voient correctement** avant d
 > **Objectif** : clore proprement le cluster V4 avec les derniers irritants de perception, puis lancer un gros run de validation avant d'attaquer la refonte architecturale V5.
 
 - [ ] **Mini CNN classificateur de chiffres** (remplace EasyOCR pour compteurs troop bar) — découpé en 4 phases :
-  - [x] **Phase 1** (Session 13) : tool de collecte `tools/collect_digit_crops.py` — walk `logs/episode_*/` + `logs/test_run/`, run YOLO troop bar sur chaque jpg, crop le badge compteur de chaque détection countable (skip héros + abilities + siege déployés), save dans `needLabelisation/digits/<class>_<frameid>_<bbox>_<position>.png`. **Mode `--position auto` (défaut)** classifie l'écran source (CNN screen) et crop UNIQUEMENT la position pertinente : `prep_attaque` → badge top-LEFT, `phase_attaque` → badge top-RIGHT. Mode `--position both` disponible pour max recall (mais 50% des crops sont vides). Idempotent. Commande : `uv run python tools/collect_digit_crops.py --limit 200`
+  - [x] **Phase 1** (Session 13) : tool de collecte `tools/data/collect_digit_crops.py` — walk `logs/episode_*/` + `logs/test_run/`, run YOLO troop bar sur chaque jpg, crop le badge compteur de chaque détection countable (skip héros + abilities + siege déployés), save dans `needLabelisation/digits/<class>_<frameid>_<bbox>_<position>.png`. **Mode `--position auto` (défaut)** classifie l'écran source (CNN screen) et crop UNIQUEMENT la position pertinente : `prep_attaque` → badge top-LEFT, `phase_attaque` → badge top-RIGHT. Mode `--position both` disponible pour max recall (mais 50% des crops sont vides). Idempotent. Commande : `uv run python tools/data/collect_digit_crops.py --limit 200`
   - [ ] **Phase 2** : labelisation (manuelle ou semi-auto avec EasyOCR comme 1ère estimation). Cible : 500-1000 crops annotés, split 80/20 train/val.
-  - [ ] **Phase 3** : entraîner un mini CNN (LeNet ou MobileNetV3-Small, ~50-200k params, 100 classes 0-99 ou regression). Notebook ou `tools/train_digit_cnn.py`.
+  - [ ] **Phase 3** : entraîner un mini CNN (LeNet ou MobileNetV3-Small, ~50-200k params, 100 classes 0-99 ou regression). Notebook ou `tools/train/train_digit_cnn.py`.
   - [ ] **Phase 4** : intégrer dans `TroopBarDetector._read_count()` avec fallback EasyOCR si confiance basse.
   - **Pourquoi** : EasyOCR est générique et peu fiable sur les petits badges blanc/noir des icônes. Le `snapshot OCR + manual decrement` ne marche pas non plus car parfois l'agent tape hors zone de déploiement → la troupe n'est PAS déployée mais le compteur manuel décrémente → drift inverse.
 - [x] **Fix `Fatal Python error: PyInterpreterState_Delete: remaining threads`** au Ctrl+C (Session 12)
@@ -273,11 +273,38 @@ Objectif : valider visuellement que **tous les CNN voient correctement** avant d
     | walls seg | `YOLO_WALLS_IMGSZ` | 640 | `deploy_zone.py` | Default Ultralytics |
 
   **📜 Historique imgsz troop bar**
-  - 1ère tentative : ROADMAP avait noté `1600` (cf `tools/train_yolo_troop_bar.py::IMG_SIZE`) → en prod le YOLO ne trouvait que 0-1 icônes / 9 (conf~0.39). Cause probable : double-resize WGC 2451x1411 → LANCZOS 1920x1080 → YOLO letterbox 1600x1600 trop blur.
+  - 1ère tentative : ROADMAP avait noté `1600` (cf `tools/train/train_yolo_troop_bar.py::IMG_SIZE`) → en prod le YOLO ne trouvait que 0-1 icônes / 9 (conf~0.39). Cause probable : double-resize WGC 2451x1411 → LANCZOS 1920x1080 → YOLO letterbox 1600x1600 trop blur.
   - 2ème tentative (Session 13) : revert à `640` (default Ultralytics) → 9/9 détections (conf 0.35-0.96). Empiriquement OK mais qualité moyenne.
   - 3ème tentative (Session 13, fin) : retrain dédié à `imgsz=1088` → mieux que 640 mais pas encore parfait. Le modèle mérite plus de data / plus d'epochs (item séparé hors refactor).
 - [x] **Fix demande de troupes château de clan** (Session 13, fait — voir détail dans V4.3)
 - [ ] **Bug `grand_gardien` tap mode toggle** (à fixer côté data, pas code) : le bouton vert mode air/sol sur l'icône du GG n'a pas de classe YOLO dédiée → bbox `grand_gardien` inclut ce bouton → le tap au centre du bbox peut tomber sur le toggle au lieu de l'icône à déployer. **Fix recommandé** : retrain YOLO troop bar avec une nouvelle classe `grand_gardien_mode` (ou `mode_toggle_generic` partagé entre héros). Log diagnostic ajouté dans `troop_finder.select()` (warning si y hors range 950-1080).
+- [x] **Conf YOLO troop bar 0.45 → 0.40** (Session 13) : 0.45 était pile sur le fil (golem @ 0.41 droppé). Validé empiriquement sur vraies frames : 0.40 = rien loupé, 0.50 = ça loupe. `YOLO_CONF` dans `troop_bar_detector.py` + défaut du tool `detect_troop_bar.py`.
+
+### 🔧 Bug RGB/BGR inversé sur l'input YOLO (Session 13) — LE vrai bug
+
+> Si une détection YOLO se trompe systématiquement sur des classes dépendantes de la couleur (gel↔poison, soin↔clone, troupes mal classées) alors que le tool manuel `detect_troop_bar.py` sur la MÊME image est parfait → relire ce bloc.
+
+**Symptôme**
+- Détection troop bar fausse de façon **systématique** sur les classes couleur : `gel` (bleu) ↔ `poison` (violet), `soin` (jaune) ↔ `clone` (violet), championne manquée
+- Le tool manuel `tools/debug/detect_troop_bar.py` sur exactement la même image → 100% correct
+- Même modèle + conf + imgsz + image → résultats différents
+
+**Cause racine**
+- **Ultralytics lit un `np.ndarray` comme du BGR** (convention cv2), mais un `PIL.Image` comme du RGB.
+- La prod faisait `model.predict(np.array(screenshot_pil))` → envoie des octets **RGB** que YOLO interprète comme **BGR** → **canaux Rouge/Bleu inversés** → classes couleur confondues.
+- Le tool manuel faisait `model.predict(img_pil)` (PIL) → canaux corrects → toujours bon.
+- La SEULE différence de code entre les deux chemins = `np.array(pil)` vs `pil`. C'était ça.
+
+**Solution (en place)**
+- Passer le `PIL.Image` directement à `.predict()` (ultralytics gère le RGB) — JAMAIS `np.array(pil)` brut.
+- Corrigé dans : `troop_bar_detector.detect` + `analyze_village` (YOLO bâtiments).
+- Déjà corrects : `troop_detector.detect` (passe PIL), `deploy_zone` walls (`cv2.cvtColor(..., RGB2BGR)` explicite avant predict).
+- **Règle** : pour passer un numpy à ultralytics, TOUJOURS le convertir en BGR (`cv2.cvtColor(arr, COLOR_RGB2BGR)`). Sinon passer le PIL directement.
+
+**Bonus défensif — verrou d'inférence**
+- `clashai/perception/inference_lock.py` : `INFERENCE_LOCK = threading.RLock()` global, acquis autour de chaque appel modèle (`classify_screen`, `analyze_village`, building CNN, `troop_bar_detector.detect`, `troop_detector.detect`).
+- Raison : les modèles ultralytics/torch ne sont pas thread-safe. Le `PerceptionThread` (fond) et `test_run_capture` (`--test`, thread principal) appellent les mêmes objets → on sérialise par sécurité. (Ce n'était pas LE bug couleur, mais c'est une bonne pratique pour le multi-agents V5.)
+- [ ] **Migration capacités héros : template matching → CNN** (À FAIRE AVANT LE GROS RUN). Actuellement `clashai/combat/hero_ability.py` détecte les abilities dispo via `cv2.matchTemplate` (5 templates `ability_*.png`). Le YOLO troop bar connaît déjà les classes `*_capa` (`roi_capa`, `reine_capa`, `grand_gardien_capa`, `championne_capa`, `prince_gargouille_capa`, `duc_draconique_capa`). Migrer `hero_ability.scan()` pour lire ces détections depuis le `PerceptionThread` au lieu du template matching → plus robuste, plus rapide, un détecteur de moins à maintenir. Supprimer ensuite le chargement des templates `ability_*.png` (le log `5 ability templates loaded`).
 - [ ] **Gros run V4 final** : 300-500 épisodes une fois tous les fixes ci-dessus en place. Baseline solide avant V5.
 
 ---

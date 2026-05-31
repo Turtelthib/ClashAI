@@ -1,4 +1,4 @@
-# tools/capture_troop_bar.py
+# tools/data/capture_troop_bar.py
 # Dataset capture tool for the troop bar YOLO model.
 #
 # Captures full screenshots and saves them to data_source/troop_bar/.
@@ -7,9 +7,9 @@
 #   - During combat (progressive depletion, some grayed)
 #
 # Usage:
-#   uv run python tools/capture_troop_bar.py
-#   uv run python tools/capture_troop_bar.py --interval 1.0
-#   uv run python tools/capture_troop_bar.py --max 200
+#   uv run python tools/data/capture_troop_bar.py
+#   uv run python tools/data/capture_troop_bar.py --interval 1.0
+#   uv run python tools/data/capture_troop_bar.py --max 200
 
 import os
 import sys
@@ -17,7 +17,7 @@ import time
 import argparse
 from datetime import datetime
 
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
 OUTPUT_DIR = os.path.join(project_root, 'data_source', 'troop_bar')
@@ -74,7 +74,7 @@ def main():
 
     print(f"\nDone — {count} screenshots saved to {OUTPUT_DIR}")
     print("Next: upload to Roboflow, annotate, export YOLO Detection format to datasets/troop_bar/")
-    print("Then: uv run python tools/train_yolo_troop_bar.py")
+    print("Then: uv run python tools/train/train_yolo_troop_bar.py")
 
 
 if __name__ == '__main__':

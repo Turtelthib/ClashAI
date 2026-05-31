@@ -1,12 +1,12 @@
-# tools/train_rl_v4.py
+# tools/train/train_rl_v4.py
 # V4 RL training for ClashAI.
 #
 # Usage:
-# uv run python tools/train_rl_v4.py --heuristic --episodes 5
-# uv run python tools/train_rl_v4.py --episodes 100
-# uv run python tools/train_rl_v4.py --resume --episodes 50
-# uv run python tools/train_rl_v4.py --pretrain 15 --episodes 500
-# uv run python tools/train_rl_v4.py --pretrain 15 --bc-epochs 15 --episodes 500
+# uv run python tools/train/train_rl_v4.py --heuristic --episodes 5
+# uv run python tools/train/train_rl_v4.py --episodes 100
+# uv run python tools/train/train_rl_v4.py --resume --episodes 50
+# uv run python tools/train/train_rl_v4.py --pretrain 15 --episodes 500
+# uv run python tools/train/train_rl_v4.py --pretrain 15 --bc-epochs 15 --episodes 500
 
 import os
 import json

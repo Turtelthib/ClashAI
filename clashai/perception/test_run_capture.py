@@ -4,7 +4,7 @@
 # buildings, YOLO walls deploy zone, YOLO troop bar, EasyOCR counters,
 # YOLO troops combat) see the game correctly before launching real training.
 #
-# Trigger: tools/train_rl_v4.py --test
+# Trigger: tools/train/train_rl_v4.py --test
 #
 # Output: logs/test_run/<label>.png
 #   village_home.png  — village home screen, screen-state CNN overlay

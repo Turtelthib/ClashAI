@@ -1,4 +1,4 @@
-# tools/convert_labelme_walls.py
+# tools/data/convert_labelme_walls.py
 # Wrapper de convert_labelme.py pour le dataset MURS.
 #
 # Le convert_labelme.py original est configuré pour les troupes (14 classes,
@@ -6,15 +6,15 @@
 # pour les murs (1 classe 'mur', dossier 'data_source/data_walls').
 #
 # Usage :
-#   uv run python tools/convert_labelme_walls.py
-#   uv run python tools/convert_labelme_walls.py --input custom/path --output custom/out
+#   uv run python tools/data/convert_labelme_walls.py
+#   uv run python tools/data/convert_labelme_walls.py --input custom/path --output custom/out
 
 import os
 import sys
 import argparse
 from pathlib import Path
 
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
 # On réutilise la fonction principale, mais on override le mapping des classes

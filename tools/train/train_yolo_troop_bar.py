@@ -1,4 +1,4 @@
-# tools/train_yolo_troop_bar.py
+# tools/train/train_yolo_troop_bar.py
 # ============================================================
 # ClashAI — YOLO Troop Bar Training (Kaggle-ready)
 # ============================================================

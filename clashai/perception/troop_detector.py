@@ -37,7 +37,7 @@ TROOP_CLASSES_SET = set(TROOP_CLASSES) - HERO_CLASSES - SIEGE_CLASSES
 
 # Confidence threshold
 DEFAULT_CONF = 0.35
-# YOLO combat troops trained at imgsz=640 (see tools/train_yolo_troops.py
+# YOLO combat troops trained at imgsz=640 (see tools/train/train_yolo_troops.py
 # DEFAULT_IMG_SIZE). Set explicitly so a future retrain at 1280/1600 only
 # requires updating this constant.
 YOLO_TROOPS_IMGSZ = 640
@@ -105,7 +105,7 @@ class TroopDetector:
         if not os.path.exists(self._weights_path):
             raise FileNotFoundError(
                 f"Modèle YOLO troupes introuvable : {self._weights_path}\n"
-                f"Entraîne-le avec : python tools/train_yolo_troops.py"
+                f"Entraîne-le avec : python tools/train/train_yolo_troops.py"
             )
 
         from ultralytics import YOLO
@@ -131,10 +131,12 @@ class TroopDetector:
         scale_x = ADB_WIDTH / img_w
         scale_y = ADB_HEIGHT / img_h
 
-        results = self._model(
-            screenshot_pil, conf=self.conf,
-            imgsz=YOLO_TROOPS_IMGSZ, verbose=False,
-        )
+        from clashai.perception.inference_lock import INFERENCE_LOCK
+        with INFERENCE_LOCK:
+            results = self._model(
+                screenshot_pil, conf=self.conf,
+                imgsz=YOLO_TROOPS_IMGSZ, verbose=False,
+            )
         detections = []
 
         for r in results:

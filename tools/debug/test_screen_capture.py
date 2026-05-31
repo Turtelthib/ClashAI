@@ -1,8 +1,8 @@
-# tools/test_screen_capture.py
+# tools/debug/test_screen_capture.py
 # Manual sanity check for ScreenCapture / PrintWindow backend.
 #
 # Run:
-#   uv run python tools/test_screen_capture.py
+#   uv run python tools/debug/test_screen_capture.py
 #
 # Then arrange your windows in 3 configurations and press Enter between each:
 #   1. Emulator window visible on top

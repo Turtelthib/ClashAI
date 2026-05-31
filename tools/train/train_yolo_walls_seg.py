@@ -1,4 +1,4 @@
-# tools/train_yolo_walls_seg.py
+# tools/train/train_yolo_walls_seg.py
 # Training YOLO26 for WALL SEGMENTATION in Clash of Clans.
 #
 # Differences vs train_yolo_walls.py:
@@ -33,7 +33,7 @@
 import os
 import argparse
 
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 # =============================================================================
@@ -145,7 +145,7 @@ def test(image_path=None, conf=0.35, save=True):
 
     if not os.path.exists(BEST_WEIGHTS):
         print(f" Pas de modèle entraîné : {BEST_WEIGHTS}")
-        print("   Lance d'abord : uv run python tools/train_yolo_walls_seg.py")
+        print("   Lance d'abord : uv run python tools/train/train_yolo_walls_seg.py")
         return
 
     print("\n Test YOLO26-SEG Murs")
