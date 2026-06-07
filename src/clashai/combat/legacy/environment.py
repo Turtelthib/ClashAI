@@ -50,7 +50,7 @@ from clashai.perception.troop_counter import read_troop_counts
 from clashai.combat.combat_observer import CombatObserver, COMBAT_FEATURES_SIZE
 from clashai.combat.hero_ability import HeroAbilityManager, HERO_NAMES
 
-from clashai.combat.agent import (
+from clashai.combat.legacy.agent import (
     TROOP_TYPES, NUM_TROOP_TYPES, NUM_POSITIONS,
     TOTAL_ACTIONS, ACTION_WAIT_SHORT, ACTION_WAIT_LONG, ACTION_DONE,
     ACTION_WAIT_COMBAT, MAX_STEPS_PER_EPISODE, MAX_COMBAT_STEPS,
@@ -1422,7 +1422,7 @@ class ClashEnvV3:
         (extracted in Phase C.2-light to keep this file focused on the
         gym-style interface).
         """
-        from clashai.combat.heuristic_v3 import build_heuristic_sequence
+        from clashai.combat.legacy.heuristic_v3 import build_heuristic_sequence
         return build_heuristic_sequence(self)
 
     def close(self):
@@ -1438,7 +1438,7 @@ class ClashEnvV3:
 if __name__ == "__main__":
     print("ClashEnv V3 — test dry-run\n")
 
-    from clashai.combat.agent import decode_action
+    from clashai.combat.legacy.agent import decode_action
 
     print("1. Test nouvelles actions V3 :")
     test_actions = [

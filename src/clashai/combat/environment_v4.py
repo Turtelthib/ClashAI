@@ -15,7 +15,7 @@ import os
 import time
 import numpy as np
 
-from clashai.combat.environment import ClashEnvV3
+from clashai.combat.legacy.environment import ClashEnvV3
 from clashai.combat.action_space import (
     TOTAL_ACTIONS, NUM_ROLES, NUM_SECTORS, NUM_HEROES,
     DEPLOY_ROLES, HERO_NAMES, SPELL_NAMES,
@@ -35,7 +35,7 @@ from clashai.combat.reward_shaping import (
 )
 
 # V3 imports to access constants
-from clashai.combat.agent import (
+from clashai.combat.legacy.agent import (
     TROOP_TYPES, TROOP_NAME_TO_IDX,
 )
 

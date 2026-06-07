@@ -9,7 +9,7 @@
 # no I/O, no side effects on `env` other than reading three attributes:
 #   env._buildings, env._remaining_troops, env.verbose
 
-from clashai.combat.agent import (
+from clashai.combat.legacy.agent import (
     TROOP_TYPES, TROOP_NAME_TO_IDX,
     NUM_POSITIONS,
     ACTION_WAIT_SHORT, ACTION_WAIT_LONG, ACTION_WAIT_COMBAT, ACTION_DONE,

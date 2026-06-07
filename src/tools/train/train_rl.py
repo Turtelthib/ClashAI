@@ -24,8 +24,8 @@ import numpy as np
 # Setup
 from clashai.paths import PROJECT_ROOT as project_root
 
-from clashai.combat.environment import ClashEnvV3
-from clashai.combat.agent import (
+from clashai.combat.legacy.environment import ClashEnvV3
+from clashai.combat.legacy.agent import (
     PPOAgentV3, MAX_STEPS_PER_EPISODE,
 )
 
