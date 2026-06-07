@@ -16,8 +16,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, project_root)
+from clashai.paths import PROJECT_ROOT as project_root
 
 from clashai.paths import WEIGHTS_DIR, ADB_DEVICE
 from clashai.combat.action_space import NUM_POSITIONS

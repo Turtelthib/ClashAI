@@ -25,10 +25,10 @@ import time
 # CONFIGURATION
 # =============================================================================
 
-current_script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(os.path.dirname(current_script_dir))
+# SSOT: paths come from clashai.paths (canonical configs/ui_positions.json).
+from clashai.paths import PROJECT_ROOT as project_root, UI_POSITIONS_FILE  # noqa: E402
 
-POSITIONS_FILE = os.path.join(project_root, 'ui_positions.json')
+POSITIONS_FILE = UI_POSITIONS_FILE
 
 # Re-imported from clashai/config/screen.py (Phase A).
 from clashai.config import ADB_WIDTH, ADB_HEIGHT  # noqa: E402

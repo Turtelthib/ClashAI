@@ -33,7 +33,7 @@
 import os
 import argparse
 
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from clashai.paths import PROJECT_ROOT as project_root
 
 
 # =============================================================================

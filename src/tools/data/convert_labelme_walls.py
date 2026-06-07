@@ -14,8 +14,7 @@ import sys
 import argparse
 from pathlib import Path
 
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, project_root)
+from clashai.paths import PROJECT_ROOT as project_root
 
 # On réutilise la fonction principale, mais on override le mapping des classes
 import tools.convert_labelme as convert_labelme

@@ -9,8 +9,7 @@ import os, sys, json, torch
 from torchvision import transforms
 from PIL import Image
 
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, project_root)
+from clashai.paths import PROJECT_ROOT as project_root
 
 from clashai.paths import WEIGHTS_DIR
 from clashai.perception.screen_classifier import MyCustomCNN

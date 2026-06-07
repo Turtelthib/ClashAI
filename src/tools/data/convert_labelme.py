@@ -17,7 +17,7 @@ import random
 import argparse
 from pathlib import Path
 
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from clashai.paths import PROJECT_ROOT as project_root
 
 
 # =============================================================================
@@ -154,7 +154,7 @@ def process_dataset(input_dir, output_dir, train_split=DEFAULT_TRAIN_SPLIT):
     Converts the entire LabelMe folder to a YOLO dataset.
     """
     print(f"\n{'='*60}")
-    print(" Conversion LabelMe → YOLO")
+    print(" Conversion LabelMe -> YOLO")
     print(f"{'='*60}")
     print(f" Input : {input_dir}")
     print(f" Output : {output_dir}")
@@ -277,7 +277,7 @@ def process_dataset(input_dir, output_dir, train_split=DEFAULT_TRAIN_SPLIT):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Conversion LabelMe → YOLO pour les troupes"
+        description="Conversion LabelMe -> YOLO pour les troupes"
     )
     parser.add_argument('--input', type=str, default=DEFAULT_INPUT_DIR,
                         help="Dossier avec les images + JSON LabelMe")

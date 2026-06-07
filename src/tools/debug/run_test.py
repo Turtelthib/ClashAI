@@ -9,8 +9,7 @@ import os
 import sys
 import time
 
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, project_root)
+from clashai.paths import PROJECT_ROOT as project_root
 
 OUT_DIR = os.path.join(project_root, 'logs', 'test_run')
 os.makedirs(OUT_DIR, exist_ok=True)

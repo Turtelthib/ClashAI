@@ -38,7 +38,7 @@
 - [x] **OCR compteurs** : EasyOCR dans `TroopBarDetector._read_count()` — crop top-RIGHT (combat) ou top-LEFT (prep) selon l'écran, upscale ×3 + threshold → lecture du chiffre. `to_counts()` → `{name: count}`. `TroopManager.rescan()` utilise YOLO+OCR en priorité, legacy en fallback.
 - [x] **Fix capture fenêtre émulateur occluded** (Session 12) — voir bloc dédié ci-dessous
 - [x] **Mode `--test`** (Session 12) : `uv run python tools/train/train_rl_v4.py --test` lance 1 épisode heuristique et sauvegarde 5 captures annotées dans `logs/test_run/` : `village_home.png` (état CNN), `prep_attaque.png` (+ barre troupes YOLO + compteurs OCR), `debut_attaque.png` (+ bboxes bâtiments colorées par catégorie + hull deploy + points numérotés), `attaque_30s.png` / `attaque_60s.png` (+ bâtiments détruits surlignés en croix rouge + troupes YOLO combat). Module : `clashai/perception/test_run_capture.py::TestRunCapture`. Hooks dans `environment_v4.py` (`_get_screen_state` override + `_update_combat_observation`). Rapport `[OK]/[--]` à la fin pour voir quelles captures ont été atteintes
-- [ ] Tester + valider en conditions réelles, ajuster conf YOLO si faux positifs
+- [x] Tester + valider en conditions réelles, ajuster conf YOLO si faux positifs
 - [x] **Fix demande de troupes château de clan** (Session 13, **5 bugs**) :
   - `verbose=False` sur le CC manager → toutes les failures silencieuses (CC pas trouvé, cooldown, CC FULL — aucun log visible). Fix : `verbose=True`.
   - Pas de check `screen == village_home` avant l'appel → YOLO ne trouvait pas le château quand on était sur `resultats_attaque` ou `recherche_adversaire`. Fix : guard `classify_screen() == 'village_home'` avant `request_if_needed`.

@@ -17,8 +17,7 @@ import time
 import argparse
 from datetime import datetime
 
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, project_root)
+from clashai.paths import PROJECT_ROOT as project_root
 
 OUTPUT_DIR = os.path.join(project_root, 'data_source', 'troop_bar')
 
