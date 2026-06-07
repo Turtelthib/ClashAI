@@ -149,14 +149,14 @@ def main():
     for hwnd, cls, title, w, h in candidates:
         img = _grab_printwindow(hwnd, w, h)
         if img is None:
-            print(f"  hwnd={hwnd}  {cls}  → skipped (size {w}x{h})")
+            print(f"  hwnd={hwnd}  {cls}  -> skipped (size {w}x{h})")
             continue
         arr = np.array(img)
         # Variance is a rough proxy for "did we capture real content"
         var = arr.std()
         fname = f"_inspect_{hwnd}_{_safe_filename_chunk(cls)}.png"
         img.save(fname)
-        print(f"  hwnd={hwnd}  {cls:<24}  variance={var:6.1f}  → {fname}")
+        print(f"  hwnd={hwnd}  {cls:<24}  variance={var:6.1f}  -> {fname}")
 
     print("\nOpen the _inspect_*.png files. The one showing the actual game")
     print("(without your terminal/VS Code in front) is the HWND we need to use.")

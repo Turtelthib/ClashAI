@@ -38,7 +38,7 @@ transform = transforms.Compose([
 from clashai.perception.screen_capture import ScreenCapture, find_emulator_bbox
 
 print("=== Screen capture debug ===\n")
-bbox, title = find_emulator_bbox()
+bbox, title, _hwnd = find_emulator_bbox()
 print(f"Window found : {title}")
 print(f"Bbox         : {bbox}\n")
 
