@@ -312,10 +312,10 @@ uv run python -c "from clashai.combat.hero_ability import HeroAbilityManager as 
 - [x] **`ClanCastleAgent` (agent pilote)** (`clashai/agents/clan_castle_agent.py`) : 1er `BaseAgent` concret, enveloppe `ClanCastleManager` sans réécrire la logique. Cooldown délégué au manager. Démo offline validée : `world → can_run → pick → run → cooldown`.
 - [x] **`CombatAgent`** (`clashai/agents/combat_agent.py`) : farm/multi, enveloppe le runner d'épisode. **DRY** : extraction de `clashai/combat/episode_runner.py::run_attack_episode()` (SSOT partagé avec `brain/farm.py` qui délègue maintenant). Démo offline : préemption de priorité (CC 20 > Combat 10) + mode gating (gdc → off).
 - [x] **`GdCAgent`** (`clashai/agents/gdc_agent.py`) : attaque de guerre sur cible queuée (`enqueue_target(n)`, rempli plus tard par ChatAgent). Enveloppe `GdCNavigator.attack_target()` + le runner partagé. Prio 25 (préempte farm). Démo offline : queue + priorité + mode gating. **Bonus DRY** : `GdCOrchestrator._run_attack` délègue aussi à `run_attack_episode()` (bug corrigé : il réécrasait `heuristic_mode` → tentait le RL sur un réseau non chargé si le checkpoint échouait).
-- [ ] Répliquer le reste : `ChatAgent` (lecture/réponse chat — canal d'entrée NL du futur LLM)
+- [x] **`ChatAgent`** (`clashai/agents/chat_agent.py`) : lit le chat, parse, dispatche (`attack N → on_attack(N)` = `gdc.enqueue_target`, + ack), répond. Prio 30 (le plus haut), cooldown = `CHAT_CHECK_INTERVAL`. **C'est le canal d'entrée NL du futur LocalLLMBrain.** Démo offline : flux complet `chat "attaque 5" → enqueue GdC → scheduler route vers la guerre`.
 - [ ] **Interface `Brain`** (seam pour cerveau swappable) : `brain.py` actuel → `HeuristicBrain` ; futur `LocalLLMBrain` (LLM local + RAG jargon clan). Voir [[project_llm_brain_vision]].
 - [ ] L'orchestrateur `brain.py` utilise `AgentScheduler` au lieu de la logique ad-hoc actuelle
-- [ ] Chaque agent existant (combat, GdC, château, chat) implémente l'interface — château ✅ (pilote), reste à faire
+- [x] Chaque agent existant (combat, GdC, château, chat) implémente l'interface — **les 4 faits** (ClanCastle, Combat, GdC, Chat)
 
 #### État actuel (à formaliser)
 
