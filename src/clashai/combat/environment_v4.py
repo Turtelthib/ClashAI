@@ -290,11 +290,12 @@ class ClashEnvV4(ClashEnvV3):
         """Activates a hero's ability."""
         hero_name = HERO_NAMES[hero_idx]
 
-        # Scan if the icon has not been found yet
+        # Refresh from the troop bar CNN if the icon has not been found yet
         if hero_name not in self._hero_manager._icon_positions:
+            bar_det = self.models.get('troop_bar_detector') if self.models else None
             screenshot = self._adb_screenshot()
-            if screenshot is not None and self._hero_manager.has_templates():
-                self._hero_manager.scan(screenshot)
+            if bar_det is not None and screenshot is not None:
+                self._hero_manager.update_from_troop_bar(bar_det.detect(screenshot))
 
         success = self._hero_manager.activate(hero_name, self._adb_tap)
         time.sleep(DELAY_ABILITY)
@@ -647,8 +648,8 @@ class ClashEnvV4(ClashEnvV3):
                 # periodic rescan that used to fire every 10 steps).
                 self._sync_remaining_from_perception(state.get('troop_bar'))
 
-                # Hero ability scan from the cached frame
-                self._hero_manager.scan(screenshot)
+                # Hero ability availability from the cached troop bar CNN
+                self._hero_manager.update_from_troop_bar(state.get('troop_bar'))
 
                 if self.verbose:
                     from clashai.config.logging import pp, styled
@@ -695,9 +696,12 @@ class ClashEnvV4(ClashEnvV3):
                       f"total: {self._buildings_destroyed_total} "
                       f"({curr_count} remaining)")
 
-        # 2. Hero ability scan — populates _icon_positions so the mask can enable abilities.
-        # Must run before get_ability_mask() is called in _get_mask().
-        self._hero_manager.scan(screenshot)
+        # 2. Hero ability availability from the troop bar CNN — populates
+        # _icon_positions so the mask can enable abilities. Must run before
+        # get_ability_mask() is called in _get_mask().
+        bar_det = self.models.get('troop_bar_detector') if self.models else None
+        if bar_det is not None:
+            self._hero_manager.update_from_troop_bar(bar_det.detect(screenshot))
 
         # 3. YOLO troops → refresh combat features
         t0 = _time.time()

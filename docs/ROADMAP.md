@@ -30,6 +30,7 @@
 - [x] `TroopBarDetector` + filtre HSV grisé — `clashai/perception/troop_bar_detector.py`
 - [x] `TroopFinder.update()` → YOLO en priorité, template matching en fallback
 - [x] Chargé dans `load_models()` + `perception_thread` → détection fréquente sans bloquer
+- [x] **Migration capacités héros template → CNN (V4.4)** — voir bloc dédié ci-dessous
 
 #### Reste à faire (V4.3)
 
@@ -154,6 +155,29 @@ Objectif : valider visuellement que **tous les CNN voient correctement** avant d
 - [ ] **Bug `grand_gardien` tap mode toggle** (à fixer côté data, pas code) : le bouton vert mode air/sol sur l'icône du GG n'a pas de classe YOLO dédiée → bbox `grand_gardien` inclut ce bouton → le tap au centre du bbox peut tomber sur le toggle au lieu de l'icône à déployer. **Fix recommandé** : retrain YOLO troop bar avec une nouvelle classe `grand_gardien_mode` (ou `mode_toggle_generic` partagé entre héros). Log diagnostic ajouté dans `troop_finder.select()` (warning si y hors range 950-1080).
 - [x] **Conf YOLO troop bar 0.45 → 0.40** (Session 13) : 0.45 était pile sur le fil (golem @ 0.41 droppé). Validé empiriquement sur vraies frames : 0.40 = rien loupé, 0.50 = ça loupe. `YOLO_CONF` dans `troop_bar_detector.py` + défaut du tool `detect_troop_bar.py`.
 
+#### 🔧 Migration capacités héros : template matching → CNN troop bar (V4.4)
+
+**Symptôme / motivation** : `HeroAbilityManager` détectait les icônes de capacité par template matching (multi-scale, seuil 0.50) dans une zone hardcodée (`ABILITY_ZONE` y=850-1080). Or le CNN de la barre de troupes détecte DÉJÀ les capacités via les classes `<hero>_capa` (`roi_capa`, `reine_capa`, `grand_gardien_capa`, `championne_capa`, `prince_gargouille_capa`, + `duc_draconique_capa`). Deux systèmes de perception redondants pour la même info → violation DRY + le template matching nécessitait des crops manuels (`ability_<hero>.png`) fragiles aux changements de skin/résolution.
+
+**Fix** : suppression complète du template matching, remplacé par la lecture des détections `*_capa` du `TroopBarDetector` (qui tourne déjà dans `PerceptionThread`, donc **zéro inférence supplémentaire**).
+- Nouvelle méthode `HeroAbilityManager.update_from_troop_bar(detections)` : mappe `<hero>_capa` → `<hero>` (strip suffixe `_capa`), garde uniquement les héros de `HERO_NAMES` (→ `duc_draconique` ignoré, hors action space), lit le `center` de la bbox comme position de tap. `is_grayed=True` (capacité utilisée / cooldown) → exclu de `_icon_positions`. Présence d'un `*_capa` = preuve que le héros est déployé → marque `_deployed` (le CNN est la source de vérité du déploiement de la capacité).
+- Supprimés : `template_match.py`, `_load_templates()`, `_templates`, `scan()` template, constantes `ABILITY_ZONE_*` / `MATCH_THRESHOLD` / `TEMPLATES_DIR`.
+- Câblage `environment_v4.py` (3 sites) : `_update_combat_observation` async path → `update_from_troop_bar(state['troop_bar'])` (cache du thread, gratuit) ; fallback bloquant → `bar_det.detect(screenshot)` ; `_execute_ability` re-scan de secours → idem.
+
+**Pièges / décisions** :
+- `scan()` **conservé** comme shim déprécié (signature `scan(screenshot_pil=None, troop_bar_detections=None)`) : si `troop_bar_detections` fourni → délègue à `update_from_troop_bar` ; un screenshot nu (vieux appel V3) → no-op qui retourne les positions courantes. Évite de casser `legacy/environment.py`.
+- `has_templates()` **conservé** mais retourne toujours `False` : `legacy/environment.py` garde `if has_templates(): scan(...)` → devient un no-op propre (pas d'`AttributeError`). V3 ne fait donc plus de capacités héros (acceptable, V3 est figé/déprécié).
+- `prince_gargouille` est dans `HERO_NAMES` et a un `_capa` → géré ; `duc_draconique` a un `_capa` mais **pas** dans `HERO_NAMES` → volontairement ignoré.
+
+**Tests** :
+```bash
+# Détection live (ou sur image) des *_capa via le CNN
+uv run python -m clashai.combat.hero.cli --file logs/test_run/attaque_30s.png
+uv run python -m clashai.combat.hero.cli            # capture ADB live
+# Sanity offline (sans ADB/modèle) : roi available, reine grayed→exclu
+uv run python -c "from clashai.combat.hero_ability import HeroAbilityManager as M; m=M(verbose=True); m.reset(); print(m.update_from_troop_bar([{'name':'roi_capa','center':(300,980),'conf':.9,'is_grayed':False},{'name':'reine_capa','center':(380,980),'conf':.9,'is_grayed':True}])); print(m.get_ability_mask())"
+```
+
 #### 🔧 Bug RGB/BGR inversé sur l'input YOLO (Session 13) — LE vrai bug
 
 > Si une détection YOLO se trompe systématiquement sur des classes dépendantes de la couleur (gel↔poison, soin↔clone, troupes mal classées) alors que le tool manuel `detect_troop_bar.py` sur la MÊME image est parfait → relire ce bloc.
@@ -200,6 +224,25 @@ Objectif : valider visuellement que **tous les CNN voient correctement** avant d
 - [ ] **Phase 3 (optionnel)** : decision tick agent event-driven (separate thread qui réagit aux events PerceptionEventBus au lieu de step discrets). Pour le mode prod uniquement, RL training reste sur steps discrets.
 - [ ] **Phase 4 (optionnel)** : mesurer latency end-to-end (event → action). Cible : ~150ms vs ~500ms avant V5.0.
 
+#### Refonte architecture repo (src/ layout + split gros fichiers >500L)
+
+> Plan validé : `.claude/plans/okk-maintenant-grosse-modification-jolly-manatee.md`. Rythme : **1 fichier = 1 test (`--test`) = 1 commit**. Chaque split = sous-dossier par domaine + `__init__.py` qui ré-exporte l'API publique (back-compat, zéro import externe modifié). DRY/SSOT appliqués à chaque étape. Vérif systématique : compileall + scan AST des noms non définis + import test de tous les importeurs.
+
+- [x] **Phase 1** : `clashai/` + `tools/` → `src/` ; data dirs → `data/` ; `paths.py` en résolution SSOT par marqueur `pyproject.toml` ; `[tool.hatch.build.targets.wheel] packages = ["src/clashai"]`
+- [x] **Phase 2** : code V3 déprécié isolé dans `src/clashai/combat/legacy/` (environment.py, agent.py, heuristic_v3.py)
+- [x] **Phase 3 — Split 1/12** : `perception/screen_capture.py` → `perception/screen_capture/` (capture, window_detect, gdi_capture, normalize)
+- [x] **Split 2/12** : `perception/deploy_zone.py` → `perception/deploy/` (+ shim `deploy_zone.py`)
+- [x] **Split 3/12** : `perception/reward_reader.py` → `perception/reward_reader/` (constants, green, stars, percentage, results)
+- [x] **Split 4/12** : `combat/state_encoder.py` → `combat/encoder/` (+ shim) (constants, grid, features, attack_side)
+- [x] **Split 5/12** : `navigation/game_loop.py` → `navigation/game_loop/` (constants, models, analysis, adb_io, controller)
+- [x] **Split 6/12** : `combat/hero_ability.py` → `combat/hero/` (constants, manager, cli) + shim `hero_ability.py` (puis migration CNN V4.4 : template_match.py supprimé)
+- [x] **Split 7/12** : `social/clan_chat_monitor.py` → `social/chat/` (constants, adb_io, ocr, parser, monitor, __main__) + shim `clan_chat_monitor.py`
+- [ ] **Split 8/12** : `navigation/gdc_navigator.py` (827L) → `navigation/gdc/`
+- [ ] **Split 9/12** : `brain.py` (683L) → `brain/` (package)
+- [ ] **Split 10/12** : `combat/environment_v4.py` (916L) → `combat/env/`
+- [ ] **Split 11/12** : `combat/agent_v4.py` (546L) → `combat/agent_v4/`
+- [ ] **Split 12/12** : `combat/combat_observer.py` (521L) → `combat/observer/`
+
 #### Avant de coder V5.0 Phase 3 (decision tick event-driven)
 
 À définir clairement avec l'utilisateur :
@@ -221,7 +264,7 @@ Objectif : valider visuellement que **tous les CNN voient correctement** avant d
 
 - [ ] Migrer `clashai/navigation/gdc_navigator.py` → lit depuis `PerceptionThread.get_latest()['screen_state']`
 - [ ] Migrer `clashai/social/clan_castle.py` + `clan_chat_monitor.py` → même thread
-- [ ] Migrer `clashai/combat/hero_ability.py` → scan abilities depuis le frame du thread
+- [x] Migrer `clashai/combat/hero_ability.py` → scan abilities depuis le CNN troop bar (V4.4, voir bloc dédié plus bas)
 - [ ] Supprimer **tous** les appels directs `adb exec-out screencap` restants dans `clashai/` (grep doit retourner 0)
 - [ ] `PerceptionThread` devient le **seul point d'entrée** pour la vision de l'agent
 - [ ] Stop le sanity-rescan dans `environment_v4._all_resources_exhausted()` (redondant avec `_sync_remaining_from_perception()` qui tourne à chaque observe)

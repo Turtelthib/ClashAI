@@ -1,17 +1,14 @@
 # clashai/combat/hero/constants.py
-# Ability-scan zone, match threshold, hero ability display names, delays.
+# Hero ability display names + CNN mapping constants.
 
-from clashai.paths import HERO_TEMPLATES_DIR
-from clashai.config import MATCH_SCALES, HERO_NAMES, NUM_HEROES
+from clashai.config import HERO_NAMES, NUM_HEROES  # noqa: F401 (re-exported)
 
-TEMPLATES_DIR = HERO_TEMPLATES_DIR
+# Troop bar CNN suffix marking a hero's ability button: 'roi' -> 'roi_capa'.
+CAPA_SUFFIX = '_capa'
 
-ABILITY_ZONE_TOP = 850
-ABILITY_ZONE_BOTTOM = 1080
-ABILITY_ZONE_LEFT = 0
-ABILITY_ZONE_RIGHT = 1920
-
-MATCH_THRESHOLD = 0.50  # local — hero_ability tuned at 0.50
+# Grace delay after deploy before the ability is considered "searched"
+# (used only by get_status_vector for the 0.25 vs 0.5 distinction).
+DEPLOY_TO_SCAN_DELAY = 5.0
 
 HERO_ABILITY_NAMES = {
     'roi': 'Rage Royale',
@@ -20,7 +17,3 @@ HERO_ABILITY_NAMES = {
     'championne': 'Seeking Shield',
     'prince_gargouille': 'Visage Noir',
 }
-
-# Delay after deploy before icons appear; cooldown between scans.
-DEPLOY_TO_SCAN_DELAY = 5.0
-SCAN_COOLDOWN = 2.0

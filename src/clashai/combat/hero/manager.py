@@ -1,19 +1,14 @@
 # clashai/combat/hero/manager.py
 # HeroAbilityManager — detect available abilities + activate them.
 
-import os
 import time
 
-import cv2
 import numpy as np
 
 from clashai.config import HERO_NAMES, NUM_HEROES
 from clashai.combat.hero.constants import (
-    TEMPLATES_DIR, MATCH_THRESHOLD, HERO_ABILITY_NAMES,
-    ABILITY_ZONE_TOP, ABILITY_ZONE_BOTTOM, ABILITY_ZONE_LEFT, ABILITY_ZONE_RIGHT,
-    DEPLOY_TO_SCAN_DELAY, SCAN_COOLDOWN,
+    HERO_ABILITY_NAMES, CAPA_SUFFIX, DEPLOY_TO_SCAN_DELAY,
 )
-from clashai.combat.hero.template_match import _match_template_multiscale
 
 
 def _adb_tap(x, y, delay=0.1):
@@ -26,53 +21,26 @@ class HeroAbilityManager:
     """
     Manages detection and activation of hero abilities during combat.
 
-    Uses template matching to dynamically find ability icons on screen
-    — no hardcoded positions.
+    V4.4: availability is read from the YOLO troop bar detector (the same
+    CNN that runs in PerceptionThread), not template matching. Once a hero
+    is deployed, its slot in the bottom bar becomes a `<hero>_capa` ability
+    button; the CNN detects it. A non-grayed `*_capa` detection = ability
+    available; grayed = used / on cooldown.
 
     Workflow:
         1. During deploy, call mark_deployed() for each placed hero.
-        2. During combat, call scan(screenshot) to detect icons.
+        2. During combat, call update_from_troop_bar(detections) each step.
         3. Call activate(hero_name) to tap the detected icon.
     """
 
     def __init__(self, verbose=True):
         self.verbose = verbose
 
-        # Ability icon templates
-        self._templates = {}
-        self._load_templates()
-
         # Per-episode state
         self._deployed = {}
         self._deploy_time = {}
         self._activated = {}
         self._icon_positions = {}
-        self._last_scan_time = 0
-
-    def _load_templates(self):
-        """Loads ability icon templates from hero_ability_templates/."""
-        if not os.path.exists(TEMPLATES_DIR):
-            if self.verbose:
-                print("WARNING: hero_ability_templates/ directory not found")
-                print(" Run: python scripts/rl/hero_ability.py --extract")
-            return
-
-        count = 0
-        for hero in HERO_NAMES:
-            filename = f"ability_{hero}.png"
-            path = os.path.join(TEMPLATES_DIR, filename)
-            if os.path.exists(path):
-                tmpl = cv2.imread(path)
-                if tmpl is not None:
-                    self._templates[hero] = tmpl
-                    count += 1
-
-        if self.verbose:
-            if count > 0:
-                print(f"{count} ability templates loaded: "
-                      f"{sorted(self._templates.keys())}")
-            else:
-                print(f"WARNING: No ability templates found in {TEMPLATES_DIR}")
 
     def reset(self):
         """Reset at the start of a new episode."""
@@ -80,7 +48,6 @@ class HeroAbilityManager:
         self._deploy_time = {}
         self._activated = {name: False for name in HERO_NAMES}
         self._icon_positions = {}
-        self._last_scan_time = 0
 
     def mark_deployed(self, hero_name):
         """
@@ -98,65 +65,71 @@ class HeroAbilityManager:
                 ability = HERO_ABILITY_NAMES.get(hero_name, '?')
                 print(f" {hero_name} deployed (ability: {ability})")
 
-    def scan(self, screenshot_pil):
+    def update_from_troop_bar(self, troop_bar_detections):
         """
-        Scans a mid-combat screenshot to detect ability icons.
-        Updates internal icon positions.
+        V4.4 — populate ability icon positions from the YOLO troop bar
+        detector (PerceptionThread), replacing template matching.
+
+        The CNN detects `<hero>_capa` classes — the ability button that
+        replaces a hero's slot once deployed. A NON-grayed detection means
+        the ability is available; grayed means used / on cooldown.
 
         Args:
-            screenshot_pil: PIL Image of the ongoing combat
+            troop_bar_detections: list of dicts from TroopBarDetector.detect()
+                (each has 'name', 'center', 'conf', 'is_grayed')
 
         Returns:
-            found: list of hero names whose icon is visible
+            found: list of hero names whose ability is currently available
         """
-        now = time.time()
-
-        # Cooldown between scans
-        if now - self._last_scan_time < SCAN_COOLDOWN:
+        if not troop_bar_detections:
             return list(self._icon_positions.keys())
 
-        self._last_scan_time = now
-
-        if not self._templates:
-            return []
-
-        # Convert and crop the ability zone
-        screen = cv2.cvtColor(np.array(screenshot_pil), cv2.COLOR_RGB2BGR)
-        zone = screen[ABILITY_ZONE_TOP:ABILITY_ZONE_BOTTOM,
-                       ABILITY_ZONE_LEFT:ABILITY_ZONE_RIGHT]
-
         found = []
-
-        for hero_name, template in self._templates.items():
-            # Only search for deployed heroes that haven't been activated yet
-            if not self._deployed.get(hero_name, False):
+        for d in troop_bar_detections:
+            name = d.get('name', '')
+            if not name.endswith(CAPA_SUFFIX):
                 continue
+            hero_name = name[:-len(CAPA_SUFFIX)]   # 'roi_capa' -> 'roi'
+            if hero_name not in HERO_NAMES:
+                continue  # e.g. duc_draconique (not in the action space)
+
             if self._activated.get(hero_name, False):
                 continue
 
-            # Check post-deploy delay
-            deploy_t = self._deploy_time.get(hero_name, now)
-            if now - deploy_t < DEPLOY_TO_SCAN_DELAY:
+            # The ability button only shows once the hero is deployed → the
+            # CNN is the authoritative deploy signal for the ability.
+            if not self._deployed.get(hero_name, False):
+                self._deployed[hero_name] = True
+                self._deploy_time.setdefault(hero_name, time.time())
+
+            if d.get('is_grayed'):
+                # Used / on cooldown → not selectable this step.
+                self._icon_positions.pop(hero_name, None)
                 continue
 
-            best_val, best_loc, best_tw, best_th = _match_template_multiscale(
-                zone, template
-            )
-
-            if best_val >= MATCH_THRESHOLD and best_loc is not None:
-                # Convert zone position → ADB coordinates
-                x_adb = ABILITY_ZONE_LEFT + best_loc[0] + best_tw // 2
-                y_adb = ABILITY_ZONE_TOP + best_loc[1] + best_th // 2
-                self._icon_positions[hero_name] = (x_adb, y_adb, best_val)
-                found.append(hero_name)
+            cx, cy = d['center']
+            self._icon_positions[hero_name] = (cx, cy, d.get('conf', 1.0))
+            found.append(hero_name)
 
         if self.verbose and found:
             for name in found:
                 x, y, conf = self._icon_positions[name]
-                print(f" {name} ability detected "
-                      f"at ({x}, {y}) conf={conf:.2f}")
+                print(f" {name} ability (CNN) at ({x}, {y}) conf={conf:.2f}")
 
         return found
+
+    def scan(self, screenshot_pil=None, troop_bar_detections=None):
+        """
+        DEPRECATED (V4.4) — template matching was removed in favor of the
+        YOLO troop bar CNN. Use update_from_troop_bar() instead.
+
+        Kept for back-compat: if `troop_bar_detections` is provided it
+        delegates to update_from_troop_bar(); a bare screenshot argument
+        (the old V3 call) is a no-op and returns the current positions.
+        """
+        if troop_bar_detections is not None:
+            return self.update_from_troop_bar(troop_bar_detections)
+        return list(self._icon_positions.keys())
 
     def get_available_abilities(self):
         """
@@ -278,7 +251,9 @@ class HeroAbilityManager:
         return sum(1 for v in self._activated.values() if v)
 
     def has_templates(self):
-        return len(self._templates) > 0
+        """DEPRECATED (V4.4) — template matching removed. Always False so
+        legacy V3 guards (`if has_templates(): scan(...)`) become no-ops."""
+        return False
 
     # -----------------------------------------------------------------
     # V4: YOLO positions of heroes on the battlefield
