@@ -239,7 +239,7 @@ uv run python -c "from clashai.combat.hero_ability import HeroAbilityManager as 
 - [x] **Split 7/12** : `social/clan_chat_monitor.py` → `social/chat/` (constants, adb_io, ocr, parser, monitor, __main__) + shim `clan_chat_monitor.py`
 - [x] **Split 8/12** : `navigation/gdc_navigator.py` → `navigation/gdc/` (constants, adb_io, ocr, navigator, orchestrator, __main__) + shim. **Bug préexistant corrigé au passage** : `GdCOrchestrator._run_attack()` calculait `weights_dir` via `dirname×3(__file__)+'weights/rl'` → pointait sur `src/weights/rl` (faux) depuis le move src/. Remplacé par `os.path.join(WEIGHTS_DIR, 'rl')` (SSOT `clashai.paths`).
 - [x] **Split 9/12** : `brain.py` → `brain/` (package, mixins par domaine : core/loop/farm/war/chat/navigation + app + __main__). **Bug préexistant corrigé** : l'entry point `clashai-brain = "clashai.brain:main"` était CASSÉ (brain.py n'avait pas de `main()`, juste un `if __name__=="__main__"`) → ajout d'un vrai `main()` dans `app.py`, ré-exporté par `__init__.py`. `python -m clashai.brain` fonctionne via `__main__.py`.
-- [ ] **Split 10/12** : `combat/environment_v4.py` (916L) → `combat/env/`
+- [x] **Split 10/12** : `combat/environment_v4.py` → `combat/environment_v4/` (same-name package, mixins par domaine : core/observation/actions/reward/observe/capture/heuristic + env). `ClashEnvV4(...Mixins, ClashEnvV3)` — mixins AVANT ClashEnvV3 dans la MRO pour que les overrides V4 gagnent. `NO_TROOPS_CHECKS_THRESHOLD` (inutilisé ici, dupliqué dans episode_lifecycle/legacy) supprimé (DRY).
 - [ ] **Split 11/12** : `combat/agent_v4.py` (546L) → `combat/agent_v4/`
 - [ ] **Split 12/12** : `combat/combat_observer.py` (521L) → `combat/observer/`
 
