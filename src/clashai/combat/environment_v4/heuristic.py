@@ -77,11 +77,24 @@ class HeuristicMixin:
                 actions.append(enc('observe'))
                 actions.append(enc('spell', spell_name))
 
-        # Abilities — deployed heroes only (skip championne/PG if absent)
-        for i, hero_name in enumerate(HERO_NAMES):
-            if self._hero_manager.is_deployed(hero_name):
-                actions.append(enc('observe'))
-                actions.append(enc('ability', i))
+        # Abilities — for every hero PRESENT IN THE ARMY (build-time inventory).
+        # BUG FIX: the sequence is built right after reset(), before any deploy
+        # executes, so self._hero_manager.is_deployed() is always False here and
+        # ability actions were never queued (abilities never fired in heuristic
+        # mode). Gate on the army inventory instead — these heroes WILL be
+        # deployed by the deploy actions above, so their `*_capa` button will
+        # appear and _execute_ability() can tap it.
+        heroes_in_army = {
+            t['name'] for i, t in enumerate(TROOP_TYPES)
+            if t['role'] == 'hero' and self._remaining_troops[i] > 0
+        }
+        if heroes_in_army:
+            # Let deployed heroes walk in + their ability charge before firing.
+            actions.append(enc('wait_long'))
+            for i, hero_name in enumerate(HERO_NAMES):
+                if hero_name in heroes_in_army:
+                    actions.append(enc('observe'))
+                    actions.append(enc('ability', i))
 
         actions.append(enc('observe'))
         actions.append(enc('done'))
