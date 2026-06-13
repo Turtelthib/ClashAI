@@ -55,70 +55,38 @@ class GdCOrchestrator:
     def _run_attack(self):
         """
         Launches the V4 agent for an attack from phase_attaque.
+        Delegates the deploy/combat loop to the shared SSOT runner.
         """
         if self.verbose:
             print("\n Launching V4 attack...")
 
-        try:
-            from clashai.combat.environment_v4 import ClashEnvV4
-            from clashai.combat.agent_v4 import PPOAgentV4
-            from clashai.combat.action_space import MAX_STEPS_SAFETY
+        from clashai.combat.agent_v4 import PPOAgentV4
+        from clashai.combat.episode_runner import run_attack_episode
+        from clashai.paths import WEIGHTS_DIR
 
-            env = ClashEnvV4(models=self.models, verbose=self.verbose)
+        # Load the best checkpoint if available (SSOT: <root>/weights/rl).
+        agent = PPOAgentV4()
+        weights_dir = os.path.join(WEIGHTS_DIR, 'rl')
+        use_heuristic = True
+        for ckpt_path in (os.path.join(weights_dir, 'agent_v4_best.pth'),
+                          os.path.join(weights_dir, 'agent_v4_checkpoint.pth')):
+            if os.path.exists(ckpt_path):
+                try:
+                    agent.load(ckpt_path)
+                    use_heuristic = False
+                    break
+                except RuntimeError:
+                    if self.verbose:
+                        print(" WARNING: Incompatible checkpoint, heuristic mode")
 
-            # Agent: load the best checkpoint.
-            # SSOT: weights live at <root>/weights (clashai.paths.WEIGHTS_DIR),
-            # not under src/ — use the canonical constant.
-            agent = PPOAgentV4()
-            from clashai.paths import WEIGHTS_DIR
-            weights_dir = os.path.join(WEIGHTS_DIR, 'rl')
-            best_path = os.path.join(weights_dir, 'agent_v4_best.pth')
-            checkpoint_path = os.path.join(weights_dir, 'agent_v4_checkpoint.pth')
-
-            heuristic_mode = True
-            for ckpt_path in [best_path, checkpoint_path]:
-                if os.path.exists(ckpt_path):
-                    try:
-                        agent.load(ckpt_path)
-                        heuristic_mode = False
-                        break
-                    except RuntimeError:
-                        if self.verbose:
-                            print(f" WARNING: Incompatible checkpoint, heuristic mode")
-
-            # Reset (resumes from phase_attaque)
-            obs, mask = env.reset()
-            grid, vector = obs
-
-            # Heuristic or RL depending on whether a checkpoint exists
-            heuristic_mode = not os.path.exists(best_path) and not os.path.exists(checkpoint_path)
-
-            if heuristic_mode:
-                actions = env.get_heuristic_sequence()
-                for action in actions:
-                    obs, mask, reward, done, info = env.step(action)
-                    if done:
-                        break
-            else:
-                for step in range(MAX_STEPS_SAFETY):
-                    action, _, _ = agent.select_action(grid, vector, mask)
-                    obs, mask, reward, done, info = env.step(action)
-                    grid, vector = obs
-                    if done:
-                        break
-
-            if self.verbose:
-                stars = info.get('stars', '?')
-                pct = info.get('percentage', '?')
-                print(f"\n CW result: {stars}* {pct}%")
-
-            env.close()
-
-        except Exception as e:
-            if self.verbose:
-                print(f" ERROR: V3 attack error: {e}")
-                import traceback
-                traceback.print_exc()
+        info = run_attack_episode(
+            self.models,
+            agent=None if use_heuristic else agent,
+            use_heuristic=use_heuristic,
+            verbose=self.verbose,
+        )
+        if self.verbose and info:
+            print(f"\n CW result: {info.get('stars', '?')}* {info.get('percentage', '?')}%")
 
     def run(self, monitor_interval=30):
         """
