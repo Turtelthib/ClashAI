@@ -16,8 +16,9 @@ from clashai.agents.base import BaseAgent, RunState, AgentResult
 from clashai.agents.scheduler import AgentScheduler
 from clashai.agents.world import build_world, WORLD_KEYS
 from clashai.agents.clan_castle_agent import ClanCastleAgent
+from clashai.agents.combat_agent import CombatAgent
 
 __all__ = [
     'BaseAgent', 'RunState', 'AgentResult', 'AgentScheduler',
-    'build_world', 'WORLD_KEYS', 'ClanCastleAgent',
+    'build_world', 'WORLD_KEYS', 'ClanCastleAgent', 'CombatAgent',
 ]

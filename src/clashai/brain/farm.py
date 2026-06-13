@@ -57,42 +57,16 @@ class BrainFarmMixin:
 
     def _run_attack_episode(self):
         """
-        Executes a complete attack episode with agent V4.
-        Used for both farm AND CW.
+        Executes a complete attack episode with agent V4. Used for farm AND CW.
+        Delegates to the shared SSOT runner (also used by CombatAgent, V5.1).
 
         Returns:
             info: dict with results, or None on failure
         """
-        from clashai.combat.environment_v4 import ClashEnvV4
-        from clashai.combat.action_space import MAX_STEPS_SAFETY
-
-        try:
-            env = ClashEnvV4(models=self._models, verbose=self.verbose)
-            obs, mask = env.reset()
-            grid, vector = obs
-
-            if self._use_heuristic:
-                # Heuristic mode
-                actions = env.get_heuristic_sequence()
-                for action in actions:
-                    obs, mask, reward, done, info = env.step(action)
-                    grid, vector = obs
-                    if done:
-                        break
-            else:
-                # RL mode
-                for step in range(MAX_STEPS_SAFETY):
-                    action, _, _ = self._agent.select_action(grid, vector, mask)
-                    obs, mask, reward, done, info = env.step(action)
-                    grid, vector = obs
-                    if done:
-                        break
-
-            env.close()
-            return info
-
-        except Exception as e:
-            print(f" ERROR: Erreur pendant l'attaque : {e}")
-            import traceback
-            traceback.print_exc()
-            return None
+        from clashai.combat.episode_runner import run_attack_episode
+        return run_attack_episode(
+            self._models,
+            agent=self._agent,
+            use_heuristic=self._use_heuristic,
+            verbose=self.verbose,
+        )

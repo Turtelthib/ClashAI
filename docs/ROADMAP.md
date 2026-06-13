@@ -152,8 +152,40 @@ Objectif : valider visuellement que **tous les CNN voient correctement** avant d
   - 2ème tentative (Session 13) : revert à `640` (default Ultralytics) → 9/9 détections (conf 0.35-0.96). Empiriquement OK mais qualité moyenne.
   - 3ème tentative (Session 13, fin) : retrain dédié à `imgsz=1088` → mieux que 640 mais pas encore parfait. Le modèle mérite plus de data / plus d'epochs (item séparé hors refactor).
 - [x] **Fix demande de troupes château de clan** (Session 13, fait — voir détail dans V4.3)
-- [ ] **🚩 BUG À VÉRIFIER APRÈS LE REFACTO — capacités héros jamais déclenchées** : observé (déjà avant la migration CNN) que l'agent ne déclenche PAS manuellement les capacités des héros en combat (`_execute_ability` / `activate()` jamais effectif). À diagnostiquer une fois le refacto des gros fichiers terminé, AVANT de passer à la suite. Pistes : (1) l'action `ability` est-elle bien échantillonnée par la policy / présente dans l'action space ? (2) le mask `get_ability_mask()` est-il toujours à 0 (donc action masquée) — i.e. `_icon_positions` jamais peuplé ? (3) avec la migration CNN, vérifier que `state['troop_bar']` contient bien des détections `*_capa` non-grisées en combat réel (sinon mask reste 0). (4) `_execute_ability` appelé mais `activate()` retourne False ? Ajouter des logs sur le chemin deploy→mask→sample→execute. : le bouton vert mode air/sol sur l'icône du GG n'a pas de classe YOLO dédiée → bbox `grand_gardien` inclut ce bouton → le tap au centre du bbox peut tomber sur le toggle au lieu de l'icône à déployer. **Fix recommandé** : retrain YOLO troop bar avec une nouvelle classe `grand_gardien_mode` (ou `mode_toggle_generic` partagé entre héros). Log diagnostic ajouté dans `troop_finder.select()` (warning si y hors range 950-1080).
+- [x] **🚩 Capacités héros jamais déclenchées (mode heuristique) — CORRIGÉ** : voir bloc dédié ci-dessous. : le bouton vert mode air/sol sur l'icône du GG n'a pas de classe YOLO dédiée → bbox `grand_gardien` inclut ce bouton → le tap au centre du bbox peut tomber sur le toggle au lieu de l'icône à déployer. **Fix recommandé** : retrain YOLO troop bar avec une nouvelle classe `grand_gardien_mode` (ou `mode_toggle_generic` partagé entre héros). Log diagnostic ajouté dans `troop_finder.select()` (warning si y hors range 950-1080).
 - [x] **Conf YOLO troop bar 0.45 → 0.40** (Session 13) : 0.45 était pile sur le fil (golem @ 0.41 droppé). Validé empiriquement sur vraies frames : 0.40 = rien loupé, 0.50 = ça loupe. `YOLO_CONF` dans `troop_bar_detector.py` + défaut du tool `detect_troop_bar.py`.
+
+#### 🔧 Capacités héros jamais déclenchées en mode heuristique (V4.4)
+
+**Symptôme** : l'agent ne déclenche JAMAIS les capacités des héros en combat (Rage Royale, Cloak, etc.), alors que les héros sont bien déployés (logs le confirment). Observé déjà avant la migration CNN.
+
+**Cause racine** (mode heuristique = `--test` + brain sans checkpoint entraîné) : `get_heuristic_sequence()` construit toute la séquence d'actions **en une fois, juste après `reset()`** — donc AVANT que le moindre deploy ne s'exécute. Or la boucle qui ajoutait les actions `ability` était gardée par `if self._hero_manager.is_deployed(hero_name)`. Comme `reset()` vient d'appeler `_hero_manager.reset()` (→ `_deployed = {tous False}`), ce check est **toujours False au moment de la construction** → **aucune action `ability` n'était jamais ajoutée au plan**. Les deploys exécutés ensuite passaient `is_deployed=True`, mais trop tard : la séquence était déjà figée.
+
+**Fix** (`combat/environment_v4/heuristic.py`) : remplacer le check d'état runtime `is_deployed()` par un check d'**inventaire** connu au build-time — les héros présents dans l'armée (`TROOP_TYPES[i]['role']=='hero'` et `_remaining_troops[i]>0`) SERONT déployés par les actions deploy plus haut dans la séquence, donc leur bouton `*_capa` apparaîtra et `_execute_ability()` pourra le taper. Ajout d'un `wait_long` avant le bloc abilities pour laisser les héros entrer + la capacité se charger (sinon le `*_capa` est grisé/en cooldown → exclu du mask).
+
+**Pièges** :
+- `is_deployed()` reflète l'état runtime, inutilisable dans un plan construit à l'avance. Toujours raisonner inventaire (build-time) vs état (runtime) quand on génère une séquence d'actions en amont.
+- Le `*_capa` est grisé pendant ~quelques secondes après le deploy (cooldown de charge) → `update_from_troop_bar` l'exclut tant qu'il est grisé. D'où le `wait_long`.
+- En **mode RL**, le chemin était structurellement OK (le mask s'ouvre via `get_ability_mask()` quand le CNN voit un `*_capa` non-grisé pendant les steps `observe`) — l'agent doit juste apprendre à l'utiliser. Bonus : la séquence heuristique corrigée sert aussi de démonstrations BC → meilleur point de départ RL pour les capacités.
+
+**Test** :
+```bash
+# Vérif unitaire : les abilities sont queuées pour les héros de l'armée
+uv run python -c "
+import numpy as np
+from clashai.combat.environment_v4.heuristic import HeuristicMixin
+from clashai.combat.legacy.agent import TROOP_TYPES, TROOP_NAME_TO_IDX
+from clashai.combat.action_space import decode_action, HERO_NAMES
+from clashai.combat.hero import HeroAbilityManager
+class F(HeuristicMixin):
+    def __init__(s, r): s._remaining_troops=r; s.verbose=False; s._hero_manager=HeroAbilityManager(verbose=False); s._hero_manager.reset()
+r=np.zeros(len(TROOP_TYPES),dtype=int); r[TROOP_NAME_TO_IDX['golem']]=2; r[TROOP_NAME_TO_IDX['roi']]=1; r[TROOP_NAME_TO_IDX['reine']]=1
+seq=[decode_action(a) for a in F(r).get_heuristic_sequence()]
+print('abilities:', [HERO_NAMES[d[1]] for d in seq if d[0]=='ability'])  # -> ['roi','reine']
+"
+# Run réel : observer les logs '<hero> ability activated' pendant l'attaque
+uv run python tools/train/train_rl_v4.py --test
+```
 
 #### 🔧 Migration capacités héros : template matching → CNN troop bar (V4.4)
 
@@ -276,8 +308,13 @@ uv run python -c "from clashai.combat.hero_ability import HeroAbilityManager as 
 
 - [x] Définir classe abstraite `BaseAgent` : `can_run(world)`, `run()`, `priority`, `cooldown_seconds` (Session 13, Phase C.4 — `clashai/agents/base.py`)
 - [x] `AgentScheduler` : registry + `pick(world)` (prio + cooldown + can_run) + `tick(world)` + history (Session 13, `clashai/agents/scheduler.py`)
-- [ ] Chaque agent existant (combat, GdC, château, chat) implémente l'interface — fait en V5.2
-- [ ] L'orchestrateur `brain.py` utilise `AgentScheduler` au lieu de la logique ad-hoc actuelle — fait en V5.2
+- [x] **`build_world(models, **flags)`** (`clashai/agents/world.py`) : snapshot SSOT lu par tous les `can_run()`, alimenté par le cache `PerceptionThread` (zéro screenshot bloquant) + flag dérivé `on_village_home`. Fonctionne à vide (sans émulateur).
+- [x] **`ClanCastleAgent` (agent pilote)** (`clashai/agents/clan_castle_agent.py`) : 1er `BaseAgent` concret, enveloppe `ClanCastleManager` sans réécrire la logique. Cooldown délégué au manager. Démo offline validée : `world → can_run → pick → run → cooldown`.
+- [x] **`CombatAgent`** (`clashai/agents/combat_agent.py`) : farm/multi, enveloppe le runner d'épisode. **DRY** : extraction de `clashai/combat/episode_runner.py::run_attack_episode()` (SSOT partagé avec `brain/farm.py` qui délègue maintenant). Démo offline : préemption de priorité (CC 20 > Combat 10) + mode gating (gdc → off).
+- [ ] Répliquer le reste : `GdCAgent` (guerre), `ChatAgent` (lecture/réponse chat)
+- [ ] **Interface `Brain`** (seam pour cerveau swappable) : `brain.py` actuel → `HeuristicBrain` ; futur `LocalLLMBrain` (LLM local + RAG jargon clan). Voir [[project_llm_brain_vision]].
+- [ ] L'orchestrateur `brain.py` utilise `AgentScheduler` au lieu de la logique ad-hoc actuelle
+- [ ] Chaque agent existant (combat, GdC, château, chat) implémente l'interface — château ✅ (pilote), reste à faire
 
 #### État actuel (à formaliser)
 
