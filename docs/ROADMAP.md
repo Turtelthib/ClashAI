@@ -241,7 +241,10 @@ uv run python -c "from clashai.combat.hero_ability import HeroAbilityManager as 
 - [x] **Split 9/12** : `brain.py` → `brain/` (package, mixins par domaine : core/loop/farm/war/chat/navigation + app + __main__). **Bug préexistant corrigé** : l'entry point `clashai-brain = "clashai.brain:main"` était CASSÉ (brain.py n'avait pas de `main()`, juste un `if __name__=="__main__"`) → ajout d'un vrai `main()` dans `app.py`, ré-exporté par `__init__.py`. `python -m clashai.brain` fonctionne via `__main__.py`.
 - [x] **Split 10/12** : `combat/environment_v4.py` → `combat/environment_v4/` (same-name package, mixins par domaine : core/observation/actions/reward/observe/capture/heuristic + env). `ClashEnvV4(...Mixins, ClashEnvV3)` — mixins AVANT ClashEnvV3 dans la MRO pour que les overrides V4 gagnent. `NO_TROOPS_CHECKS_THRESHOLD` (inutilisé ici, dupliqué dans episode_lifecycle/legacy) supprimé (DRY).
 - [x] **Split 11/12** : `combat/agent_v4.py` → `combat/agent_v4/` (same-name package : constants, network=ActorCriticV4, buffer=RolloutBuffer, bc=BehavioralCloningMixin, agent=PPOAgentV4, __main__). API ré-exportée : `PPOAgentV4, ActorCriticV4, RolloutBuffer, VECTOR_SIZE, ROLE_FEATURES, SPELL_FEATURES, COMBAT_FEATURES_SIZE, BATCH_SIZE` + hyperparams.
-- [ ] **Split 12/12** : `combat/combat_observer.py` (521L) → `combat/observer/`
+- [x] **Split 12/12** : `combat/combat_observer.py` → `combat/combat_observer/` (same-name package : constants, health_bars, clustering, observer, __main__). API ré-exportée : `CombatObserver, COMBAT_FEATURES_SIZE, _cluster_positions, detect_troop_bars/hurt_bars/hero_bars`.
+- [ ] **Split BONUS (hors plan initial)** : `combat/spell_caster.py` (564L) dépasse aussi 500L mais n'était pas dans la liste des 12 → à splitter pour respecter le critère "0 fichier >500L hors legacy". Reste le SEUL fichier >500L hors legacy.
+
+> ✅ **Refacto Phase 3 quasi terminée** : 12/12 splits faits + migration CNN héros + 3 bugs préexistants corrigés (weights_dir GdC, entry point brain cassé, NO_TROOPS dupliqué). Reste juste le split bonus spell_caster.
 
 #### Avant de coder V5.0 Phase 3 (decision tick event-driven)
 
