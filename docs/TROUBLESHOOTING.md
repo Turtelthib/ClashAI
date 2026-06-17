@@ -15,6 +15,7 @@ Si un de ces problèmes réapparaît, relire le bloc correspondant avant de re-d
 - [Alignement `imgsz` par modèle YOLO (+ historique troop bar)](#-alignement-imgsz-par-modèle-yolo)
 - [Demande de troupes château de clan (5 bugs)](#-demande-de-troupes-château-de-clan-5-bugs)
 - [Échec navigation → faux -50 reward](#-échec-navigation--faux--50-reward)
+- [Famine d'agent dans le scheduler (CC monopolise, combat ne tourne pas)](#-famine-dagent-dans-le-scheduler)
 
 ---
 
@@ -163,3 +164,29 @@ uv run python -c "from clashai.combat.hero_ability import HeroAbilityManager as 
 - `reset()` marque `self._nav_failed = True` si `_navigate_to('phase_attaque')` échoue après retries.
 - `finish_episode()` court-circuite si `_nav_failed` → reward `0.0` (au lieu de -50) + `info['nav_failed']=True` pour filtrer ces épisodes.
 - Retry auto : `reset()` attend 3s et retente une fois (matchmaker bloqué = cause fréquente, le retry suffit souvent).
+
+---
+
+## 🔧 Famine d'agent dans le scheduler
+
+> Si un agent ne se déclenche jamais (`brain --mode farm` ne fait que des pauses, CombatAgent jamais lancé) → relire ce bloc.
+
+**Symptôme** : en V5.1 (brain branché sur l'`AgentScheduler`), le bot ne fait que `_human_pause()` ; un agent prioritaire (ex. `ClanCastleAgent` prio 20) tourne en silence à chaque tick et l'agent moins prioritaire (`CombatAgent` prio 10) n'a jamais son tour.
+
+**Cause racine** : un agent **prio-haute** dont `can_run` reste **True en permanence** et `cooldown_seconds = 0` **monopolise** le scheduler (`pick()` le renvoie à chaque tick). Cas concret : `ClanCastleAgent` avait délégué son cooldown au `ClanCastleManager` — mais le manager n'avance `_last_request_time` que sur une requête **réussie**. Template `request` manquant → requête échoue → `time_until_next_request()` reste à 0 → CC "prêt" en boucle → famine de `CombatAgent`.
+
+**Fix** : donner un **cooldown scheduler** à l'agent (`ClanCastleAgent.cooldown_seconds = REQUEST_COOLDOWN`). Le scheduler pose `_last_run_at` après **chaque** `run()` (succès **ou** échec, cf `BaseAgent._execute` `finally`) → l'agent rend la main pour 15 min même si son run n'a rien fait.
+
+**Règle générale** : tout agent prioritaire doit soit avoir un `cooldown_seconds > 0`, soit devenir `can_run=False` après avoir agi (ex. `GdCAgent` vide sa file). Sinon il affame les agents en dessous. `CombatAgent` (prio la plus basse) peut rester à cooldown 0 — il n'affame personne et son `run()` dure plusieurs minutes (une attaque complète).
+
+**Test** :
+```bash
+uv run python -c "
+from clashai.agents import AgentScheduler, CombatAgent, ClanCastleAgent
+from clashai.social.clan_castle import ClanCastleManager
+s=AgentScheduler(); c=CombatAgent(models=None,verbose=False)
+cc=ClanCastleAgent(manager=ClanCastleManager(models=None,verbose=False),screenshot_fn=lambda:None,tap_fn=lambda *a,**k:None,verbose=False)
+s.register(c); s.register(cc); w={'mode':'farm','on_village_home':True}
+print('tick1', s.pick(w).name); cc._execute(); print('tick2', s.pick(w).name)  # clan_castle puis combat
+"
+```

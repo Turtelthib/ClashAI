@@ -5,9 +5,13 @@ import time
 
 
 class BrainChatMixin:
-    """Reads clan chat commands and posts the AI's acknowledgements."""
+    """Reads clan chat commands and posts the AI's acknowledgements.
 
-    def _send_chat_ack(self, target, before=True, result=None):
+    [DEAD-CODE-V5.1] superseded by ChatAgent (V5.1 scheduler migration) —
+    remove in Étape B. (grep "DEAD-CODE-V5.1".)
+    """
+
+    def _send_chat_ack(self, target, before=True, result=None):  # [DEAD-CODE-V5.1] → ChatAgent
         """Sends a message in the clan chat."""
         try:
             # Open the chat
@@ -32,7 +36,7 @@ class BrainChatMixin:
             if self.verbose:
                 print(f" WARNING: Erreur envoi chat: {e}")
 
-    def _check_clan_chat(self):
+    def _check_clan_chat(self):  # [DEAD-CODE-V5.1] → ChatAgent
         """
         Opens the chat, reads commands, closes the chat.
         Like a player glancing at the chat between attacks.

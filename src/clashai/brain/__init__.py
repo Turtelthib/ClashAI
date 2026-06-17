@@ -16,5 +16,6 @@
 # Entry point `clashai-brain = "clashai.brain:main"` resolves to app.main.
 
 from clashai.brain.app import ClashBrain, main
+from clashai.brain.interface import Brain, HeuristicBrain
 
-__all__ = ['ClashBrain', 'main']
+__all__ = ['ClashBrain', 'main', 'Brain', 'HeuristicBrain']

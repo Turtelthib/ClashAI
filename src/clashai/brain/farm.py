@@ -5,9 +5,14 @@ from datetime import datetime
 
 
 class BrainFarmMixin:
-    """Farm (multiplayer) attacks + the shared attack-episode runner."""
+    """Farm (multiplayer) attacks + the shared attack-episode runner.
 
-    def _do_farm_attack(self):
+    [DEAD-CODE-V5.1] All methods below are superseded by CombatAgent +
+    ClanCastleAgent (V5.1 scheduler migration) — remove in Étape B.
+    (grep "DEAD-CODE-V5.1" to find every method to delete.)
+    """
+
+    def _do_farm_attack(self):  # [DEAD-CODE-V5.1] → CombatAgent
         """Executes a farm attack (classic multiplayer)."""
         self._attacks_done += 1
 
@@ -35,7 +40,7 @@ class BrainFarmMixin:
                       f"{stars}* {pct}% | "
                       f"Average: {avg_dest:.1f}%")
 
-    def _request_cc_troops(self):
+    def _request_cc_troops(self):  # [DEAD-CODE-V5.1] → ClanCastleAgent
         """
         Requests clan castle troops if the cooldown has passed.
         V4.1: called automatically before each attack.
@@ -55,7 +60,7 @@ class BrainFarmMixin:
             if self.verbose:
                 print(f" WARNING: Erreur demande CC: {e}")
 
-    def _run_attack_episode(self):
+    def _run_attack_episode(self):  # [DEAD-CODE-V5.1] → combat.episode_runner
         """
         Executes a complete attack episode with agent V4. Used for farm AND CW.
         Delegates to the shared SSOT runner (also used by CombatAgent, V5.1).

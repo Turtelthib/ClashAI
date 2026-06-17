@@ -63,10 +63,12 @@
 
 > Plomberie pour le futur cerveau. **4 agents déjà faits** (voir CHANGELOG) ; reste l'orchestration.
 
-- [ ] **Interface `Brain`** (seam pour cerveau swappable) : `brain.py` actuel → `HeuristicBrain` ; futur `LocalLLMBrain` (LLM local + RAG jargon clan, voir [Cerveau LLM](#cerveau-llm-local-coach--parole--rag)).
-- [ ] **`brain.py` utilise `AgentScheduler`** au lieu de sa logique if/else en dur (enregistre les 4 agents, boucle sur `pick(world)`). ⚠️ **Première étape qui change le comportement** → test réel important.
-- [ ] **ADB zéro screenshot (résiduel)** : faire lire le cache `PerceptionThread` aux consommateurs *live* (`gdc/navigator`, `social/chat`, `clan_castle`) au lieu de leur propre grab. *Note* : en grande partie absorbé par le `world` quand le brain passe sur le scheduler ; le RAW `adb exec-out screencap` ne subsiste que comme fallback documenté (OK).
+- [x] **Interface `Brain`** (`brain/interface.py`) : `Brain` ABC + `HeuristicBrain` (= `scheduler.pick`). Seam pour le futur `LocalLLMBrain`.
+- [x] **`brain.py` utilise `AgentScheduler`** (Étape A) : `_load_modules` enregistre les 4 agents + crée le `HeuristicBrain` ; `_main_loop` réécrit (`world → brain.decide → scheduler.run → stats`). Vieilles méthodes gardées et taguées `[DEAD-CODE-V5.1]` (revert-safe). ⚠️ **change le comportement** → test réel requis.
+- [ ] **Étape B** : supprimer les méthodes mortes (`grep DEAD-CODE-V5.1`) une fois le run réel validé.
+- [ ] **ADB zéro screenshot (résiduel)** : faire lire le cache `PerceptionThread` aux consommateurs *live* (`gdc/navigator`, `social/chat`, `clan_castle`). En partie absorbé par le `world`. Le RAW `screencap` ne subsiste que comme fallback documenté (OK).
 - [ ] Stop le sanity-rescan dans `environment_v4._all_resources_exhausted()` (redondant avec `_sync_remaining_from_perception()`).
+- [ ] **Flag perception `chat_unread`** (badge `!`/rouge près du bouton chat) → `ChatAgent.can_run` ne check qu'en présence du signal (au lieu d'ouvrir périodiquement). Cf vision communication inter-agents.
 
 ### V5.0 — Mode live (phases optionnelles)
 
@@ -124,7 +126,12 @@
 - [ ] **Parole autonome** : commente ses attaques dans le chat ("3★ 100% ! Compo parfaite").
 - [ ] **Conseils GdC** : "2 infernos single → soin plutôt que rage".
 - [ ] **Rapport quotidien** dans le chat.
-- [ ] **RAG** (ChromaDB + SentenceTransformers) : wiki CoC (stats exactes) + historique attaques (mémoire épisodique) + meta + données clan. **Le jargon/contexte = RAG, PAS fine-tuning** (le fine-tune apprend le style, pas les faits → hallucinations sinon).
+- [ ] **RAG** (ChromaDB + SentenceTransformers) — base de connaissance pour donner au LLM le contexte du jeu :
+  - **Mécaniques de jeu** : synergies sorts↔troupes (rage = +dégâts/+vitesse ; gel fige les défenses ; soin), rôles (golem = tank lent/PV, démolisseur = fonce sur les murs, etc.) → le cerveau raisonne stratégie.
+  - **Stats exactes par niveau** (wiki CoC scrappé) → pas d'hallucination sur les chiffres.
+  - **Historique d'attaques** (auto-alimenté) → mémoire épisodique ("la semaine dernière sur une base similaire…").
+  - **Meta + données clan** (compos populaires, membres, règles).
+  - **Le jargon/contexte = RAG, PAS fine-tuning** (le fine-tune apprend le style, pas les faits → hallucinations sinon). MAJ CoC → mettre à jour la base RAG seulement, zéro ré-entraînement.
 - [ ] **Fine-tuning optionnel** (LoRA) : uniquement pour le *style* (parler comme un membre du clan), à partir des vrais logs de chat.
 - [ ] ⚠️ **Sécurité** : le chat clan est un input HOSTILE (injection de prompt) → whitelist des donneurs d'ordres + actions destructives derrière confirmation. Séparer cerveau (décide QUOI) et RL (exécute COMMENT).
 
@@ -133,6 +140,16 @@
 ## 🗃️ Backlog (non planifié)
 
 > Idées pas encore assignées à une version. On pioche ici quand on a du temps.
+
+**Combat — ajustements heuristique (vus au 1er run multi-agents, non-critiques)**
+- [ ] **Engin de siège jamais déployé** : le CNN détecte `demolisseur` mais il est **absent de `TROOP_TYPES`** (`combat/legacy/agent.py`) ET de `ROLE_TO_TROOPS['siege']` (`combat/action_space.py`, qui n'a que `lance_buche`) → invisible à l'inventaire de deploy. **Ne PAS corriger en dur** → voir l'item "Registre de troupes data-driven" ci-dessous (le bon fix).
+- [ ] **Spam de sorts** : l'heuristique balance tous les sorts d'affilée (3 rages en ~5s au run). Court terme : espacer dans `get_heuristic_sequence`. Long terme : **timing géré par l'orchestrateur LLM** (sort au bon moment selon le combat).
+
+**Registre de troupes data-driven (extensibilité sans code)** 🎯
+> Objectif : ajouter une troupe/engin/sort = **retrain CNN + 1 ligne de data**, JAMAIS toucher au code Python.
+- [ ] Remplacer les listes en dur `TROOP_TYPES` (`legacy/agent.py`) + `ROLE_TO_TROOPS` (`action_space.py`) par **un SSOT data** (ex. `configs/troops.json` : `{nom: {role, max}}`) dont les deux dérivent.
+- [ ] Audit : aligner les classes du CNN troop bar avec ce registre (ex. `demolisseur` manquant) ; détecter les classes CNN absentes du registre au chargement.
+- [ ] **Full-auto (horizon LLM)** : quand le CNN voit une classe inconnue, l'orchestrateur LLM en déduit le rôle (connaissance jeu + RAG) et remplit le registre tout seul → "je retrain le CNN et ça repart". Rejoint *Apprentissage continu* ci-dessous.
 
 **Combat intelligent**
 - [ ] Estimation loot avant attaque (OCR ressources adverses → skip si pas rentable).

@@ -5,9 +5,13 @@ from datetime import datetime
 
 
 class BrainWarMixin:
-    """CW attacks driven by a target number (from clan chat commands)."""
+    """CW attacks driven by a target number (from clan chat commands).
 
-    def _do_gdc_attack(self, target_number):
+    [DEAD-CODE-V5.1] superseded by GdCAgent (V5.1 scheduler migration) —
+    remove in Étape B. (grep "DEAD-CODE-V5.1".)
+    """
+
+    def _do_gdc_attack(self, target_number):  # [DEAD-CODE-V5.1] → GdCAgent
         """
         Executes a CW attack on a specific target.
 

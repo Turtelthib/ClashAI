@@ -1,88 +1,101 @@
 # clashai/brain/loop.py
-# BrainLoopMixin — main decision loop + task dispatch + chat-check timing.
+# BrainLoopMixin — main decision loop (V5.1: scheduler-driven via the Brain).
 
 import time
 
-from clashai.config import (
-    CHAT_CHECK_INTERVAL, ATTACKS_BEFORE_CHAT_CHECK,
-    PRIORITY_GDC_COMMAND, PRIORITY_FARM_ATTACK,
-)
+# ATTACKS_BEFORE_CHAT_CHECK is only used by the [DEAD-CODE-V5.1] _should_check_chat
+# below — kept imported so the dead method stays valid until Étape B removes it.
+from clashai.config import CHAT_CHECK_INTERVAL, ATTACKS_BEFORE_CHAT_CHECK
 
 
 class BrainLoopMixin:
-    """The heart of the Brain: decides what to do at every moment."""
+    """The heart of the Brain: each tick, ask the Brain which agent to run."""
 
     def _main_loop(self, max_episodes=None):
         """
-        The heart of the Brain. Decides what to do at every moment.
+        V5.1 main loop — scheduler-driven.
 
         Cycle:
-          1. Make sure we are at the village
-          2. Check chat commands (if it is time)
-          3. Decide the next action
-          4. Execute
-          5. Human pause
-          6. Repeat
+          1. Ensure we're at the village (recovery)
+          2. Build the world snapshot (perception + mode)
+          3. Brain.decide(world) → which agent runs (priority + cooldown + can_run)
+          4. Run it, update stats
+          5. Human pause / idle
         """
+        from clashai.agents import build_world
+
         while self._running:
-            # --- Episode limit ---
+            # --- Episode limit (counts farm attacks, like before) ---
             if max_episodes and self._attacks_done >= max_episodes:
                 print(f"\n{max_episodes} attacks completed")
                 break
 
-            # --- 1. Return to village ---
+            # --- 1. Return to village (recovery; also gives us the screen) ---
             if not self._ensure_at_village():
                 print(" WARNING: Unable to return to village, retry...")
                 time.sleep(5)
                 continue
 
-            # --- 2. Check clan chat ---
-            if self._should_check_chat():
-                commands = self._check_clan_chat()
+            # --- 2. World snapshot (perception cache + mode + village flag) ---
+            world = build_world(
+                self._models,
+                mode=self.mode,
+                on_village_home=True,  # we just ensured it
+            )
 
-                # Process commands by priority
-                for cmd in commands:
-                    if cmd['type'] == 'attack':
-                        self._task_queue.append({
-                            'type': 'gdc_attack',
-                            'target': cmd['target'],
-                            'priority': PRIORITY_GDC_COMMAND,
-                            'original_cmd': cmd,
-                        })
-                    elif cmd['type'] == 'stop':
-                        print(" Stop command received")
-                        if self._chat_monitor:
-                            self._chat_monitor.mark_executed(cmd)
-                        self._running = False
-                        return
+            # --- 3. Decide via the (swappable) Brain ---
+            agent = self._brain.decide(world)
 
-                # Sort by priority
-                self._task_queue.sort(key=lambda t: t['priority'], reverse=True)
-
-            # --- 3. Decide the next action ---
-            if self._task_queue:
-                # Execute the most urgent task
-                task = self._task_queue.pop(0)
-                self._execute_task(task)
-            elif self.mode in ('farm', 'auto'):
-                # No urgent task → farm
-                self._execute_task({
-                    'type': 'farm_attack',
-                    'priority': PRIORITY_FARM_ATTACK,
-                })
-            elif self.mode == 'gdc':
-                # CW mode: wait for commands
-                if self.verbose:
-                    print(f"  Waiting for CW commands... "
-                          f"(next check in {CHAT_CHECK_INTERVAL}s)")
-                time.sleep(CHAT_CHECK_INTERVAL)
+            if agent is None:
+                # Nothing ready. In gdc-only mode, wait for commands; else pause.
+                if self.mode == 'gdc':
+                    if self.verbose:
+                        print(f"  Waiting for CW commands... "
+                              f"(next check in {CHAT_CHECK_INTERVAL}s)")
+                    time.sleep(CHAT_CHECK_INTERVAL)
+                else:
+                    self._human_pause()
                 continue
 
-            # --- 4. Human pause ---
+            # --- 4. Run the chosen agent + update stats ---
+            result = self._scheduler.run(agent)
+            self._update_stats(agent, result)
+
+            # --- 5. Human pause ---
             if self._running:
                 self._human_pause()
 
-    def _execute_task(self, task):
+    def _update_stats(self, agent, result):
+        """Aggregate brain-level stats from an agent's AgentResult."""
+        if not result.ok:
+            if self.verbose and result.error:
+                print(f" {agent.name} failed: {result.error}")
+            return
+        data = result.data or {}
+
+        if agent.name == 'combat':
+            self._attacks_done += 1
+            self._total_stars += data.get('stars') or 0
+            self._total_destruction += data.get('percentage') or 0
+            self._attacks_since_chat_check += 1
+            if self.verbose:
+                avg = self._total_destruction / max(self._attacks_done, 1)
+                print(f"\n Farm #{self._attacks_done}: "
+                      f"{data.get('stars')}* {data.get('percentage')}% | "
+                      f"Average: {avg:.1f}%")
+
+        elif agent.name == 'gdc':
+            self._gdc_attacks_done += 1
+            if self.verbose:
+                print(f"\n GdC #{data.get('target')}: "
+                      f"{data.get('stars')}* {data.get('percentage')}%")
+
+    # =====================================================================
+    # [DEAD-CODE-V5.1] superseded by the scheduler + agents — remove in Étape B
+    # (grep "DEAD-CODE-V5.1" to find every method to delete)
+    # =====================================================================
+
+    def _execute_task(self, task):  # [DEAD-CODE-V5.1] → CombatAgent / GdCAgent
         """Executes a task (farm attack or CW attack)."""
         task_type = task['type']
 
@@ -108,7 +121,7 @@ class BrainLoopMixin:
             if self._chat_monitor and info:
                 self._send_chat_ack(target, before=False, result=info)
 
-    def _should_check_chat(self):
+    def _should_check_chat(self):  # [DEAD-CODE-V5.1] → ChatAgent.can_run cooldown
         """Determines whether the chat should be checked now."""
         if self.mode == 'farm':
             return False

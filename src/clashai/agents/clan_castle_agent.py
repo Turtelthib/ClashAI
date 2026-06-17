@@ -10,6 +10,7 @@
 import time
 
 from clashai.agents.base import BaseAgent, AgentResult
+from clashai.config import REQUEST_COOLDOWN
 
 
 class ClanCastleAgent(BaseAgent):
@@ -22,7 +23,13 @@ class ClanCastleAgent(BaseAgent):
 
     name = 'clan_castle'
     priority = 20            # low — farm/war combat preempts this
-    cooldown_seconds = 0.0   # cooldown is owned by the manager, not the scheduler
+    # Scheduler-level cooldown = the request interval. CRITICAL: the manager
+    # only advances ITS cooldown on a SUCCESSFUL request; if a run no-ops
+    # (template missing, CC full, failure), the manager stays "ready" forever
+    # → this prio-20 agent would starve CombatAgent (prio 10) every tick.
+    # The scheduler cooldown fires after EVERY run (success or not), so a
+    # failed/no-op CC run still yields the floor to combat for 15 min.
+    cooldown_seconds = REQUEST_COOLDOWN
 
     def __init__(self, manager=None, models=None,
                  screenshot_fn=None, tap_fn=None, verbose=True, **kwargs):

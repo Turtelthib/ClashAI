@@ -130,6 +130,45 @@ class BrainCoreMixin:
         self._adb_screenshot = gl.adb_screenshot
         self._adb_tap = gl.adb_tap
 
+        # V5.1: assemble the agent scheduler + swappable Brain.
+        # Each agent wraps an already-loaded module (no double init).
+        from clashai.agents import (
+            AgentScheduler, CombatAgent, GdCAgent, ClanCastleAgent, ChatAgent,
+        )
+        from clashai.brain.interface import HeuristicBrain
+
+        self._scheduler = AgentScheduler()
+
+        # Combat (farm) — always available (also farms loot for war modes).
+        self._scheduler.register(CombatAgent(
+            models=self._models, agent=self._agent,
+            use_heuristic=self._use_heuristic, verbose=self.verbose,
+        ))
+
+        # Clan castle — always (CC troops help farm + war).
+        self._scheduler.register(ClanCastleAgent(
+            manager=self._cc_manager, models=self._models,
+            screenshot_fn=self._adb_screenshot, tap_fn=self._adb_tap,
+            verbose=self.verbose,
+        ))
+
+        # War + chat only in auto/gdc modes.
+        if self.mode in ('auto', 'gdc'):
+            gdc_agent = GdCAgent(
+                models=self._models, navigator=self._gdc_navigator,
+                agent=self._agent, use_heuristic=self._use_heuristic,
+                verbose=self.verbose,
+            )
+            self._scheduler.register(gdc_agent)
+            self._scheduler.register(ChatAgent(
+                monitor=self._chat_monitor, models=self._models,
+                on_attack=gdc_agent.enqueue_target,
+                on_stop=lambda: setattr(self, '_running', False),
+                verbose=self.verbose,
+            ))
+
+        self._brain = HeuristicBrain(self._scheduler)
+
         print("Tous les modules chargés\n")
 
     def _shutdown(self):
