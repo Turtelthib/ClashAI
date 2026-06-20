@@ -27,18 +27,12 @@ class BrainCoreMixin:
 
         # Modules (loaded at startup)
         self._models = None
-        self._env = None
         self._agent = None
         self._chat_monitor = None
         self._gdc_navigator = None
         self._cc_manager = None
-
-        # Task queue
-        self._task_queue = []
-
-        # Cycle counters
-        self._attacks_since_chat_check = 0
-        self._last_chat_check = 0
+        self._scheduler = None
+        self._brain = None
 
     def start(self, max_episodes=None):
         """

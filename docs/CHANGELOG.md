@@ -23,7 +23,8 @@ Plomberie pour les sous-agents. Posé à côté du système existant → le bot 
   - `ChatAgent` (prio 30) — lit le chat, dispatche (`attack N → gdc.enqueue_target`), répond. **Canal d'entrée NL du futur LocalLLMBrain.**
 - ✅ Chaque agent a une démo offline (sans émulateur) prouvant `world → can_run → pick → run` + préemption de priorité + mode gating.
 - 🐛 **Fix famine d'agent** (révélé au 1er run réel) : `ClanCastleAgent` (prio 20, cooldown 0 + `can_run` toujours vrai car template manquant) monopolisait le scheduler → `CombatAgent` jamais lancé (que des pauses). Fix : `cooldown_seconds = REQUEST_COOLDOWN` (le scheduler pose le cooldown après chaque run, succès ou échec). Voir TROUBLESHOOTING.
-- ✅ **Interface `Brain` + brain branché sur le scheduler (Étape A)** : `brain/interface.py` (`Brain` ABC + `HeuristicBrain` = `scheduler.pick`). `brain.py` enregistre les 4 agents dans un `AgentScheduler` et son `_main_loop` est réécrit (`world → brain.decide → scheduler.run → stats`). Vieilles méthodes taguées `[DEAD-CODE-V5.1]` (revert-safe, à supprimer en Étape B). **Première étape qui change le comportement runtime** (le bot route via le scheduler).
+- ✅ **Interface `Brain` + brain branché sur le scheduler (Étape A)** : `brain/interface.py` (`Brain` ABC + `HeuristicBrain` = `scheduler.pick`). `brain.py` enregistre les 4 agents dans un `AgentScheduler` et son `_main_loop` est réécrit (`world → brain.decide → scheduler.run → stats`). **Première étape qui change le comportement runtime** ; validée en run réel (CombatAgent attaque via le scheduler, `--mode farm`).
+- ✅ **Cleanup brain (Étape B)** : suppression des méthodes mortes + fichiers mixins `farm.py`/`war.py`/`chat.py` (logique désormais 100% dans les agents). `ClashBrain` = `core` + `loop` + `navigation`. Compteurs morts retirés.
 
 ---
 

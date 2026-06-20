@@ -65,7 +65,7 @@
 
 - [x] **Interface `Brain`** (`brain/interface.py`) : `Brain` ABC + `HeuristicBrain` (= `scheduler.pick`). Seam pour le futur `LocalLLMBrain`.
 - [x] **`brain.py` utilise `AgentScheduler`** (Étape A) : `_load_modules` enregistre les 4 agents + crée le `HeuristicBrain` ; `_main_loop` réécrit (`world → brain.decide → scheduler.run → stats`). Vieilles méthodes gardées et taguées `[DEAD-CODE-V5.1]` (revert-safe). ⚠️ **change le comportement** → test réel requis.
-- [ ] **Étape B** : supprimer les méthodes mortes (`grep DEAD-CODE-V5.1`) une fois le run réel validé.
+- [x] **Étape B** : run réel validé (CombatAgent attaque via le scheduler) → méthodes `[DEAD-CODE-V5.1]` supprimées + fichiers mixins `farm.py`/`war.py`/`chat.py` retirés (logique portée par les agents). Brain = `core` + `loop` + `navigation`. Compteurs morts (`_task_queue`/`_last_chat_check`/`_attacks_since_chat_check`) nettoyés.
 - [ ] **ADB zéro screenshot (résiduel)** : faire lire le cache `PerceptionThread` aux consommateurs *live* (`gdc/navigator`, `social/chat`, `clan_castle`). En partie absorbé par le `world`. Le RAW `screencap` ne subsiste que comme fallback documenté (OK).
 - [ ] Stop le sanity-rescan dans `environment_v4._all_resources_exhausted()` (redondant avec `_sync_remaining_from_perception()`).
 - [ ] **Flag perception `chat_unread`** (badge `!`/rouge près du bouton chat) → `ChatAgent.can_run` ne check qu'en présence du signal (au lieu d'ouvrir périodiquement). Cf vision communication inter-agents.

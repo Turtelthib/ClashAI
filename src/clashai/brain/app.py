@@ -6,33 +6,26 @@ import argparse
 from clashai.config import DEFAULT_BOT_NAME
 from clashai.brain.core import BrainCoreMixin
 from clashai.brain.loop import BrainLoopMixin
-from clashai.brain.farm import BrainFarmMixin
-from clashai.brain.war import BrainWarMixin
-from clashai.brain.chat import BrainChatMixin
 from clashai.brain.navigation import BrainNavigationMixin
 
 
 class ClashBrain(
     BrainCoreMixin,
     BrainLoopMixin,
-    BrainFarmMixin,
-    BrainWarMixin,
-    BrainChatMixin,
     BrainNavigationMixin,
 ):
     """
     The single brain of ClashAI.
 
-    Manages the whole account like a real player:
-    - Farm attacks (multiplayer, for resources)
-    - CW commands (from clan chat)
-    - Human-like behavior (random pauses, zooms)
-    - Robust navigation (always knows how to return to the village)
+    V5.1: the brain is an orchestrator over the AgentScheduler. The actual
+    "doing" (farm, war, chat, clan castle) lives in the agents
+    (clashai/agents/), not here. The brain only:
+      - core      : lifecycle + loads models/agents/scheduler/Brain
+      - loop       : tick = world → Brain.decide → scheduler.run → stats
+      - navigation : ensure-at-village recovery + human-like pauses
 
-    Future: village management (upgrades, donations, harvesting)
-
-    Implementation is split across domain mixins (Phase 3):
-      core / loop / farm / war / chat / navigation.
+    The farm/war/chat mixins were removed in V5.1 Étape B (superseded by
+    CombatAgent / GdCAgent / ChatAgent / ClanCastleAgent).
     """
 
 

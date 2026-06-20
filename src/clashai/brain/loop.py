@@ -3,9 +3,7 @@
 
 import time
 
-# ATTACKS_BEFORE_CHAT_CHECK is only used by the [DEAD-CODE-V5.1] _should_check_chat
-# below — kept imported so the dead method stays valid until Étape B removes it.
-from clashai.config import CHAT_CHECK_INTERVAL, ATTACKS_BEFORE_CHAT_CHECK
+from clashai.config import CHAT_CHECK_INTERVAL
 
 
 class BrainLoopMixin:
@@ -77,7 +75,6 @@ class BrainLoopMixin:
             self._attacks_done += 1
             self._total_stars += data.get('stars') or 0
             self._total_destruction += data.get('percentage') or 0
-            self._attacks_since_chat_check += 1
             if self.verbose:
                 avg = self._total_destruction / max(self._attacks_done, 1)
                 print(f"\n Farm #{self._attacks_done}: "
@@ -89,53 +86,3 @@ class BrainLoopMixin:
             if self.verbose:
                 print(f"\n GdC #{data.get('target')}: "
                       f"{data.get('stars')}* {data.get('percentage')}%")
-
-    # =====================================================================
-    # [DEAD-CODE-V5.1] superseded by the scheduler + agents — remove in Étape B
-    # (grep "DEAD-CODE-V5.1" to find every method to delete)
-    # =====================================================================
-
-    def _execute_task(self, task):  # [DEAD-CODE-V5.1] → CombatAgent / GdCAgent
-        """Executes a task (farm attack or CW attack)."""
-        task_type = task['type']
-
-        if task_type == 'farm_attack':
-            self._do_farm_attack()
-
-        elif task_type == 'gdc_attack':
-            target = task['target']
-            original_cmd = task.get('original_cmd')
-
-            # Acknowledgement BEFORE the attack
-            if self._chat_monitor:
-                self._send_chat_ack(target, before=True)
-
-            # Attack
-            info = self._do_gdc_attack(target)
-
-            # Mark as executed
-            if original_cmd and self._chat_monitor:
-                self._chat_monitor.mark_executed(original_cmd)
-
-            # Acknowledgement AFTER the attack (with result)
-            if self._chat_monitor and info:
-                self._send_chat_ack(target, before=False, result=info)
-
-    def _should_check_chat(self):  # [DEAD-CODE-V5.1] → ChatAgent.can_run cooldown
-        """Determines whether the chat should be checked now."""
-        if self.mode == 'farm':
-            return False
-
-        if self._chat_monitor is None:
-            return False
-
-        # Check after N attacks or after a time interval
-        now = time.time()
-        time_since_check = now - self._last_chat_check
-
-        if self._attacks_since_chat_check >= ATTACKS_BEFORE_CHAT_CHECK:
-            return True
-        if time_since_check >= CHAT_CHECK_INTERVAL:
-            return True
-
-        return False
