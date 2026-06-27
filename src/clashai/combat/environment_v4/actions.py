@@ -53,6 +53,12 @@ class ActionsMixin:
         """Deploys a troop of the given role at the given sector."""
         role_name = DEPLOY_ROLES[role_idx]
 
+        # Respect the grayed signal DURING the deploy burst. _remaining_troops
+        # is seeded from default_max (no real counter), so the heuristic/agent
+        # over-queues deploys; without this, depleted troops get tapped on their
+        # grayed icon until the fake counter drains. Cheap cache read (no GPU).
+        self._sync_grayed_from_cache()
+
         # TroopManager selects the next troop for the role
         troop_idx, troop_name = self._troop_mgr.select_next_for_role(
             role_name, self._remaining_troops

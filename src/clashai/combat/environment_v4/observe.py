@@ -36,6 +36,22 @@ class ObserveMixin:
             if name in TROOP_NAME_TO_IDX:
                 self._remaining_troops[TROOP_NAME_TO_IDX[name]] = 0
 
+    def _sync_grayed_from_cache(self):
+        """Cheap grayed-only refresh from the async perception cache (no GPU).
+
+        The heuristic/agent deploys in a BURST before the next `observe` step,
+        so the grayed signal — only synced at observe time — is ignored during
+        the burst and depleted troops get tapped until their (over-estimated)
+        default_max counter drains. Reading the PerceptionThread cache here is
+        free (no inference) and lets select_next_for_role() skip grayed troops
+        mid-burst. Falsely-zeroed troops are still recovered by cleanup() at
+        episode end (tap-until-gray).
+        """
+        perception = self.models.get('perception_thread') if self.models else None
+        if perception is None or not perception.is_fresh(max_age_s=1.5):
+            return
+        self._sync_remaining_from_perception(perception.get_latest().get('troop_bar'))
+
     def _update_combat_observation(self):
         """
         V4.3 — reads from the async PerceptionThread (non-blocking).

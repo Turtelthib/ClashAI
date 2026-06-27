@@ -16,6 +16,35 @@ Si un de ces problèmes réapparaît, relire le bloc correspondant avant de re-d
 - [Demande de troupes château de clan (5 bugs)](#-demande-de-troupes-château-de-clan-5-bugs)
 - [Échec navigation → faux -50 reward](#-échec-navigation--faux--50-reward)
 - [Famine d'agent dans le scheduler (CC monopolise, combat ne tourne pas)](#-famine-dagent-dans-le-scheduler)
+- [Deploy de troupes grisées pendant le burst (taps gaspillés)](#-deploy-de-troupes-grisées-pendant-le-burst)
+
+---
+
+## 🔧 Deploy de troupes grisées pendant le burst
+
+> Si l'agent continue à taper l'icône d'une troupe déjà épuisée (grisée) au lieu de passer à la suite → relire ce bloc.
+
+**Symptômes**
+- En run réel : l'agent déploie bien ses troupes, mais à la fin il « s'amuse encore à vouloir déployer » des troupes qu'il n'a plus (icône grisée).
+- Pire avec les troupes ajoutées au registre data-driven (defaults par rôle généreux).
+
+**Cause racine**
+- `_remaining_troops` est seedé à **`default_max`** au reset (pas de vrai compteur). L'heuristique construit sa séquence à partir de cette **sur-estimation** (`role_inv` = somme) → elle file `default_max` deploys par troupe (ex. 12 pour 1 archère réelle).
+- `_execute_deploy` → `select_next_for_role` tape l'icône tant que `remaining > 0` et décrémente de 1, **sans consulter `is_grayed`**.
+- Le filtre grisé (`_sync_remaining_from_perception`) **fonctionne**, mais il n'est appelé que dans `_update_combat_observation()` → uniquement aux steps `observe`. Or l'heuristique fait **tous les deploys d'affilée AVANT** le premier `observe` → grisé jamais consulté pendant le burst. (Les sorts, eux, ont un `observe` avant chaque cast → pas le bug.)
+
+**Solution (en place)**
+- `ObserveMixin._sync_grayed_from_cache()` : lecture **gratuite** du cache `PerceptionThread` (pas d'inférence, le thread tourne déjà) → applique `_sync_remaining_from_perception()` (zéro sur les grisés).
+- Appelée au **début de `_execute_deploy()`**, avant la sélection → `select_next_for_role` voit `remaining == 0` pour les grisés et passe à la troupe suivante / retourne « exhausted » sans taper.
+- Bénéficie aussi à l'agent RL (chemin `_execute_deploy` partagé + le mask reflète le grisé au step suivant).
+
+**Pièges**
+- Latence d'affichage du grisé : 0-1 tap « de trop » possible (le tap qui épuise la troupe) avant que le cache reflète le grisé — acceptable (vs `default_max - 1` avant).
+- Faux grisé possible (CNN) → une troupe non vide zéroée. Rattrapé par `cleanup()` en fin d'épisode (tap-until-gray re-scan).
+- Ne supprime pas la sur-estimation : la séquence garde des deploys « no-op » en fin de burst (rapides, sans tap). La vraie suppression de `default_max` = chantier **deploy-until-grayed**.
+
+**Tests**
+- `uv run python tools/train/train_rl_v4.py --heuristic --episodes 1` avec une compo où la plupart des troupes sont en ×1 → vérifier qu'il ne re-tape plus les icônes grisées (logs `WARNING: <role> exhausted` au lieu de taps répétés).
 
 ---
 
