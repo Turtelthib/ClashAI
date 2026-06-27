@@ -74,12 +74,7 @@
 - [ ] **ADB zéro screenshot (résiduel)** : faire lire le cache `PerceptionThread` aux consommateurs *live* (`gdc/navigator`, `social/chat`, `clan_castle`). En partie absorbé par le `world`. Le RAW `screencap` ne subsiste que comme fallback documenté (OK).
 - [ ] Stop le sanity-rescan dans `environment_v4._all_resources_exhausted()` (redondant avec `_sync_remaining_from_perception()`).
 - [ ] **Flag perception `chat_unread`** (badge `!`/rouge près du bouton chat) → `ChatAgent.can_run` ne check qu'en présence du signal (au lieu d'ouvrir périodiquement). Cf vision communication inter-agents.
-- [ ] **🔨 Rework COMPLET des sorts (data-driven)** — *plan validé Session 14, à coder*. Aujourd'hui `SPELL_NAMES=['soin','rage','gel']` codé en dur + `ACTION_ABILITY_START = ACTION_SPELL_START + 3` (le `+3` hardcode le nb de sorts). Objectif : zéro nb de sorts hardcodé, tous les sorts via le registre + CNN, un combat peut avoir 10 sorts ou 2 (géré par le **mask**, l'action space est dimensionné à TOUS les types).
-  - Registre : `troops.json` role=spell + champ **`target`** par sort (`cluster`=support→troupes / `defense`=offensif→défense ennemie). Lister tous les sorts castables du CNN.
-  - `action_space` dérivé : `SPELL_NAMES` du registre ; `ACTION_ABILITY_START = ACTION_SPELL_START + len(SPELL_NAMES)` ; decode/encode + `TOTAL_ACTIONS` dérivés.
-  - `mask` : sort actif ssi présent + non grisé. obs `SPELL_FEATURES = len(SPELL_NAMES)`.
-  - Ciblage data-driven : `_execute_spell` lit `target` → SpellCaster (sait déjà cibler défense=freeze / cluster=heal,rage).
-  - Heuristique : caste les sorts présents (plus de liste figée). **⚠️ re-train** (obs+actions changent).
+- [x] **🔨 Rework COMPLET des sorts (data-driven)** — *fait Session 14*. `SPELL_NAMES` dérivé du registre **∩ classes CNN** (`troop_registry.load_spell_names`), plus de `+3` hardcodé (`ACTION_ABILITY_START = ACTION_SPELL_START + len(SPELL_NAMES)`), constantes `ACTION_CAST_*` retirées. **16 sorts** (vs 3) ; un sort pré-enregistré mais pas encore dans le CNN (ex. `colere`) reste **inerte** (pas de dim morte / re-train inutile). Ciblage data-driven : `SPELL_TARGET_DEFAULTS` (cluster/heal/defense) overridable via `target` dans le JSON, mappé sur SpellCaster. Heuristique caste tous les sorts présents (mains d'abord). `load()` tolère le mismatch de dims. obs **54→67**, actions **37→50** → **re-train** (heuristique OK direct). **Test émulateur requis.**
 
 ### V5.0 — Mode live (phases optionnelles)
 

@@ -158,9 +158,18 @@ class PPOAgentV4(BehavioralCloningMixin):
 
     def load(self, path):
         checkpoint = torch.load(path, map_location=self.device, weights_only=True)
-        self.network.load_state_dict(checkpoint['network'])
-        self.optimizer.load_state_dict(checkpoint['optimizer'])
+        try:
+            self.network.load_state_dict(checkpoint['network'])
+            self.optimizer.load_state_dict(checkpoint['optimizer'])
+        except (RuntimeError, ValueError) as e:
+            # obs/action dims changed (e.g. spell rework: 54→67 obs, 37→50
+            # actions) → old checkpoint is incompatible. Start fresh rather than
+            # crash with a cryptic shape-mismatch trace.
+            print(f"WARNING: checkpoint incompatible avec l'archi actuelle "
+                  f"(dims changees) -> entrainement a neuf.\n  ({e})")
+            return False
         self.update_count = checkpoint.get('update_count', 0)
         self.total_episodes = checkpoint.get('total_episodes', 0)
         print(f"Agent V4 chargé ← {path}")
         print(f" Updates: {self.update_count}, Episodes: {self.total_episodes}")
+        return True

@@ -1,5 +1,5 @@
 {
-  "_comment": "SSOT du registre de troupes/héros/engins/sorts. Ajouter une unité = retrain le CNN troop bar (perception) + 1 ligne ici (stratégie). role ∈ {tank, ranged, melee, hero, siege, spell}. 'max' = BORNE HAUTE optionnelle (le grisé corrige en dessous) ; si absent → défaut par rôle (voir troop_registry.DEFAULT_MAX_BY_ROLE). L'ordre dans un rôle = priorité de déploiement. ⚠️ Les rôles des troupes récentes sont des best-guess éditables : si un deploy semble off, change le role ici (pas de code). Le 'name' DOIT matcher la classe du CNN (weights/yolo_troupes_barre/model_artifacts.json). Sorts gérés actuellement : soin/rage/gel seulement.",
+  "_comment": "SSOT du registre de troupes/héros/engins/sorts. Ajouter une unité = retrain le CNN troop bar (perception) + 1 ligne ici (stratégie). role ∈ {tank, ranged, melee, hero, siege, spell}. 'max' = BORNE HAUTE optionnelle (le grisé corrige en dessous) ; si absent → défaut par rôle (voir troop_registry.DEFAULT_MAX_BY_ROLE). L'ordre dans un rôle = priorité de déploiement. ⚠️ Les rôles des troupes récentes sont des best-guess éditables : si un deploy semble off, change le role ici (pas de code). Le 'name' DOIT matcher la classe du CNN (weights/yolo_troupes_barre/model_artifacts.json). Sorts (role=spell) : DATA-DRIVEN, tous ceux présents dans le CNN sont jouables ; un sort pré-enregistré mais pas encore une classe CNN (ex. colere) reste inerte jusqu'au retrain. Ciblage par sort via champ optionnel 'target' (cluster|heal|defense), défaut dans troop_registry.SPELL_TARGET_DEFAULTS.",
   "troops": [
     {"name": "golem", "role": "tank", "max": 2},
     {"name": "sorcier", "role": "ranged", "max": 6},
@@ -42,6 +42,7 @@
     {"name": "racine", "role": "spell", "max": 1},
     {"name": "bloc_glace", "role": "spell", "max": 2},
     {"name": "colere", "role": "spell", "max": 3},
+    {"name": "invisible", "role": "spell", "max": 3},
 
     {"name": "golem_glace", "role": "tank"},
     {"name": "golem_meteorique", "role": "tank"},

@@ -5,12 +5,17 @@ import time
 
 from clashai.combat.action_space import DEPLOY_ROLES, HERO_NAMES, decode_action
 from clashai.combat.troop_manager import TroopManager
+from clashai.combat.troop_registry import load_spell_targets
 from clashai.combat.legacy.agent import TROOP_TYPES, TROOP_NAME_TO_IDX
 from clashai.config import (
     DELAY_SWITCH_TROOP, DELAY_DEPLOY,
     DELAY_WAIT_SHORT, DELAY_WAIT_LONG,
     DELAY_OBSERVE, DELAY_ABILITY,
 )
+
+# Spell targeting (data-driven): registry category → SpellCaster output key.
+_SPELL_TARGETS = load_spell_targets()
+_TARGET_TO_CASTER = {'cluster': 'rage', 'heal': 'heal', 'defense': 'freeze'}
 
 
 class ActionsMixin:
@@ -131,9 +136,12 @@ class ActionsMixin:
                 targets = self._spell_caster.analyze_battlefield(
                     combat_img, self._village_center)
 
-            target_map = {'soin': 'heal', 'rage': 'rage', 'gel': 'freeze'}
-            key = target_map.get(spell_name, 'heal')
-            x, y = targets[key]
+            # Data-driven targeting: each spell declares a category
+            # (cluster/heal/defense) → mapped to a SpellCaster output.
+            category = _SPELL_TARGETS.get(spell_name, 'cluster')
+            key = _TARGET_TO_CASTER.get(category, 'rage')
+            x, y = targets.get(key) or targets.get('rage') or (
+                self._village_center or (960, 500))
         else:
             x, y = self._village_center or (960, 500)
 

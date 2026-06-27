@@ -17,9 +17,11 @@ PHASE_SIZE = 0
 VECTOR_SIZE = (VILLAGE_FEATURES + ROLE_FEATURES + SPELL_FEATURES
                + SECTOR_MAP_SIZE + STEP_FEATURES
                + COMBAT_FEATURES_SIZE + HERO_STATUS_SIZE)
-# 20 + 5 + 3 + 5 + 1 + 15 + 5 = 54
-# Note: checkpoints V4.1 incompatibles (nn.Linear(55→54)).
-# Old checkpoints in weights/rl/ will be unusable.
+# 20 + 5 + SPELL_FEATURES + 5 + 1 + 15 + 5  (= 54 avec 3 sorts, 67 avec 16).
+# SPELL_FEATURES est DATA-DRIVEN (sorts du registre presents dans le CNN) → la
+# dim d'obs ET l'action space changent quand on (re)train le CNN avec un nouveau
+# sort. Les anciens checkpoints deviennent alors incompatibles (load() tolere
+# le mismatch et repart a neuf). V5.1: rework sorts → 54→67 / 37→50 actions.
 
 # PPO Hyperparameters
 GAMMA = 0.99

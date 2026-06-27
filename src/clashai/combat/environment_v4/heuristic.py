@@ -2,7 +2,7 @@
 # HeuristicMixin — scripted V4 action sequence (one action per unit).
 
 from clashai.combat.action_space import (
-    HERO_NAMES, build_role_inventory, build_spell_inventory,
+    HERO_NAMES, SPELL_NAMES, build_role_inventory, build_spell_inventory,
 )
 from clashai.combat.legacy.agent import TROOP_TYPES
 
@@ -69,9 +69,13 @@ class HeuristicMixin:
         # Spells and abilities follow directly after deploy.
         actions.append(enc('observe'))
 
-        # Spells in priority order — rage, freeze, heal (tactical order)
-        spell_priority = ['rage', 'gel', 'soin']
-        for spell_name in spell_priority:
+        # Spells — mains first (rage, gel, soin = tactical order), then any other
+        # spell PRESENT in the army. Data-driven: iterates all CNN-known spells,
+        # only the ones with remaining count get queued (an `observe` before each
+        # refreshes targeting + the grayed sync).
+        mains = ['rage', 'gel', 'soin']
+        spell_order = mains + [s for s in SPELL_NAMES if s not in mains]
+        for spell_name in spell_order:
             count = spell_inv.get(spell_name, 0)
             for _ in range(count):
                 actions.append(enc('observe'))

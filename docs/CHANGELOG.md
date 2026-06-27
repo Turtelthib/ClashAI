@@ -13,6 +13,7 @@ Historique chronologique des features livrées, du plus récent au plus ancien.
 
 Plomberie pour les sous-agents. Posé à côté du système existant → le bot tourne identique tant que `brain.py` n'est pas branché sur le scheduler.
 
+- ✅ **Rework complet des sorts (data-driven)** (Session 14) : `SPELL_NAMES` dérivé du registre `troops.json` **∩ classes du CNN** (`troop_registry.load_spell_names`) — plus de `['soin','rage','gel']` ni de `+3` codés en dur (`ACTION_CAST_*` retirées, `ACTION_ABILITY_START` dérivé). 3→**16 sorts** ; un sort pré-enregistré mais pas encore dans le CNN reste inerte (pas de dim morte / re-train inutile). Ciblage **data-driven** (`SPELL_TARGET_DEFAULTS` cluster/heal/defense, overridable via `target` JSON) mappé sur SpellCaster. Heuristique caste tous les sorts présents (rage/gel/soin d'abord). `PPOAgentV4.load()` tolère le mismatch de dims. **obs 54→67, actions 37→50 → re-train** (heuristique fonctionne sans entraînement).
 - ✅ `BaseAgent` (`agents/base.py`) : `can_run(world)`, `run()`, `priority`, `cooldown_seconds`, état/erreurs/telemetry (Session 13).
 - ✅ `AgentScheduler` (`agents/scheduler.py`) : registry + `pick(world)` (prio + cooldown + can_run) + `tick()` + history + status (Session 13).
 - ✅ `build_world(models, **flags)` (`agents/world.py`) : snapshot SSOT lu par tous les `can_run()`, alimenté par le cache `PerceptionThread` (zéro screenshot bloquant) + flag `on_village_home`. Marche à vide.

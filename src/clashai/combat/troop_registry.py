@@ -8,8 +8,11 @@
 # The CNN gives the NAME; the role is the only strategic bit that must be
 # declared. Eventually the LocalLLMBrain can fill unknown roles automatically.
 #
-# checkpoint-safe: adding a troop only grows a role's count sum — the V4 obs
-# stays role-based (54 dims). (Adding a SPELL is NOT: it changes SPELL_FEATURES.)
+# checkpoint-safe: adding a TROOP only grows a role's count sum — the V4 obs
+# stays role-based. Adding a SPELL is NOT checkpoint-safe (it grows
+# SPELL_FEATURES + the action space → re-train), so spells are gated by the CNN:
+# a spell pre-registered in troops.json but not yet a CNN class stays inert
+# (no dead obs dim / needless re-train) until the CNN is retrained with it.
 
 import json
 import os
@@ -86,4 +89,61 @@ def build_role_to_troops(troop_types=None):
         if t['role'] == 'spell':
             continue
         out.setdefault(t['role'], []).append(t['name'])
+    return out
+
+
+# =============================================================================
+# SPELLS (data-driven, gated by the CNN)
+# =============================================================================
+
+# Spell targeting category → which SpellCaster output to aim at.
+#   'cluster' = your troop mass · 'heal' = your injured troops · 'defense' = the
+#   enemy's most dangerous defense. Overridable per-spell via "target" in the
+#   JSON. Best-guess for the spells you don't tune — edit as data, not code.
+SPELL_TARGET_DEFAULTS = {
+    'soin': 'heal', 'rage': 'cluster', 'gel': 'defense',
+    'zap': 'defense', 'saut': 'defense', 'clone': 'cluster',
+    'rappel': 'cluster', 'resurrection': 'heal', 'totem': 'cluster',
+    'poison': 'defense', 'seisme': 'defense', 'speed': 'cluster',
+    'squelette': 'defense', 'chauve_souris': 'defense', 'racine': 'cluster',
+    'bloc_glace': 'defense', 'colere': 'cluster',
+}
+
+_CNN_CLASSES = None
+
+
+def cnn_class_names():
+    """Set of class names the troop-bar CNN can detect. Gates which spells are
+    active in the action space (perception → strategy): a spell pre-registered in
+    troops.json but absent from the CNN stays inert. Empty set if the model
+    artifacts are unreadable (callers then skip the filter)."""
+    global _CNN_CLASSES
+    if _CNN_CLASSES is not None:
+        return _CNN_CLASSES
+    try:
+        from clashai.paths import WEIGHTS_DIR
+        p = os.path.join(WEIGHTS_DIR, 'yolo_troupes_barre', 'model_artifacts.json')
+        with open(p, encoding='utf-8') as f:
+            _CNN_CLASSES = set(json.load(f).get('names', []))
+    except Exception:
+        _CNN_CLASSES = set()
+    return _CNN_CLASSES
+
+
+def load_spell_names():
+    """Ordered spell names = registry(role=spell) ∩ CNN classes (registry order).
+    Falls back to all registry spells if the CNN class list is unavailable."""
+    spells = [t['name'] for t in _load_raw() if t['role'] == 'spell']
+    cnn = cnn_class_names()
+    return [s for s in spells if s in cnn] if cnn else spells
+
+
+def load_spell_targets():
+    """{spell_name: target_category} for every registry spell. Uses the JSON
+    'target' field if present, else SPELL_TARGET_DEFAULTS, else 'cluster'."""
+    out = {}
+    for t in _load_raw():
+        if t['role'] != 'spell':
+            continue
+        out[t['name']] = t.get('target', SPELL_TARGET_DEFAULTS.get(t['name'], 'cluster'))
     return out

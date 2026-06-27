@@ -1,13 +1,13 @@
 # clashai/combat/action_space.py
 # Action space V4 for ClashAI.
 #
-# 37 actions instead of 289 (V3).
-# The agent chooses a ROLE × SECTOR for deploy,
-# and high-level actions for combat.
-# The environment translates these into concrete ADB taps.
+# Compact action space (vs 289 in V3). The agent chooses a ROLE × SECTOR for
+# deploy and high-level actions for combat. The environment translates these
+# into concrete ADB taps. TOTAL_ACTIONS is DERIVED (not hardcoded) so the spell
+# count can grow with the registry/CNN.
 #
 # Deploy (25) : 5 roles × 5 sectors relative to the attack side
-# Spells (3) : soin, rage, gel — auto-targeted by SpellCaster
+# Spells (N)  : DATA-DRIVEN from configs/troops.json ∩ CNN classes, auto-targeted
 # Abilities (5): roi, reine, grand_gardien, championne, prince_gargouille
 # Observe (1) : screenshot + update features
 # Control (3) : wait_short, wait_long, done
@@ -57,17 +57,20 @@ SECTOR_OFFSETS = {
 # Deploy: role × sector
 NUM_DEPLOY_ACTIONS = NUM_ROLES * NUM_SECTORS
 
-# Spells (auto-targeted by SpellCaster)
-SPELL_NAMES = ['soin', 'rage', 'gel']
+# Spells (auto-targeted by SpellCaster) — DATA-DRIVEN: registry ∩ CNN classes.
+# One action per spell type; per-attack availability is handled by the mask, so
+# an attack can carry 2 spells or 10 with no code change. No hardcoded count:
+# the index layout below is computed from len(SPELL_NAMES). Adding a spell to
+# troops.json (once the CNN detects it) grows this automatically → re-train.
+from clashai.combat.troop_registry import load_spell_names as _load_spell_names
+SPELL_NAMES = _load_spell_names()
+NUM_SPELLS = len(SPELL_NAMES)
 ACTION_SPELL_START = NUM_DEPLOY_ACTIONS
-ACTION_CAST_HEAL = ACTION_SPELL_START
-ACTION_CAST_RAGE = ACTION_SPELL_START + 1
-ACTION_CAST_FREEZE = ACTION_SPELL_START + 2
 
 # Hero abilities
 HERO_NAMES = ['roi', 'reine', 'grand_gardien', 'championne', 'prince_gargouille']
 NUM_HEROES = len(HERO_NAMES)
-ACTION_ABILITY_START = ACTION_SPELL_START + 3
+ACTION_ABILITY_START = ACTION_SPELL_START + NUM_SPELLS
 ACTION_ABILITY_ROI = ACTION_ABILITY_START
 ACTION_ABILITY_REINE = ACTION_ABILITY_START + 1
 ACTION_ABILITY_GG = ACTION_ABILITY_START + 2
