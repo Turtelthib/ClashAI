@@ -1,0 +1,58 @@
+{
+  "_comment": "SSOT du registre de troupes/héros/engins/sorts. Ajouter une unité = retrain le CNN troop bar (perception) + 1 ligne ici (stratégie). role ∈ {tank, ranged, melee, hero, siege, spell}. 'max' = BORNE HAUTE optionnelle (le grisé corrige en dessous) ; si absent → défaut par rôle (voir troop_registry.DEFAULT_MAX_BY_ROLE). L'ordre dans un rôle = priorité de déploiement. ⚠️ Les rôles des troupes récentes sont des best-guess éditables : si un deploy semble off, change le role ici (pas de code). Le 'name' DOIT matcher la classe du CNN (weights/yolo_troupes_barre/model_artifacts.json). Sorts gérés actuellement : soin/rage/gel seulement.",
+  "troops": [
+    {"name": "golem", "role": "tank", "max": 2},
+    {"name": "sorcier", "role": "ranged", "max": 6},
+    {"name": "sorciere", "role": "ranged", "max": 10},
+    {"name": "pekka", "role": "melee", "max": 2},
+    {"name": "archere", "role": "ranged", "max": 5},
+
+    {"name": "roi", "role": "hero", "max": 1},
+    {"name": "reine", "role": "hero", "max": 1},
+    {"name": "grand_gardien", "role": "hero", "max": 1},
+    {"name": "championne", "role": "hero", "max": 1},
+    {"name": "prince_gargouille", "role": "hero", "max": 1},
+    {"name": "duc_draconique", "role": "hero", "max": 1},
+
+    {"name": "lance_buche", "role": "siege", "max": 1},
+    {"name": "broyeur_pierre", "role": "siege"},
+    {"name": "caserne_siege", "role": "siege"},
+    {"name": "catapulte", "role": "siege"},
+    {"name": "foreuse", "role": "siege"},
+    {"name": "dirigeable", "role": "siege"},
+    {"name": "fourgon_celeste", "role": "siege"},
+    {"name": "lance_troupe", "role": "siege"},
+
+    {"name": "soin", "role": "spell", "max": 2},
+    {"name": "rage", "role": "spell", "max": 3},
+    {"name": "gel", "role": "spell", "max": 1},
+
+    {"name": "golem_glace", "role": "tank"},
+    {"name": "golem_meteorique", "role": "tank"},
+    {"name": "geant", "role": "tank"},
+    {"name": "yeti", "role": "tank"},
+    {"name": "electro_titanide", "role": "tank"},
+    {"name": "molosse", "role": "tank"},
+
+    {"name": "bebe_dragon", "role": "ranged"},
+    {"name": "dragon", "role": "ranged"},
+    {"name": "electro_dragon", "role": "ranged"},
+    {"name": "chevaucheur_dragon", "role": "ranged"},
+    {"name": "ballon", "role": "ranged"},
+    {"name": "gargouille", "role": "ranged"},
+    {"name": "bouliste", "role": "ranged"},
+    {"name": "chasseuse_tete", "role": "ranged"},
+    {"name": "guerrisseuse", "role": "ranged"},
+    {"name": "druide", "role": "ranged"},
+    {"name": "mini_gardien", "role": "ranged"},
+
+    {"name": "barbare", "role": "melee"},
+    {"name": "valkyrie", "role": "melee"},
+    {"name": "gobelin", "role": "melee"},
+    {"name": "mineur", "role": "melee"},
+    {"name": "chevaucheur_cochon", "role": "melee"},
+    {"name": "cyclope", "role": "melee"},
+    {"name": "sapeur", "role": "melee"},
+    {"name": "demolisseur", "role": "melee"}
+  ]
+}
