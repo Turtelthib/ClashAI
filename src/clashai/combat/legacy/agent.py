@@ -52,27 +52,12 @@ from torch.distributions import Categorical
 # CONFIGURATION
 # =============================================================================
 
-# MASTER list of all troops/spells/heroes (identical to V2)
-TROOP_TYPES = [
-    # --- Troops ---
-    {'name': 'golem', 'default_max': 2, 'role': 'tank'},
-    {'name': 'sorcier', 'default_max': 6, 'role': 'ranged'},
-    {'name': 'sorciere', 'default_max': 10, 'role': 'ranged'},
-    {'name': 'pekka', 'default_max': 2, 'role': 'melee'},
-    {'name': 'archere', 'default_max': 5, 'role': 'ranged'},
-    # --- Heroes ---
-    {'name': 'roi', 'default_max': 1, 'role': 'hero'},
-    {'name': 'reine', 'default_max': 1, 'role': 'hero'},
-    {'name': 'grand_gardien', 'default_max': 1, 'role': 'hero'},
-    {'name': 'championne', 'default_max': 1, 'role': 'hero'},
-    {'name': 'prince_gargouille', 'default_max': 1, 'role': 'hero'},
-    # --- Siege ---
-    {'name': 'lance_buche', 'default_max': 1, 'role': 'siege'},
-    # --- Spells ---
-    {'name': 'soin', 'default_max': 2, 'role': 'spell'},
-    {'name': 'rage', 'default_max': 3, 'role': 'spell'},
-    {'name': 'gel', 'default_max': 1, 'role': 'spell'},
-]
+# MASTER list of all troops/spells/heroes — now DATA-DRIVEN.
+# SSOT = configs/troops.json (via clashai.combat.troop_registry). Adding a
+# troop = 1 line in that JSON + retrain the CNN, zero code. Same dict shape as
+# before ({name, default_max, role}) so every consumer is unchanged.
+from clashai.combat.troop_registry import load_troop_types as _load_troop_types
+TROOP_TYPES = _load_troop_types()
 
 NUM_TROOP_TYPES = len(TROOP_TYPES)
 

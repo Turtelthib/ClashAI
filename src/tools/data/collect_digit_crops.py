@@ -104,6 +104,11 @@ def walk_log_frames(logs_dir):
     if test_run.exists():
         for img_path in sorted(test_run.glob('*.png')):
             yield 'test_run', img_path
+    # And the accumulating prep_attaque captures (richest: full counts).
+    digit_frames = base / 'digit_frames'
+    if digit_frames.exists():
+        for img_path in sorted(digit_frames.glob('*.png')):
+            yield 'prep', img_path
 
 
 def main():

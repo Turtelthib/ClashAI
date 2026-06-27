@@ -67,6 +67,13 @@ Phases 1-2 livrées (3-4 optionnelles, voir ROADMAP).
 
 ---
 
+## V4.4 — Polish perception (en cours) — Session 14
+
+- ✅🐛 **Registre de troupes data-driven** (`configs/troops.json` + `combat/troop_registry.py`) : `TROOP_TYPES` (legacy/agent.py) + `ROLE_TO_TROOPS` (action_space.py) en **dérivent** (loader). **Corrige le bug critique "les troupes non hardcodées ne se déploient pas"** : le CNN voyait golem_glace/bebe_dragon/gargouille/yeti mais l'agent ne les jouait pas (absentes du registre codé en dur). Registre 14 → **47 troupes** (toutes les classes déployables du CNN). Ajouter une troupe = 1 ligne JSON + retrain CNN, **zéro code Python**. Existantes préservées à l'identique, obs 54 dims (checkpoint-safe, pas de re-train). `max` = borne haute optionnelle par troupe (défaut par rôle). Rôles des troupes récentes = best-guess éditables. (Le "zéro compteur" total = gros chantier deploy-grisé, à part.)
+
+- ✅ **Capture accumulante prep_attaque** (`env_v4._save_digit_frame`) : 1 frame `prep_attaque` (armée pleine, compteurs complets, aucun grisé) sauvée par épisode dans `logs/digit_frames/` (horodatée → s'accumule), sur tout run (pas que `--test`). Source la plus riche pour le dataset digit-CNN ; `collect_digit_crops` la lit.
+- ✅ **Mini-CNN chiffres — outillage Phase 2+3** : `tools/data/label_digit_crops.py` (labelisation semi-auto : crop affiché + pré-remplissage EasyOCR + Enter/num/s/u/q, rangement `<count>/`, resumable) + `tools/train/train_digit_cnn.py` (mini-CNN ~60k params, dataset folder-per-label, `--smoke` self-test). Reste côté user : collecter+labéliser les crops puis entraîner ; puis Phase 4 (intégration). Complémentaire du deploy-grisé (compteurs précis quand fiables, grisé en fallback).
+
 ## V4.3 — Perception + Vitesse — Session 12
 
 - ✅ YOLO walls segmentation → deploy zone précise ; `get_perimeter_from_walls()`.

@@ -22,14 +22,14 @@ import numpy as np
 DEPLOY_ROLES = ['tank', 'ranged', 'melee', 'hero', 'siege']
 NUM_ROLES = len(DEPLOY_ROLES)
 
-# Mapping role → ordered list of troop names (deploy priority)
-ROLE_TO_TROOPS = {
-    'tank': ['golem'],
-    'ranged': ['sorcier', 'sorciere', 'archere'],
-    'melee': ['pekka'],
-    'hero': ['roi', 'reine', 'grand_gardien', 'championne', 'prince_gargouille'],
-    'siege': ['lance_buche'],
-}
+# Mapping role → ordered list of troop names (deploy priority).
+# DATA-DRIVEN: derived from configs/troops.json (clashai.combat.troop_registry),
+# so a new troop in that JSON is automatically deployable — zero code here.
+from clashai.combat.troop_registry import build_role_to_troops as _build_role_to_troops
+ROLE_TO_TROOPS = _build_role_to_troops()
+# Ensure every deploy role exists as a key, even if it has no troops yet.
+for _r in DEPLOY_ROLES:
+    ROLE_TO_TROOPS.setdefault(_r, [])
 
 
 # =============================================================================

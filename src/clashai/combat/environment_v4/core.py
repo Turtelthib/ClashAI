@@ -185,6 +185,16 @@ class CoreMixin:
 
     def _get_screen_state(self):
         state, confidence, img_pil = super()._get_screen_state()
+
+        # Digit-CNN dataset: accumulate one full-count prep_attaque frame per
+        # episode (army screen = all troops, full counts, none grayed → the
+        # richest source for tools/data/collect_digit_crops.py). Timestamped
+        # so runs accumulate. Fires on every episode (not just --test).
+        if (state == 'prep_attaque' and confidence >= 0.7 and img_pil is not None
+                and not getattr(self, '_digit_frame_saved', False)):
+            self._save_digit_frame(img_pil)
+            self._digit_frame_saved = True
+
         if self._test_capture is not None and img_pil is not None:
             # Trace every CNN screen-state transition (dedup consecutive
             # duplicates) → logs/test_run/screens/NN_state_conf.png
@@ -202,12 +212,31 @@ class CoreMixin:
                 )
         return state, confidence, img_pil
 
+    def _save_digit_frame(self, img_pil):
+        """Save one prep_attaque frame (accumulating, timestamped) for the
+        digit-CNN dataset. Read by tools/data/collect_digit_crops.py."""
+        try:
+            import os
+            import time as _t
+            out = os.path.join('logs', 'digit_frames')
+            os.makedirs(out, exist_ok=True)
+            fname = f"prep_{int(_t.time() * 1000)}.png"
+            img_pil.save(os.path.join(out, fname))
+            if self.verbose:
+                print(f" digit-frame: logs/digit_frames/{fname}")
+        except Exception:
+            pass
+
     # -----------------------------------------------------------------
     # Reset override (V4 specific state)
     # -----------------------------------------------------------------
 
     def reset(self):
         """Reset V4 — calls the V3 reset then adapts."""
+        # One digit-frame capture per episode (reset BEFORE nav so the
+        # prep_attaque traversed during super().reset() gets captured).
+        self._digit_frame_saved = False
+
         # V4.3: pause async perception during navigation (save GPU)
         _pt = self.models.get('perception_thread') if self.models else None
         if _pt is not None:

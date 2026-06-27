@@ -51,12 +51,13 @@
 
 > Clore les derniers irritants de perception, puis un gros run de validation avant la suite.
 
-- [ ] **Mini-CNN classificateur de chiffres** (remplace EasyOCR pour les compteurs troop bar) :
-  - [x] Phase 1 — collecte (`tools/data/collect_digit_crops.py`, mode `--position auto`)
-  - [ ] Phase 2 — labelisation (500-1000 crops, split 80/20)
-  - [ ] Phase 3 — entraîner un mini-CNN (LeNet/MobileNetV3-Small, `tools/train/train_digit_cnn.py`)
-  - [ ] Phase 4 — intégrer dans `TroopBarDetector._read_count()` (fallback EasyOCR si conf basse)
+- [ ] **Mini-CNN classificateur de chiffres** (compteurs troop bar fiables — le "vrai truc") :
+  - [x] Phase 1 — outil de collecte (`tools/data/collect_digit_crops.py`, mode `--position auto`)
+  - [~] Phase 2 — **outils faits** : (a) capture accumulante d'une frame `prep_attaque` par épisode (`env_v4._save_digit_frame` → `logs/digit_frames/`, armée pleine = data la plus riche, lue par `collect_digit_crops`) ; (b) labelisation semi-auto (`tools/data/label_digit_crops.py` : crop affiché, pré-remplissage EasyOCR, Enter/num/s/u/q, range en `<count>/`, resumable). **Reste (ton côté)** : lancer des épisodes + labéliser 500-1000 crops.
+  - [~] Phase 3 — **À REWORK en PAR-CHIFFRE (lecture gauche→droite)** *(plan validé Session 14)*. Le 1er `train_digit_cnn.py` était par-nombre-entier → ne peut prédire QUE les nombres vus (88 jamais vu → faux). Nouveau : **multi-tête** (1 crop entier → tête dizaines {vide,0-9} + tête unités {0-9}) → lit n'importe quel nombre. **Réutilise ton labeling tel quel** (on parse le nom de dossier en chiffres : "12"→diz=1,uni=2 ; "7"→diz=vide,uni=7), zéro re-labelisation, **zéro segmentation**. Le `0` = classe normale apprise des dizaines (10,20…) ; un compte de 0 = grisé (jamais lu). Alternative B2 si besoin de généraliser aux comptes rares (88) : segmentation + classifieur 0-9 partagé.
+  - [ ] Phase 4 — intégrer dans `TroopBarDetector._read_count()` (charger `weights/digit_cnn.pt`, fallback EasyOCR si conf basse) — **après** l'entraînement réel.
   - *Pourquoi* : EasyOCR peu fiable sur les petits badges ; le "snapshot OCR + manual decrement" drift quand un tap tombe hors zone de deploy.
+  - **Relation avec le deploy-grisé** (gros chantier backlog) : **complémentaires, pas contradictoires**. Le deploy-grisé est le fallback **robuste** (zéro compteur, marche toujours). Ce mini-CNN est l'**upgrade précis** : compteurs exacts → l'agent sait *combien* il lui reste (meilleure stratégie). Cible : compteurs CNN quand fiables, grisé en fallback.
 - [ ] **Gros run V4 final** : 300-500 épisodes une fois tous les fixes en place → baseline solide avant V5.
 
 ### V5.1 — Foundation multi-agents
@@ -69,6 +70,12 @@
 - [ ] **ADB zéro screenshot (résiduel)** : faire lire le cache `PerceptionThread` aux consommateurs *live* (`gdc/navigator`, `social/chat`, `clan_castle`). En partie absorbé par le `world`. Le RAW `screencap` ne subsiste que comme fallback documenté (OK).
 - [ ] Stop le sanity-rescan dans `environment_v4._all_resources_exhausted()` (redondant avec `_sync_remaining_from_perception()`).
 - [ ] **Flag perception `chat_unread`** (badge `!`/rouge près du bouton chat) → `ChatAgent.can_run` ne check qu'en présence du signal (au lieu d'ouvrir périodiquement). Cf vision communication inter-agents.
+- [ ] **🔨 Rework COMPLET des sorts (data-driven)** — *plan validé Session 14, à coder*. Aujourd'hui `SPELL_NAMES=['soin','rage','gel']` codé en dur + `ACTION_ABILITY_START = ACTION_SPELL_START + 3` (le `+3` hardcode le nb de sorts). Objectif : zéro nb de sorts hardcodé, tous les sorts via le registre + CNN, un combat peut avoir 10 sorts ou 2 (géré par le **mask**, l'action space est dimensionné à TOUS les types).
+  - Registre : `troops.json` role=spell + champ **`target`** par sort (`cluster`=support→troupes / `defense`=offensif→défense ennemie). Lister tous les sorts castables du CNN.
+  - `action_space` dérivé : `SPELL_NAMES` du registre ; `ACTION_ABILITY_START = ACTION_SPELL_START + len(SPELL_NAMES)` ; decode/encode + `TOTAL_ACTIONS` dérivés.
+  - `mask` : sort actif ssi présent + non grisé. obs `SPELL_FEATURES = len(SPELL_NAMES)`.
+  - Ciblage data-driven : `_execute_spell` lit `target` → SpellCaster (sait déjà cibler défense=freeze / cluster=heal,rage).
+  - Heuristique : caste les sorts présents (plus de liste figée). **⚠️ re-train** (obs+actions changent).
 
 ### V5.0 — Mode live (phases optionnelles)
 
@@ -141,15 +148,22 @@
 
 > Idées pas encore assignées à une version. On pioche ici quand on a du temps.
 
-**Combat — ajustements heuristique (vus au 1er run multi-agents, non-critiques)**
-- [ ] **Engin de siège jamais déployé** : le CNN détecte `demolisseur` mais il est **absent de `TROOP_TYPES`** (`combat/legacy/agent.py`) ET de `ROLE_TO_TROOPS['siege']` (`combat/action_space.py`, qui n'a que `lance_buche`) → invisible à l'inventaire de deploy. **Ne PAS corriger en dur** → voir l'item "Registre de troupes data-driven" ci-dessous (le bon fix).
-- [ ] **Spam de sorts** : l'heuristique balance tous les sorts d'affilée (3 rages en ~5s au run). Court terme : espacer dans `get_heuristic_sequence`. Long terme : **timing géré par l'orchestrateur LLM** (sort au bon moment selon le combat).
+### 🎯🔨 GROS CHANTIER — Inventaire & déploiement pilotés par le grisé (zéro compteur)
 
-**Registre de troupes data-driven (extensibilité sans code)** 🎯
-> Objectif : ajouter une troupe/engin/sort = **retrain CNN + 1 ligne de data**, JAMAIS toucher au code Python.
-- [ ] Remplacer les listes en dur `TROOP_TYPES` (`legacy/agent.py`) + `ROLE_TO_TROOPS` (`action_space.py`) par **un SSOT data** (ex. `configs/troops.json` : `{nom: {role, max}}`) dont les deux dérivent.
-- [ ] Audit : aligner les classes du CNN troop bar avec ce registre (ex. `demolisseur` manquant) ; détecter les classes CNN absentes du registre au chargement.
-- [ ] **Full-auto (horizon LLM)** : quand le CNN voit une classe inconnue, l'orchestrateur LLM en déduit le rôle (connaissance jeu + RAG) et remplit le registre tout seul → "je retrain le CNN et ça repart". Rejoint *Apprentissage continu* ci-dessous.
+> **Décidé Session 14, à faire (assez gros, ne pas oublier).** Objectif final : ajouter une troupe/engin/sort = **retrain le CNN + 1 ligne de data**, JAMAIS toucher au code Python. Et un déploiement robuste à la taille des camps / au changement de compo.
+
+**Pourquoi** : il n'existe **pas de compteur fiable** (l'OCR des compteurs a été retiré Session 13). Aujourd'hui `_remaining_troops` est initialisé à `default_max` (par troupe, codé en dur dans `TROOP_TYPES`) — fragile : les camps grossissent, on change de compo. Le **seul signal fiable = `is_grayed`** du CNN troop bar (déjà exploité par `_sync_remaining_from_perception` qui met à 0 les grisés). Le `max` et la logique compteur sont **couplés** → on ne peut pas juste retirer `max` (l'heuristique construit sa séquence à l'avance à partir des compteurs).
+
+**À faire (cohérent, un seul chantier)** :
+- [x] **Registre data-driven** (Session 14) : `configs/troops.json` = SSOT `{name, role, max?}` ; `TROOP_TYPES` (`legacy/agent.py`) + `ROLE_TO_TROOPS` (`action_space.py`, group-by rôle) en **dérivent** via `combat/troop_registry.py`. **47 troupes** (toutes les classes déployables du CNN). Ajouter une troupe = 1 ligne JSON + retrain CNN, **zéro code**. Existantes préservées à l'identique, obs 54 dims (checkpoint-safe). → **corrige l'urgence "nouvelles troupes pas déployées"** (golem_glace, bebe_dragon, gargouille, yeti, etc.). `max` gardé comme borne haute optionnelle (défaut par rôle) — pas encore "zéro compteur".
+- [ ] **Deploy-until-grayed** (reste du chantier) : `_execute_deploy(role)` déploie la troupe non-grisée du rôle ; le **mask** active `deploy(role)` tant qu'une troupe du rôle est non-grisée ; l'heuristique = "déploie ce rôle tant que pas grisé" (boucle runtime). → supprime `max`/`default_max` définitivement + rend le sanity-rescan inutile.
+- [ ] **Rôles best-guess à valider** : les rôles des troupes récentes dans `troops.json` sont des estimations (éditables sans code). Vérifier en jeu et ajuster.
+- [ ] **Impact RL** : change la sémantique de l'obs (role_counts → présence par rôle) → **re-train** (acceptable, checkpoint actuel faible : 0★ 27%, 80 ep). **Test émulateur requis.**
+- [ ] **Sorts** : ajouter un sort change la dim d'obs (`SPELL_FEATURES`) → pas checkpoint-safe (à gérer à part des troupes).
+- [ ] **Full-auto (horizon LLM)** : classe CNN inconnue → l'orchestrateur LLM déduit le rôle (connaissance jeu + RAG) et remplit le registre tout seul. Rejoint *Apprentissage continu*.
+
+**Autre ajustement combat (non-critique, vu au 1er run)**
+- [ ] **Spam de sorts** : l'heuristique balance tous les sorts d'affilée (3 rages en ~5s). Court terme : espacer dans `get_heuristic_sequence`. Long terme : timing géré par l'orchestrateur LLM.
 
 **Combat intelligent**
 - [ ] Estimation loot avant attaque (OCR ressources adverses → skip si pas rentable).
