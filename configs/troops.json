@@ -22,10 +22,26 @@
     {"name": "dirigeable", "role": "siege"},
     {"name": "fourgon_celeste", "role": "siege"},
     {"name": "lance_troupe", "role": "siege"},
+    {"name": "demolisseur", "role": "siege"},
+
 
     {"name": "soin", "role": "spell", "max": 2},
     {"name": "rage", "role": "spell", "max": 3},
     {"name": "gel", "role": "spell", "max": 1},
+    {"name": "zap", "role": "spell", "max": 2},
+    {"name": "saut", "role": "spell", "max": 3},
+    {"name": "clone", "role": "spell", "max": 1},
+    {"name": "rappel", "role": "spell", "max": 2},
+    {"name": "resurrection", "role": "spell", "max": 3},
+    {"name": "totem", "role": "spell", "max": 1},
+    {"name": "poison", "role": "spell", "max": 2},
+    {"name": "seisme", "role": "spell", "max": 3},
+    {"name": "speed", "role": "spell", "max": 1},
+    {"name": "squelette", "role": "spell", "max": 2},
+    {"name": "chauve_souris", "role": "spell", "max": 3},
+    {"name": "racine", "role": "spell", "max": 1},
+    {"name": "bloc_glace", "role": "spell", "max": 2},
+    {"name": "colere", "role": "spell", "max": 3},
 
     {"name": "golem_glace", "role": "tank"},
     {"name": "golem_meteorique", "role": "tank"},
@@ -53,6 +69,8 @@
     {"name": "chevaucheur_cochon", "role": "melee"},
     {"name": "cyclope", "role": "melee"},
     {"name": "sapeur", "role": "melee"},
-    {"name": "demolisseur", "role": "melee"}
+
+
+    {"name": "sorciere_ruine", "role": "clean"}
   ]
 }
