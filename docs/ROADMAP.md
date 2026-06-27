@@ -54,11 +54,9 @@
 - [ ] **Mini-CNN classificateur de chiffres** (compteurs troop bar fiables — le "vrai truc") :
   - [x] Phase 1 — outil de collecte (`tools/data/collect_digit_crops.py`, mode `--position auto`)
   - [~] Phase 2 — **outils faits** : (a) capture accumulante d'une frame `prep_attaque` par épisode (`env_v4._save_digit_frame` → `logs/digit_frames/`, armée pleine = data la plus riche, lue par `collect_digit_crops`) ; (b) labelisation semi-auto (`tools/data/label_digit_crops.py` : crop affiché, pré-remplissage EasyOCR, Enter/num/s/u/q, range en `<count>/`, resumable). **Reste (ton côté)** : lancer des épisodes + labéliser 500-1000 crops.
-  - [~] Phase 3 — **À REWORK en PAR-CHIFFRE — version B2 (segmentation + classifieur 0-9 partagé)** *(plan validé Session 14)*. Le 1er `train_digit_cnn.py` était par-nombre-entier → ne peut prédire QUE les nombres vus (88 jamais vu → faux). **Décision : B2 direct** (pas multi-tête) car les camps font ~200-320 places → un compte peut atteindre **3 chiffres** (ex. 200 barbares), que le multi-tête 2 chiffres (1-99) ne couvre pas. B2 = **longueur variable** + meilleure généralisation (un `8` appris en unités sert en centaines).
-    - **Pipeline** : (1) segmenter le badge en chiffres individuels (projection-profile / composantes connexes) ; (2) classifieur **0-9** (10 classes) ; (3) inférence = segmenter → classer chaque chiffre → concaténer gauche→droite.
-    - **Réutilise ton labeling** : un crop labellisé "200" → segmenté → `2`,`0`,`0`. Zéro re-labelisation.
-    - Le `0` = classe normale (apprise des 10/20/200…) ; un compte de 0 = grisé (jamais lu).
-    - **Risque** : fiabilité de la segmentation sur petits badges stylisés → **fallback EasyOCR** si segmentation/conf douteuse ; CRNN/CTC en upgrade si la segmentation déçoit.
+  - [x] Phase 3 — **PAR-CHIFFRE B2 (segmentation + classifieur 0-9 partagé) — FAIT Session 14**. `clashai/perception/digit_reader.py` (SSOT segmentation + `DigitCNN` + `read_count`), `tools/data/build_digit_singles.py` (whole-number→per-digit, **réutilise ton labeling**, 730 crops→634 used), `train_digit_cnn.py` adapté (augmentation + oversampling + acc/classe). **Modèle : 98% val acc** (`weights/digit_cnn.pt`). Read e2e : 83.7% brut, **conf-gating** rejette ~8% (erreurs basse-conf → fallback). Longueur variable (gère 7, 79, 200…).
+    - ⚠️ **À renforcer** : `0` (7 ex.) et `7` (8 ex.) sous-représentés (pas de "N0"/"N7" labélisés) → collecter des nombres qui les contiennent. Segmentation ~87% exact (un "1" se sur-découpe parfois) → CRNN/CTC en upgrade si besoin.
+  - [ ] **Phase 4 — intégration** : brancher `read_count` dans le pipeline. **Décision à prendre** : (a) bas-risque = remplir `count` dans `TroopBarDetector.detect`/`to_counts` (combat, matché aux données) ; (b) haut-impact = seeder `_remaining_troops` au reset depuis le CNN (l'agent connaît le vrai compte → deploy/cast précis, remplace `default_max`) — change le comportement, à valider émulateur (modèle entraîné sur crops combat, pas prep). Fallback présence si conf basse.
   - [ ] Phase 4 — intégrer dans `TroopBarDetector._read_count()` (charger `weights/digit_cnn.pt`, fallback EasyOCR si conf basse) — **après** l'entraînement réel.
   - *Pourquoi* : EasyOCR peu fiable sur les petits badges ; le "snapshot OCR + manual decrement" drift quand un tap tombe hors zone de deploy.
   - **Relation avec le deploy-grisé** (gros chantier backlog) : **complémentaires, pas contradictoires**. Le deploy-grisé est le fallback **robuste** (zéro compteur, marche toujours). Ce mini-CNN est l'**upgrade précis** : compteurs exacts → l'agent sait *combien* il lui reste (meilleure stratégie). Cible : compteurs CNN quand fiables, grisé en fallback.
@@ -163,7 +161,9 @@
 
 **Autre ajustement combat (non-critique, vu au 1er run)**
 - [ ] **🔨 Retrain `yolo_troops.pt` (CNN troupes terrain)** — *root cause du rage mal placé*. Le modèle est **sous-entraîné** (peu de classes) → ne reconnaît pas la plupart des troupes déployées → `main_cluster` vide → support spells au fallback. Workaround en place (`_troop_march_point`), mais le vrai fix = ré-entraîner avec toutes les troupes (comme le CNN troop bar). Débloque rage/heal **précis** + features combat fiables.
-- [~] **Spam de sorts** : l'heuristique balançait tous les sorts d'affilée au même endroit. **Atténué** Session 14 : `_spread_cluster_point` étale les casts cluster (plus d'empilement). Reste : espacer dans le **temps** (timing géré par l'orchestrateur LLM à terme).
+- [~] **Spam de sorts** : l'heuristique balance tous les sorts d'affilée. **Atténué** Session 14 : `_spread_cluster_point` étale les casts cluster (plus d'empilement spatial). **Reste (vu run Session 14)** :
+  - Espacement **temporel** (l'heuristique enchaîne les casts ; timing géré par l'orchestrateur LLM à terme).
+  - **Gel re-gèle la même défense déjà gelée** → `SpellCaster` doit mémoriser les défenses gelées récemment (cooldown ~5s) et viser la suivante. Petit fix dédié possible.
 
 **Combat intelligent**
 - [ ] Estimation loot avant attaque (OCR ressources adverses → skip si pas rentable).
