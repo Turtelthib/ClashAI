@@ -162,7 +162,8 @@
 - [ ] **Full-auto (horizon LLM)** : classe CNN inconnue → l'orchestrateur LLM déduit le rôle (connaissance jeu + RAG) et remplit le registre tout seul. Rejoint *Apprentissage continu*.
 
 **Autre ajustement combat (non-critique, vu au 1er run)**
-- [ ] **Spam de sorts** : l'heuristique balance tous les sorts d'affilée (3 rages en ~5s). Court terme : espacer dans `get_heuristic_sequence`. Long terme : timing géré par l'orchestrateur LLM.
+- [ ] **🔨 Retrain `yolo_troops.pt` (CNN troupes terrain)** — *root cause du rage mal placé*. Le modèle est **sous-entraîné** (peu de classes) → ne reconnaît pas la plupart des troupes déployées → `main_cluster` vide → support spells au fallback. Workaround en place (`_troop_march_point`), mais le vrai fix = ré-entraîner avec toutes les troupes (comme le CNN troop bar). Débloque rage/heal **précis** + features combat fiables.
+- [~] **Spam de sorts** : l'heuristique balançait tous les sorts d'affilée au même endroit. **Atténué** Session 14 : `_spread_cluster_point` étale les casts cluster (plus d'empilement). Reste : espacer dans le **temps** (timing géré par l'orchestrateur LLM à terme).
 
 **Combat intelligent**
 - [ ] Estimation loot avant attaque (OCR ressources adverses → skip si pas rentable).

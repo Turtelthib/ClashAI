@@ -266,6 +266,7 @@ class CoreMixin:
         # Reset V4 state
         self._sector_map = np.zeros(NUM_SECTORS, dtype=np.float32)
         self._last_sector = None
+        self._cluster_cast_i = 0   # cluster-spell spread cursor
         self._troop_mgr.reset()
 
         # V4.3: deploy zone — walls segmentation (primary) then building hull (fallback)

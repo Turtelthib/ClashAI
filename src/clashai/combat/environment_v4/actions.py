@@ -17,6 +17,9 @@ from clashai.config import (
 _SPELL_TARGETS = load_spell_targets()
 _TARGET_TO_CASTER = {'cluster': 'rage', 'heal': 'heal', 'defense': 'freeze'}
 
+# Cluster-spell spread offsets (ADB px) so consecutive rages don't stack.
+_SPREAD_OFFSETS = [(0, 0), (-90, 0), (90, 0), (0, -90), (0, 90)]
+
 
 class ActionsMixin:
     """Executes a decoded V4 action on the emulator."""
@@ -114,6 +117,9 @@ class ActionsMixin:
         if spell_name not in TROOP_NAME_TO_IDX:
             return f"WARNING: spell {spell_name} unknown"
 
+        # Spells deplete like troops — respect the grayed signal (cast-until-gray).
+        self._sync_grayed_from_cache()
+
         spell_idx = TROOP_NAME_TO_IDX[spell_name]
         if self._remaining_troops[spell_idx] <= 0:
             return f"WARNING: {spell_name} exhausted"
@@ -142,6 +148,16 @@ class ActionsMixin:
             key = _TARGET_TO_CASTER.get(category, 'rage')
             x, y = targets.get(key) or targets.get('rage') or (
                 self._village_center or (960, 500))
+
+            # Battlefield troop detection (yolo_troops) is undertrained → often
+            # finds nothing → support spells would fall on the dead village
+            # center. When no troops are seen, aim support spells at the troops'
+            # march path (attack side → core) instead, and spread consecutive
+            # cluster casts so multiple rages don't stack on one spot.
+            if category in ('cluster', 'heal') and targets.get('num_troops', 0) == 0:
+                x, y = self._troop_march_point()
+            if category == 'cluster':
+                x, y = self._spread_cluster_point(x, y)
         else:
             x, y = self._village_center or (960, 500)
 
@@ -154,6 +170,28 @@ class ActionsMixin:
         self._troop_mgr._last_troop_name = None
 
         return f"{spell_name} → ({x}, {y})"
+
+    def _troop_march_point(self):
+        """Best-effort 'where are my troops' when battlefield detection finds
+        none: ~55% from the attack-side deploy perimeter toward the core (the
+        march path), instead of the dead village center."""
+        core = self._village_center or (960, 500)
+        if self._deploy_positions:
+            idx = self._center_pos % len(self._deploy_positions)
+            ax, ay = self._deploy_positions[idx]
+            return (int(ax + (core[0] - ax) * 0.55),
+                    int(ay + (core[1] - ay) * 0.55))
+        return core
+
+    def _spread_cluster_point(self, x, y):
+        """Offset consecutive cluster-spell casts (rage/clone/speed…) so the
+        agent stops dumping every rage on the exact same spot."""
+        from clashai.combat.spell_caster.constants import ADB_WIDTH, ADB_HEIGHT
+        i = getattr(self, '_cluster_cast_i', 0)
+        self._cluster_cast_i = i + 1
+        ox, oy = _SPREAD_OFFSETS[i % len(_SPREAD_OFFSETS)]
+        return (max(60, min(ADB_WIDTH - 60, x + ox)),
+                max(60, min(ADB_HEIGHT - 200, y + oy)))
 
     def _execute_ability(self, hero_idx):
         """Activates a hero's ability."""

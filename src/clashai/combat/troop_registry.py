@@ -21,8 +21,13 @@ import os
 # It's an UPPER bound (the grayed signal caps the real count below it); kept
 # bounded so the heuristic doesn't waste the step budget tapping empty slots.
 DEFAULT_MAX_BY_ROLE = {
-    'tank': 4, 'ranged': 12, 'melee': 8, 'hero': 1, 'siege': 1, 'spell': 2,
+    'tank': 4, 'ranged': 12, 'melee': 8, 'hero': 1, 'siege': 1, 'spell': 8,
 }
+
+# Spells are cast-until-grayed: the per-attack count is unknown up front, so we
+# always seed a generous upper bound (DEFAULT_MAX_BY_ROLE['spell']) and let the
+# grayed signal cap it at the real count. The JSON "max" is IGNORED for spells
+# (it under-counted, e.g. left 2 gel / 1 rage uncast).
 
 # Used only if configs/troops.json is missing/broken — the historical 14.
 _FALLBACK = [
@@ -73,11 +78,11 @@ def load_troop_types():
     out = []
     for t in _load_raw():
         role = t['role']
-        out.append({
-            'name': t['name'],
-            'role': role,
-            'default_max': int(t.get('max', DEFAULT_MAX_BY_ROLE.get(role, 4))),
-        })
+        if role == 'spell':
+            default_max = DEFAULT_MAX_BY_ROLE['spell']   # JSON "max" ignored (cast-until-grayed)
+        else:
+            default_max = int(t.get('max', DEFAULT_MAX_BY_ROLE.get(role, 4)))
+        out.append({'name': t['name'], 'role': role, 'default_max': default_max})
     return out
 
 

@@ -17,6 +17,33 @@ Si un de ces problèmes réapparaît, relire le bloc correspondant avant de re-d
 - [Échec navigation → faux -50 reward](#-échec-navigation--faux--50-reward)
 - [Famine d'agent dans le scheduler (CC monopolise, combat ne tourne pas)](#-famine-dagent-dans-le-scheduler)
 - [Deploy de troupes grisées pendant le burst (taps gaspillés)](#-deploy-de-troupes-grisées-pendant-le-burst)
+- [Sorts : sous-cast + rage mal placé](#-sorts--sous-cast--rage-mal-placé)
+
+---
+
+## 🔧 Sorts : sous-cast + rage mal placé
+
+> Si l'agent ne lance pas tous ses sorts, ou si rage/soin tombent au milieu du village au lieu de sur les troupes → relire ce bloc.
+
+**Symptômes**
+- Combat avec 3 gel + 4 rage → il laisse 2 gel + 1 rage (sous-cast).
+- Le **gel** vise toujours une défense précise (parfait), mais le **rage** tombe toujours vers le milieu du village, jamais sur les troupes, et les 3 rages sont empilés au même endroit.
+
+**Cause racine**
+- *Sous-cast* : `_execute_spell` s'arrête sur le compteur manuel `_remaining_troops`, seedé à `default_max` = `max` du JSON (gel=1, rage=3). L'heuristique ne queue donc que `max` casts → sous-cast quand on en a plus. (Même logique que le deploy : `max` n'a pas de sens pour un sort, c'est du cast-until-grayed.)
+- *Rage au centre* : la cible `rage`/`heal` = `main_cluster` (position des troupes), calculé par `CombatObserver` via `yolo_troops.pt`. Ce modèle est **sous-entraîné** (peu de classes) → ne détecte pas la plupart des troupes déployées → `clusters` vide → `main_cluster` = fallback `village_center`. Le **gel marche quand même** car `_find_freeze_target` cherche une défense proche de ce point (souvent centrale → "précis"), ce qui masque le bug.
+
+**Solution (en place)**
+- *Sous-cast* : les sorts **ignorent le `max` JSON** dans `troop_registry.load_troop_types` et sont seedés généreux (`DEFAULT_MAX_BY_ROLE['spell']=8`). L'`observe` avant chaque cast + `_sync_grayed_from_cache()` au début de `_execute_spell` zéroent le sort une fois grisé → cast exactement le vrai compte.
+- *Rage au centre (workaround)* : quand `targets['num_troops']==0`, les support spells (cluster/heal) visent `_troop_march_point()` (≈55 % du côté d'attaque vers le cœur) au lieu du centre. `_spread_cluster_point()` étale les casts cluster consécutifs.
+- *Fix de fond (à faire)* : **retrain `yolo_troops.pt`** avec toutes les troupes (cf ROADMAP) → `main_cluster` réel → rage/heal précis.
+
+**Pièges**
+- Le `max` des sorts dans `troops.json` est **ignoré volontairement** (cast-until-grayed). Ne pas le « rétablir » en pensant régler un compte.
+- Le spread suppose des troupes groupées ; sur une armée très étalée c'est approximatif (acceptable tant que `yolo_troops` n'est pas ré-entraîné).
+
+**Tests**
+- `uv run python tools/train/train_rl_v4.py --heuristic --episodes 1` avec ≥3 d'un même sort → vérifier qu'il les lance **tous** (jusqu'au grisé) et que rage/soin tombent vers les troupes (pas au centre), rages non empilés.
 
 ---
 
