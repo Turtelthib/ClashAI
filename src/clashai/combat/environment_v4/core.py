@@ -248,8 +248,11 @@ class CoreMixin:
         for name, c in counts.items():
             real = ALIAS_MAP.get(name, name)
             idx = TROOP_NAME_TO_IDX.get(real)
-            if idx is None or TROOP_TYPES[idx]['role'] == 'spell':
+            if idx is None:
                 continue
+            # Troops AND spells. Spells that fail to read keep their generous
+            # default_max (cast-until-grayed fallback); read ones get the exact
+            # count so the heuristic casts exactly what's available.
             self._remaining_troops[idx] = float(c)
             seeded[real] = c
         if self.verbose and seeded:

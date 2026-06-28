@@ -9,17 +9,20 @@ from clashai.combat.legacy.agent import TROOP_TYPES, TROOP_NAME_TO_IDX
 class ObserveMixin:
     """V4.3 perception sync: async PerceptionThread cache, blocking fallback."""
 
-    def _sync_remaining_from_perception(self, troop_bar_detections):
+    def _sync_remaining_from_perception(self, troop_bar_detections, screenshot=None):
         """
-        V4.3 — sync `_remaining_troops` with the YOLO troop bar detector
-        running in PerceptionThread. Replaces the periodic `rescan()` call.
+        V4.4 — sync `_remaining_troops` with the troop bar.
 
-        Session 13 cleanup: OCR-based count overwrite removed (counts
-        were unreliable, e.g. "sorcier x74" misreads corrupted the
-        correct manual-decrement counters and broke the cleanup phase).
-        Now we only use YOLO's `is_grayed` signal to detect depletion;
-        manual decrement after each deploy remains the authoritative
-        source of remaining counts.
+        Two signals:
+          1. `is_grayed` → 0 (always reliable, depletion).
+          2. digit-CNN live count (when a screenshot is given): re-reads the
+             real count of each icon (troops AND spells) → corrects manual-
+             decrement drift from missed deploys. Only confident reads
+             (conf >= 0.6) overwrite, so a misread keeps the current value.
+
+        Called from `_update_combat_observation()` (observe steps) where the
+        frame is fresh and no deploy is in flight — NOT mid deploy-burst (a
+        lagging frame would re-inflate a count and re-deploy placed troops).
         """
         if not troop_bar_detections:
             return
@@ -29,12 +32,22 @@ class ObserveMixin:
         except ImportError:
             ALIAS_MAP = {}
 
+        # 1. Depletion (grayed → 0)
         for d in troop_bar_detections:
             if d.get('no_tap') or not d.get('is_grayed'):
                 continue
             name = ALIAS_MAP.get(d['name'], d['name'])
             if name in TROOP_NAME_TO_IDX:
                 self._remaining_troops[TROOP_NAME_TO_IDX[name]] = 0
+
+        # 2. Live counts via the digit CNN (troops + spells)
+        if screenshot is not None:
+            from clashai.perception.digit_reader import read_bar_counts
+            for name, c in read_bar_counts(
+                    screenshot, troop_bar_detections, position='combat').items():
+                idx = TROOP_NAME_TO_IDX.get(ALIAS_MAP.get(name, name))
+                if idx is not None:
+                    self._remaining_troops[idx] = float(c)
 
     def _sync_grayed_from_cache(self):
         """Cheap grayed-only refresh from the async perception cache (no GPU).
@@ -86,10 +99,9 @@ class ObserveMixin:
                 if state['combat_features'] is not None:
                     self._combat_features = state['combat_features']
 
-                # V4.3: keep _remaining_troops in sync with the YOLO troop bar
-                # detector that runs in PerceptionThread (replaces the
-                # periodic rescan that used to fire every 10 steps).
-                self._sync_remaining_from_perception(state.get('troop_bar'))
+                # V4.4: re-sync counts from the troop bar (grayed + digit-CNN
+                # live read). Frame is fresh here and no deploy is in flight.
+                self._sync_remaining_from_perception(state.get('troop_bar'), screenshot)
 
                 # Hero ability availability from the cached troop bar CNN
                 self._hero_manager.update_from_troop_bar(state.get('troop_bar'))
