@@ -21,6 +21,12 @@ import torch.nn as nn
 
 IMG_SIZE = 32
 
+# Badge crop geometry — MUST match tools/data/collect_digit_crops.py (the model
+# is trained on exactly these crops). Combat = top-right of the icon, prep =
+# top-left.
+COUNTER_CROP_Y_FRAC = 0.40
+BADGE_MARGIN_PX = 4
+
 # Glyph segmentation tuning (relative to the crop, so size-independent).
 TEXT_BAND_FRAC = 0.62      # text "xNN" sits in the upper band; ignore troop art below
 V_MIN = 165                # white text: high value (brightness)
@@ -186,3 +192,44 @@ def read_count(crop_pil, min_conf=0.6):
         return int(''.join(digits)), weakest
     except ValueError:
         return None, weakest
+
+
+def crop_count_badge(img_pil, bbox, position='combat'):
+    """Crop the count badge ("xNN") from an icon bbox. MUST stay identical to
+    collect_digit_crops.crop_count_badge (the model trains on these pixels).
+    Returns a PIL.Image or None if the box is degenerate."""
+    x1, y1, x2, y2 = bbox
+    w, h = x2 - x1, y2 - y1
+    if w < 16 or h < 16:
+        return None
+    cy2 = y1 + int(h * COUNTER_CROP_Y_FRAC)
+    if position == 'prep':
+        cx1 = max(0, x1 - BADGE_MARGIN_PX)
+        cx2 = min(img_pil.width, x1 + int(w * 0.45) + BADGE_MARGIN_PX)
+    else:  # combat
+        cx1 = max(0, x1 + int(w * 0.55) - BADGE_MARGIN_PX)
+        cx2 = min(img_pil.width, x2 + BADGE_MARGIN_PX)
+    cy1 = max(0, y1 - BADGE_MARGIN_PX)
+    cy2 = min(img_pil.height, cy2 + BADGE_MARGIN_PX)
+    if cx2 - cx1 < 8 or cy2 - cy1 < 8:
+        return None
+    return img_pil.crop((cx1, cy1, cx2, cy2))
+
+
+def read_bar_counts(screenshot_pil, detections, position='combat', min_conf=0.6):
+    """Read the count of each active troop-bar icon from a full screenshot.
+
+    Returns {class_name: int} only for icons read confidently (>= min_conf).
+    Skips grayed/no-tap icons. Caller keeps its own value for anything absent.
+    """
+    out = {}
+    for d in detections:
+        if d.get('is_grayed') or d.get('no_tap'):
+            continue
+        badge = crop_count_badge(screenshot_pil, d['bbox'], position)
+        if badge is None:
+            continue
+        n, _ = read_count(badge, min_conf=min_conf)
+        if n is not None and n > 0:
+            out[d['name']] = n
+    return out

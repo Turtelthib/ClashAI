@@ -38,43 +38,9 @@ from pathlib import Path
 from PIL import Image
 
 
-# Crop box matches troop_bar_detector._read_count() exactly so the model
-# is trained on the same pixels the inference step will see.
-COUNTER_CROP_Y_FRAC = 0.40
-MARGIN_PX = 4
-
-
-def crop_count_badge(img_pil, bbox, position='combat'):
-    """
-    Reproduce the badge crop logic from
-    clashai/perception/troop_bar_detector.py::_read_count.
-
-    position : 'prep'   → top-LEFT  corner (army selection screen)
-               'combat' → top-RIGHT corner (battle bar)
-
-    Returns a PIL.Image (cropped) or None if the resulting box is degenerate.
-    """
-    x1, y1, x2, y2 = bbox
-    w = x2 - x1
-    h = y2 - y1
-    if w < 16 or h < 16:
-        return None
-
-    cy2 = y1 + int(h * COUNTER_CROP_Y_FRAC)
-
-    if position == 'prep':
-        cx1 = max(0, x1 - MARGIN_PX)
-        cx2 = min(img_pil.width, x1 + int(w * 0.45) + MARGIN_PX)
-    else:  # combat
-        cx1 = max(0, x1 + int(w * 0.55) - MARGIN_PX)
-        cx2 = min(img_pil.width, x2 + MARGIN_PX)
-
-    cy1 = max(0, y1 - MARGIN_PX)
-    cy2 = min(img_pil.height, cy2 + MARGIN_PX)
-
-    if cx2 - cx1 < 8 or cy2 - cy1 < 8:
-        return None
-    return img_pil.crop((cx1, cy1, cx2, cy2))
+# Badge crop logic is the SSOT in clashai.perception.digit_reader (shared with
+# inference so the model trains on exactly the pixels it will later read).
+from clashai.perception.digit_reader import crop_count_badge  # noqa: F401
 
 
 def short_hash(*items, n=4):

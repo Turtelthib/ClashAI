@@ -227,6 +227,34 @@ class CoreMixin:
         except Exception:
             pass
 
+    def _seed_counts_from_digits(self):
+        """Seed _remaining_troops with real counts read by the digit CNN off the
+        battle bar (attack start = full counts). Per-troop fallback: anything not
+        read confidently keeps its default_max. Spells are skipped (they stay
+        generous for cast-until-grayed). No-op if the model/detector is absent."""
+        bar = self.models.get('troop_bar_detector') if self.models else None
+        if bar is None:
+            return
+        try:
+            shot = self._adb_screenshot()
+            if shot is None:
+                return
+            from clashai.perception.digit_reader import read_bar_counts
+            from clashai.combat.troop_manager import ALIAS_MAP
+            counts = read_bar_counts(shot, bar.detect(shot), position='combat')
+        except Exception:
+            return
+        seeded = {}
+        for name, c in counts.items():
+            real = ALIAS_MAP.get(name, name)
+            idx = TROOP_NAME_TO_IDX.get(real)
+            if idx is None or TROOP_TYPES[idx]['role'] == 'spell':
+                continue
+            self._remaining_troops[idx] = float(c)
+            seeded[real] = c
+        if self.verbose and seeded:
+            print(f" digit-CNN seed: {len(seeded)} compteurs -> {seeded}")
+
     # -----------------------------------------------------------------
     # Reset override (V4 specific state)
     # -----------------------------------------------------------------
@@ -268,6 +296,11 @@ class CoreMixin:
         self._last_sector = None
         self._cluster_cast_i = 0   # cluster-spell spread cursor
         self._troop_mgr.reset()
+
+        # V4.4: seed the REAL troop counts from the digit CNN (battle bar at
+        # attack start = full counts, combat-position crops = matched to the
+        # model's training data). Spells stay generous (cast-until-grayed).
+        self._seed_counts_from_digits()
 
         # V4.3: deploy zone — walls segmentation (primary) then building hull (fallback)
         if self._buildings:
