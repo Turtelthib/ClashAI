@@ -32,11 +32,22 @@ class ObserveMixin:
         except ImportError:
             ALIAS_MAP = {}
 
-        # 1. Depletion (grayed → 0)
+        # 1. Depletion (grayed → 0), BUT only if no duplicate icon of that name
+        # is still active. The same troop/spell can appear twice (army + clan
+        # castle); when the army icon grays, the CC one may still be available —
+        # zeroing by name killed it (e.g. 4th rage refused while the CC rage was
+        # still there). A name is depleted only when ALL its icons are grayed.
+        active = {
+            ALIAS_MAP.get(d['name'], d['name'])
+            for d in troop_bar_detections
+            if not d.get('no_tap') and not d.get('is_grayed')
+        }
         for d in troop_bar_detections:
             if d.get('no_tap') or not d.get('is_grayed'):
                 continue
             name = ALIAS_MAP.get(d['name'], d['name'])
+            if name in active:
+                continue  # a duplicate (clan castle) is still available
             if name in TROOP_NAME_TO_IDX:
                 self._remaining_troops[TROOP_NAME_TO_IDX[name]] = 0
 
@@ -63,7 +74,15 @@ class ObserveMixin:
         perception = self.models.get('perception_thread') if self.models else None
         if perception is None or not perception.is_fresh(max_age_s=1.5):
             return
-        self._sync_remaining_from_perception(perception.get_latest().get('troop_bar'))
+        tb = perception.get_latest().get('troop_bar')
+        self._sync_remaining_from_perception(tb)
+        # Refresh tap positions before each deploy/spell: to_positions drops
+        # grayed icons, so once the army icon of a troop/spell is depleted,
+        # select() advances to its clan-castle duplicate (same name, separate
+        # icon on the far right) instead of tapping the dead army icon.
+        bar_det = self.models.get('troop_bar_detector') if self.models else None
+        if bar_det is not None and tb is not None:
+            self._troop_finder.positions = bar_det.to_positions(tb)
 
     def _update_combat_observation(self):
         """
@@ -102,6 +121,14 @@ class ObserveMixin:
                 # V4.4: re-sync counts from the troop bar (grayed + digit-CNN
                 # live read). Frame is fresh here and no deploy is in flight.
                 self._sync_remaining_from_perception(state.get('troop_bar'), screenshot)
+
+                # Refresh tap positions: to_positions drops grayed icons, so once
+                # an army icon is depleted, select() advances to its clan-castle
+                # duplicate (army + CC share one name) instead of tapping a dead
+                # icon. Also keeps select() off depleted slots in general.
+                bar_det = self.models.get('troop_bar_detector') if self.models else None
+                if bar_det is not None and state.get('troop_bar') is not None:
+                    self._troop_finder.positions = bar_det.to_positions(state.get('troop_bar'))
 
                 # Hero ability availability from the cached troop bar CNN
                 self._hero_manager.update_from_troop_bar(state.get('troop_bar'))

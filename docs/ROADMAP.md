@@ -59,8 +59,7 @@
   - [x] **Phase 4 — intégration (reset-seeding) — FAIT Session 14**. `digit_reader.crop_count_badge` + `read_bar_counts` (SSOT, partagé avec collect). `core._seed_counts_from_digits()` appelé au reset : lit la **barre de combat au début de l'attaque** (compteurs pleins, position combat = matché à l'entraînement → pas de souci prep) et seede `_remaining_troops` avec les **vrais compteurs**. Fallback par troupe = `default_max` si non lu (conf < 0.6). **Sorts exclus** (restent généreux pour cast-until-grayed). Log `digit-CNN seed: ...`. **À valider émulateur.**
     - [ ] *Renfort données* : `0`/`7` désormais OK (47/46 ex.) ; collecter d'autres nombres au fil de l'eau améliore encore.
     - [ ] *Segmentation ~83% e2e* (un "1" se sur-découpe) → conf-gating couvre ; CRNN en upgrade si besoin.
-  - [ ] Phase 4 — intégrer dans `TroopBarDetector._read_count()` (charger `weights/digit_cnn.pt`, fallback EasyOCR si conf basse) — **après** l'entraînement réel.
-  - *Pourquoi* : EasyOCR peu fiable sur les petits badges ; le "snapshot OCR + manual decrement" drift quand un tap tombe hors zone de deploy.
+  - *Pourquoi* : EasyOCR peu fiable sur les petits badges ; le "snapshot OCR + manual decrement" drift quand un tap tombe hors zone de deploy. → **résolu** par le digit CNN (reset-seeding + re-lecture live).
   - **Relation avec le deploy-grisé** (gros chantier backlog) : **complémentaires, pas contradictoires**. Le deploy-grisé est le fallback **robuste** (zéro compteur, marche toujours). Ce mini-CNN est l'**upgrade précis** : compteurs exacts → l'agent sait *combien* il lui reste (meilleure stratégie). Cible : compteurs CNN quand fiables, grisé en fallback.
 - [ ] **Gros run V4 final** : 300-500 épisodes une fois tous les fixes en place → baseline solide avant V5.
 

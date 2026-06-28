@@ -231,5 +231,7 @@ def read_bar_counts(screenshot_pil, detections, position='combat', min_conf=0.6)
             continue
         n, _ = read_count(badge, min_conf=min_conf)
         if n is not None and n > 0:
-            out[d['name']] = n
+            # SUM duplicates: the same troop/spell can appear twice in the bar
+            # (army + clan-castle). They share one logical slot → total = sum.
+            out[d['name']] = out.get(d['name'], 0) + n
     return out

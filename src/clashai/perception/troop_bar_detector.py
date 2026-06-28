@@ -158,6 +158,11 @@ class TroopBarDetector:
             {name: (x, y, conf)}
 
         Only includes ACTIVE (non-grayed, non-deploye) icons.
+
+        The tap point is the icon's UPPER part, not its geometric center:
+        siege machines and the Grand Warden carry a green mode/swap arrow at the
+        bottom — tapping the center hits it and opens a sub-menu (the unit then
+        fails to deploy). The upper part selects any icon safely.
         """
         if detections is None:
             detections = self._last_detections
@@ -166,8 +171,10 @@ class TroopBarDetector:
         for d in detections:
             if d['is_grayed'] or d['no_tap']:
                 continue
-            cx, cy = d['center']
-            positions[d['name']] = (cx, cy, d['conf'])
+            x1, y1, x2, y2 = d['bbox']
+            tap_x = (x1 + x2) // 2
+            tap_y = y1 + int((y2 - y1) * 0.35)   # upper part — avoids the bottom arrow
+            positions[d['name']] = (tap_x, tap_y, d['conf'])
 
         return positions
 

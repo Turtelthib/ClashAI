@@ -18,6 +18,37 @@ Si un de ces problèmes réapparaît, relire le bloc correspondant avant de re-d
 - [Famine d'agent dans le scheduler (CC monopolise, combat ne tourne pas)](#-famine-dagent-dans-le-scheduler)
 - [Deploy de troupes grisées pendant le burst (taps gaspillés)](#-deploy-de-troupes-grisées-pendant-le-burst)
 - [Sorts : sous-cast + rage mal placé](#-sorts--sous-cast--rage-mal-placé)
+- [Troop bar : doublons château écrasés + flèche de mode siège/gardien](#-troop-bar--doublons-château--flèche-de-mode)
+
+---
+
+## 🔧 Troop bar : doublons château + flèche de mode
+
+> Si un sort/troupe du **château de clan** n'est pas compté/déployé, ou si un **engin de siège / grand gardien** ouvre un menu au lieu de se déployer → relire ce bloc.
+
+**Symptômes**
+- Armée = 3 rage + 1 gel + 2 soin, château = 1 rage + 1 gel → l'agent ne voit que **1 rage 1 gel 2 soin** (les doublons château ne se cumulent pas).
+- L'engin de siège / le grand gardien : en cliquant pour sélectionner, l'agent touche la **flèche verte** (change d'engin / mode aérien-terrestre) → un sous-menu s'ouvre → le tap de déploiement le ferme **sans déployer** (l'unité n'arrive qu'au rescan/cleanup, trop tard).
+
+**Cause racine**
+- Les sorts/troupes du château apparaissent comme des **icônes séparées** dans la barre (même classe CNN, position différente). `read_bar_counts` et `to_positions` étaient **keyés par nom** (`dict[name]`) → la 2e occurrence **écrasait** la 1re (compteur ET position perdus).
+- `to_positions` renvoyait le **centre** de la bbox comme point de tap. Sur les engins de siège et le grand gardien, une flèche de mode occupe le bas de l'icône → le centre tombe dessus.
+
+**Cause racine (le vrai bloqueur du déploiement)**
+- `_sync_remaining_from_perception` mettait un sort/troupe à **0 par nom** dès qu'**une** de ses icônes était grisée. Quand l'icône rage de l'armée s'épuise (grisée), le compteur `rage` tombait à 0 **alors que l'icône château était encore active** → le 4e cast refusé (`WARNING: rage exhausted`) avant même d'essayer l'icône château. (Visible au log : 3 rage castés puis exhausted.)
+
+**Solution (en place)**
+- *Dépletion par nom* : une troupe/sort n'est mise à 0 que si **TOUTES** ses icônes sont grisées (on calcule l'ensemble des noms ayant ≥1 icône active ; un nom encore actif n'est jamais zéroté). → le doublon château survit jusqu'à être joué. **C'était le vrai bloqueur.**
+- *Compteur* : `read_bar_counts` **somme** les occurrences d'un même nom (`out[name] += n`) → armée + château cumulés (4 rage, 2 gel).
+- *Déploiement du doublon* : `_sync_grayed_from_cache` (appelé **avant chaque deploy/sort**) + `_update_combat_observation` rafraîchissent `self._troop_finder.positions = to_positions(cache_troop_bar)`. Comme `to_positions` **ignore les grisés**, dès que l'icône armée est épuisée, `positions[name]` pointe sur l'icône château → `select()` la tape. **Limite** : approche dédup (1 position/nom) → dépend du timing du grisé dans le cache. Fix 100% déterministe = **deploy par-icône** (le digit CNN lit déjà le compte de chaque icône → taper armée ×3 puis château ×1) — à faire si le doublon est encore raté.
+- *Flèche* : `to_positions` tape le **haut** de l'icône (`y1 + 0.35·h`) au lieu du centre → sélectionne sans toucher la flèche du bas. Universel (sûr pour toutes les icônes).
+
+**Pièges**
+- Le tap remonté reste dans la plage barre (y~950-1080) — OK. Si une troupe se sélectionne mal, ajuster le `0.35`.
+- Le déploiement du doublon château repose sur le `observe` entre sélections (refresh des positions) — vrai en heuristique ; à garder en tête pour l'agent RL.
+
+**Tests**
+- Combat avec sorts château (ex. 3 rage armée + 1 rage CC) → log `digit-CNN seed` doit montrer **rage: 4** ; vérifier que les 4 se lancent + que siège/gardien se déploient sans ouvrir de menu.
 
 ---
 
