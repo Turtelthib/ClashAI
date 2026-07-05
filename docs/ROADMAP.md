@@ -3,7 +3,7 @@
 > **OBJECTIF FINAL** : une IA autonome intelligente qui joue comme un humain — joue, gère, recrute, s'améliore seule, et qu'on **pilote en langage naturel via le chat clan** (cerveau LLM local orchestrant des sous-agents).
 
 **Statut** : `[ ]` à faire · `[x]` fait (détail → [CHANGELOG](CHANGELOG.md)) · 🔧 bug documenté → [TROUBLESHOOTING](TROUBLESHOOTING.md)
-**Mise à jour** : 14 juin 2026 (Session 14 — V5.1 foundation multi-agents)
+**Mise à jour** : 4 juillet 2026 (Session 15 — digit CNN + sorts + fixes sorts-château validés en réel ; gros run en cours ; plans V5.2→V7 & stack LLM figés)
 
 📂 **Ce doc** = ce qui reste à faire. · ✅ Fait → [CHANGELOG.md](CHANGELOG.md) · 🔧 Fix détaillés → [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
@@ -17,10 +17,12 @@
   - [V5.1 — Foundation multi-agents](#v51--foundation-multi-agents)
   - [V5.0 — Mode live (phases optionnelles)](#v50--mode-live-phases-optionnelles)
 - [📅 À venir](#-à-venir)
-  - [V5.2 — Nouveaux agents + orchestrateur](#v52--nouveaux-agents--orchestrateur)
-  - [V5.3 — Dashboard web temps réel](#v53--dashboard-web-temps-réel)
+  - [V5.2 — Perception + agents (règles)](#v52--perception--agents-règles)
+  - [V5.3 — Cerveau LLM v1 (orchestrateur)](#v53--cerveau-llm-v1-orchestrateur)
+  - [V5.4 — Pilotage chat + RAG complet](#v54--pilotage-chat--rag-complet)
 - [🔮 Vision long terme](#-vision-long-terme)
-  - [V6 — Combat avancé](#v6--combat-avancé)
+  - [V6 — Dashboard web complet](#v6--dashboard-web-complet)
+  - [V7+ — Automatisation & intelligence](#v7--automatisation--intelligence)
   - [Cerveau LLM local (coach + parole + RAG)](#cerveau-llm-local-coach--parole--rag)
 - [🗃️ Backlog (non planifié)](#️-backlog-non-planifié)
 
@@ -34,14 +36,18 @@
 | V4.1 | ✅ | Fix bugs critiques + BC + run validation 192 ep |
 | V4.2 | ✅ | Fusion phases, YOLO continu, zone deploy, reward shaping |
 | V4.3 | ✅ | YOLO barre troupes, perception async, WGC, mode `--test` |
-| V4.4 | 🔄 **en cours** | Polish perception : mini-CNN chiffres + gros run final |
+| V4.4 | 🔄 **en cours** | Digit CNN ✅ validé en réel ; reste le gros run (re-train 67 dims **en cours**) |
 | V5.0 | ✅ Ph.1-2 | Push pipeline WGC → PerceptionThread (Ph.3-4 optionnelles) |
 | Refacto | ✅ | src/ layout + 13 splits (0 fichier >500L hors legacy) |
-| V5.1 | 🔄 **en cours** | Foundation multi-agents : 4 agents faits, reste interface Brain |
-| V5.2 | 💡 | Nouveaux agents (jeux clan, village) + orchestrateur + CNN options bar |
-| V5.3 | 💡 | Dashboard web temps réel (FastAPI + WebSocket) |
-| V6+ | 💡 | Combat avancé, cerveau LLM local, multi-compte |
+| V5.1 | 🔄 **en cours** | Brain + scheduler + 4 agents ✅ ; restent les résiduels (ADB cache, sanity-rescan, chat_unread) |
+| V5.2 | 💡 | CNN barre d'options → Agent village + Agent jeux de clan |
+| V5.3 | 💡 | **Cerveau LLM v1** (orchestrateur) : `LocalLLMBrain` décide quel agent lancer |
+| V5.4 | 💡 | **Pilotage chat + RAG complet** : parler à l'IA via le chat clan |
+| V6 | 💡 | **Dashboard web complet** : visualise cerveau + agents + perfs + contrôle |
+| V7+ | 💡 | **Automatisation & intelligence** : combat réactif, village intelligent, amélioration continue, multi-compte |
 | V END | 🎯 | IA autonome complète |
+
+> **Séquence figée (Session 14)** : V5.2 (perception+agents) → V5.3 (cerveau LLM) → V5.4 (chat+RAG) → **V6 (dashboard, une fois le LLM en place)** → V7+ (automatisation/intelligence). Détail « comment + avec quoi » dans *À venir* / *Vision*.
 
 ---
 
@@ -51,17 +57,17 @@
 
 > Clore les derniers irritants de perception, puis un gros run de validation avant la suite.
 
-- [ ] **Mini-CNN classificateur de chiffres** (compteurs troop bar fiables — le "vrai truc") :
+- [x] **Mini-CNN classificateur de chiffres** (compteurs troop bar fiables) — **FAIT & validé en conditions réelles (Session 15)** :
   - [x] Phase 1 — outil de collecte (`tools/data/collect_digit_crops.py`, mode `--position auto`)
-  - [~] Phase 2 — **outils faits** : (a) capture accumulante d'une frame `prep_attaque` par épisode (`env_v4._save_digit_frame` → `logs/digit_frames/`, armée pleine = data la plus riche, lue par `collect_digit_crops`) ; (b) labelisation semi-auto (`tools/data/label_digit_crops.py` : crop affiché, pré-remplissage EasyOCR, Enter/num/s/u/q, range en `<count>/`, resumable). **Reste (ton côté)** : lancer des épisodes + labéliser 500-1000 crops.
-  - [x] Phase 3 — **PAR-CHIFFRE B2 (segmentation + classifieur 0-9 partagé) — FAIT Session 14**. `clashai/perception/digit_reader.py` (SSOT segmentation + `DigitCNN` + `read_count`), `tools/data/build_digit_singles.py` (whole-number→per-digit, **réutilise ton labeling**, 730 crops→634 used), `train_digit_cnn.py` adapté (augmentation + oversampling + acc/classe). **Modèle : 98% val acc** (`weights/digit_cnn.pt`). Read e2e : 83.7% brut, **conf-gating** rejette ~8% (erreurs basse-conf → fallback). Longueur variable (gère 7, 79, 200…).
-    - ⚠️ **À renforcer** : `0` (7 ex.) et `7` (8 ex.) sous-représentés (pas de "N0"/"N7" labélisés) → collecter des nombres qui les contiennent. Segmentation ~87% exact (un "1" se sur-découpe parfois) → CRNN/CTC en upgrade si besoin.
-  - [x] **Phase 4 — intégration (reset-seeding) — FAIT Session 14**. `digit_reader.crop_count_badge` + `read_bar_counts` (SSOT, partagé avec collect). `core._seed_counts_from_digits()` appelé au reset : lit la **barre de combat au début de l'attaque** (compteurs pleins, position combat = matché à l'entraînement → pas de souci prep) et seede `_remaining_troops` avec les **vrais compteurs**. Fallback par troupe = `default_max` si non lu (conf < 0.6). **Sorts exclus** (restent généreux pour cast-until-grayed). Log `digit-CNN seed: ...`. **À valider émulateur.**
-    - [ ] *Renfort données* : `0`/`7` désormais OK (47/46 ex.) ; collecter d'autres nombres au fil de l'eau améliore encore.
-    - [ ] *Segmentation ~83% e2e* (un "1" se sur-découpe) → conf-gating couvre ; CRNN en upgrade si besoin.
+  - [x] Phase 2 — **collecte + labelisation FAITES (Session 15)** : outils (capture prep_attaque `env_v4._save_digit_frame`, labelisation semi-auto `tools/data/label_digit_crops.py`) + **~956 crops labélisés** par l'utilisateur (dont renfort `0`/`7`).
+  - [x] Phase 3 — **PAR-CHIFFRE B2 (segmentation + classifieur 0-9 partagé) — FAIT Session 14**. `clashai/perception/digit_reader.py` (SSOT segmentation + `DigitCNN` + `read_count`), `tools/data/build_digit_singles.py` (whole-number→per-digit, **réutilise ton labeling**, 730 crops→634 used), `train_digit_cnn.py` adapté (augmentation + oversampling + acc/classe). **Modèle : 100% val acc/classe** après renfort `0`/`7` (Session 15 ; était 98%) (`weights/digit_cnn.pt`). Read e2e : ~83% brut, **conf-gating** rejette ~14% (erreurs basse-conf → fallback). Longueur variable (gère 7, 79, 200…).
+    - Segmentation ~87% exact (un "1" se sur-découpe parfois) → CRNN/CTC en upgrade si besoin.
+  - [x] **Phase 4 — intégration (reset-seeding) — FAIT Session 14**. `digit_reader.crop_count_badge` + `read_bar_counts` (SSOT, partagé avec collect). `core._seed_counts_from_digits()` appelé au reset : lit la **barre de combat au début de l'attaque** (compteurs pleins, position combat = matché à l'entraînement → pas de souci prep) et seede `_remaining_troops` avec les **vrais compteurs**. Fallback par troupe = `default_max` si non lu (conf < 0.6). **Troupes ET sorts seedés** (Session 15) + **re-lecture live à chaque `observe`** (`_sync_remaining_from_perception`, frame fraîche hors burst) → corrige la dérive du décrément manuel. Log `digit-CNN seed: ...`. **✅ Validé en conditions réelles (Session 15).**
+    - [x] *Renfort données `0`/`7`* fait (47/46 ex., 100% val) ; collecter d'autres nombres au fil de l'eau améliore encore (ongoing).
+    - Doublons château (armée + CC) : compteurs **sommés** + dépletion seulement si **toutes** les icônes du nom grisées + positions rafraîchies (→ TROUBLESHOOTING).
   - *Pourquoi* : EasyOCR peu fiable sur les petits badges ; le "snapshot OCR + manual decrement" drift quand un tap tombe hors zone de deploy. → **résolu** par le digit CNN (reset-seeding + re-lecture live).
-  - **Relation avec le deploy-grisé** (gros chantier backlog) : **complémentaires, pas contradictoires**. Le deploy-grisé est le fallback **robuste** (zéro compteur, marche toujours). Ce mini-CNN est l'**upgrade précis** : compteurs exacts → l'agent sait *combien* il lui reste (meilleure stratégie). Cible : compteurs CNN quand fiables, grisé en fallback.
-- [ ] **Gros run V4 final** : 300-500 épisodes une fois tous les fixes en place → baseline solide avant V5.
+  - **Relation avec le deploy-grisé** : architecture actée Session 15 — **compteurs digit-CNN = source primaire, grisé = autorité de fin / filet de sécurité**. Le "gros chantier zéro compteur" a été **requalifié en petit item de hardening** (sa prémisse "pas de compteur fiable" est obsolète depuis ce CNN), voir backlog.
+- [~] **Gros run final (re-train)** : **EN COURS (Session 15)** — re-train sur la nouvelle obs **67 dims / 50 actions** (imposé par le rework sorts). C'est l'**obs définitive** (refonte "présence-par-rôle" abandonnée, voir backlog) → ce run sert de baseline solide avant la suite.
 
 ### V5.1 — Foundation multi-agents
 
@@ -73,7 +79,7 @@
 - [ ] **ADB zéro screenshot (résiduel)** : faire lire le cache `PerceptionThread` aux consommateurs *live* (`gdc/navigator`, `social/chat`, `clan_castle`). En partie absorbé par le `world`. Le RAW `screencap` ne subsiste que comme fallback documenté (OK).
 - [ ] Stop le sanity-rescan dans `environment_v4._all_resources_exhausted()` (redondant avec `_sync_remaining_from_perception()`).
 - [ ] **Flag perception `chat_unread`** (badge `!`/rouge près du bouton chat) → `ChatAgent.can_run` ne check qu'en présence du signal (au lieu d'ouvrir périodiquement). Cf vision communication inter-agents.
-- [x] **🔨 Rework COMPLET des sorts (data-driven)** — *fait Session 14*. `SPELL_NAMES` dérivé du registre **∩ classes CNN** (`troop_registry.load_spell_names`), plus de `+3` hardcodé (`ACTION_ABILITY_START = ACTION_SPELL_START + len(SPELL_NAMES)`), constantes `ACTION_CAST_*` retirées. **16 sorts** (vs 3) ; un sort pré-enregistré mais pas encore dans le CNN (ex. `colere`) reste **inerte** (pas de dim morte / re-train inutile). Ciblage data-driven : `SPELL_TARGET_DEFAULTS` (cluster/heal/defense) overridable via `target` dans le JSON, mappé sur SpellCaster. Heuristique caste tous les sorts présents (mains d'abord). `load()` tolère le mismatch de dims. obs **54→67**, actions **37→50** → **re-train** (heuristique OK direct). **Test émulateur requis.**
+- [x] **🔨 Rework COMPLET des sorts (data-driven)** — *fait Session 14*. `SPELL_NAMES` dérivé du registre **∩ classes CNN** (`troop_registry.load_spell_names`), plus de `+3` hardcodé (`ACTION_ABILITY_START = ACTION_SPELL_START + len(SPELL_NAMES)`), constantes `ACTION_CAST_*` retirées. **16 sorts** (vs 3) ; un sort pré-enregistré mais pas encore dans le CNN (ex. `colere`) reste **inerte** (pas de dim morte / re-train inutile). Ciblage data-driven : `SPELL_TARGET_DEFAULTS` (cluster/heal/defense) overridable via `target` dans le JSON, mappé sur SpellCaster. Heuristique caste tous les sorts présents (mains d'abord). `load()` tolère le mismatch de dims. obs **54→67**, actions **37→50** → **re-train** (heuristique OK direct). **✅ Testé en conditions réelles (Session 15) ; re-train en cours.**
 
 ### V5.0 — Mode live (phases optionnelles)
 
@@ -87,44 +93,66 @@
 
 ## 📅 À venir
 
-### V5.2 — Nouveaux agents + orchestrateur
+### V5.2 — Perception + agents (règles)
 
-> Ajouter les agents manquants + un brain capable de décider QUOI faire et QUAND.
+> CNN barre d'options + 2 agents à base de règles (pas de RL). Pipeline perception **identique au digit/troop bar**.
 
-**Agent jeux de clan** (`clan_games/`) — détecter si actifs, identifier les tâches, exécuter (règles, pas de RL).
-**Agent gestion village** (`village/`) — constructeurs libres, queue d'amélioration (murs→défenses→ressources), labo libre, collecte ressources.
+**🔧 CNN barre d'options bâtiment** — taper un bâtiment ouvre une barre de ~6-8 boutons (Demander, Renforcer, Améliorer…). Le template matching sur "Demande" est fragile (~50%).
+- [ ] Collect crops (barre bas y~860-1080 quand un bâtiment est tapé) → label boutons (`demander/renforcer/ameliorer/tresorerie/collecter/rechercher…`) → train **YOLO nano** → `OptionsBarDetector` `{name,x,y,conf}`. Data ~200-500 crops. **Unlock** l'agent village.
 
-**🔧 CNN barre d'options bâtiment** (perception robuste) — quand on tape un bâtiment, une barre de ~6-8 boutons apparaît (Demander, Renforcer, Améliorer…). Le template matching actuel sur "Demande" est fragile (~50%).
-- [ ] CNN options bar : input = crop barre bas (y~860-1080), output = `{name, x, y, conf}` des boutons.
-- [ ] Classes : `demander, renforcer, ameliorer, tresorerie, dormir, infos, rechercher, collecter, acheter…`
-- [ ] Pipeline : tap bâtiment → CNN → bouton selon l'intention. **Unlock** l'agent gestion village.
-- [ ] Data : ~200-500 crops annotés ; Model : YOLO nano sur la zone barre.
+**Agent village** (`village/`, `VillageAgent(BaseAgent)`, règles) — constructeurs libres, queue d'upgrade (murs→défenses→ressources), labo, collecte ; clique via `OptionsBarDetector`. State machine simple.
+**Agent jeux de clan** (`clan_games/`) — détecter si actifs, lire les tâches (OCR), exécuter.
 
-**Orchestrateur `brain.py`** — boucle `priority()`+`can_run()`, gestion cooldowns, logging centralisé, schedule par type d'agent.
+### V5.3 — Cerveau LLM v1 (orchestrateur)
 
-### V5.3 — Dashboard web temps réel
+> `LocalLLMBrain(Brain)` remplace `HeuristicBrain` : décide QUEL agent lancer selon le `world`. Le seam `Brain` existe déjà (V5.1).
 
-> Suivre multi-agents / training / vision agent depuis une page web sur le réseau local. **Pas encore commencé.**
+- [ ] `LocalLLMBrain.decide(world)` → prompt (world JSON + agents-tools + RAG minimal) → Ollama **tool-call** → agent choisi.
+- [ ] Stack : Ollama + **Mistral 7B** + `ollama-python` (détail figé → *Cerveau LLM local*).
 
-- [ ] **Maquette + spec** des pages AVANT le code (composants, sources, refresh, endpoints REST/WS).
-- [ ] Pages : principale (état agents), Training (reward/PPO stats), Replay (overlays par épisode), Village, **Vision Agent** (flux vidéo annoté temps réel via le push pipeline V5.0).
-- [ ] Stack : FastAPI + WebSocket ; front HTML/JS ou htmx.
-- [ ] **Bonus pré-dashboard** : commande `--live` (fenêtre OpenCV temps réel) pour débugger la vision sans attendre le web.
+### V5.4 — Pilotage chat + RAG complet
+
+> Parler à l'IA via le chat clan ; elle comprend le jargon CoC + le contexte du clan.
+
+- [ ] `ChatAgent` (déjà là) → `LocalLLMBrain` (avec RAG) → répond / exécute / rapporte.
+- [ ] RAG : **Chroma** + `nomic-embed-text` (jargon/méca CoC + contexte clan + préférences) → *Cerveau LLM local*.
+- [ ] ⚠️ Sécurité : chat = input **hostile** (injection) → whitelist des donneurs d'ordres + actions destructives derrière confirmation.
 
 ---
 
 ## 🔮 Vision long terme
 
-### V6 — Combat avancé
+### V6 — Dashboard web complet
 
-- [ ] **Caméra / scroll** : actions scroll/pan pour suivre les troupes hors écran (sinon retraite déclenchée trop tôt) ; position caméra dans l'observation.
-- [ ] **Multi-compo** : supporter d'autres armées (LavaLoon, Hybrid, QC…) ; adapter `TroopManager` + templates/CNN.
-- [ ] **Équipements héros** : détecter l'équipement actif, adapter la stratégie.
-- [ ] **Self-play / curriculum** : bases de difficulté croissante (HDV10→12).
+> Prend tout son sens une fois le LLM en place : visualiser le raisonnement du cerveau + l'activité des agents + les perfs, et **contrôler**.
+
+- [ ] **Maquette + spec** des pages AVANT le code (composants, sources, refresh, endpoints REST/WS).
+- [ ] Pages : **Cerveau** (décisions LLM + tool-calls + chat), état agents (scheduler), Training (reward/PPO stats), Replay (overlays par épisode), Village, **Vision Agent** (flux annoté temps réel via push pipeline V5.0).
+- [ ] Contrôle : start/stop, commandes manuelles, override.
+- [ ] Stack : **FastAPI + WebSocket** ; front HTML/JS ou htmx (ou React).
+- [ ] **Bonus pré-dashboard** : commande `--live` (fenêtre OpenCV temps réel) pour débugger la vision sans attendre le web.
+
+### V7+ — Automatisation & intelligence
+
+- [ ] **Combat réactif** (cf section combat) : obs tactique post-`yolo_troops` + reward de timing → l'agent joue libre, pas scripté.
+- [ ] **Gestion village intelligente** : priorisation upgrades pilotée par le LLM (méta + objectifs), gestion bouclier, dons auto.
+- [ ] **Communication inter-agents** : l'attack agent demande des troupes au CC agent, le village négocie les ressources → bus de messages + arbitrage LLM.
+- [ ] **RL — efficacité échantillons** (épisodes coûteux) : PPO on-policy = peu efficace. Alternatives → **off-policy** (Rainbow/DQN, SAC discret, replay buffer) ou **model-based DreamerV3** (entraînement "en imagination"). À évaluer si la convergence est trop lente.
+- [ ] **Amélioration continue** : self-play / curriculum (HDV croissants), analyse de replays (patterns d'erreur), multi-compo (LavaLoon, Hybrid, QC…), équipements héros.
+- [ ] **Caméra / scroll** : suivre les troupes hors écran (sinon retraite trop tôt) ; position caméra dans l'obs.
+- [ ] **Multi-compte**.
 
 ### Cerveau LLM local (coach + parole + RAG)
 
-> 100% local, 0€/mois. **Ollama** + Llama 3.1 8B / Mistral 7B / Qwen sur le RTX 5070 (8 Go VRAM). C'est l'aboutissement de la vision : on parle à l'IA en langage naturel via le chat clan, elle supervise les sous-agents. Voir mémoire `project_llm_brain_vision`.
+> 100% local, 0€/mois. C'est l'aboutissement de la vision : on parle à l'IA en langage naturel via le chat clan, elle supervise les sous-agents. Voir mémoire `project_llm_brain_vision`.
+
+**🔧 Stack figé (Session 14)** :
+- **Runtime** : **Ollama** (serveur local, offload GPU/RAM auto, tool-calling), appelé via `ollama-python` (HTTP `localhost:11434`).
+- **Modèle** : **Mistral 7B Instruct** (labo 🇫🇷, Apache 2.0, FR natif, tool-calling) Q4 par défaut (~4.5 Go → tient sur GPU à côté des CNN ~1-2 Go ; rapide). Upgrade : **Mistral Nemo 12B** (Mistral+NVIDIA, Apache 2.0, 128k ctx) en offload partiel. Alt US : Llama 3.1 8B (Meta). → prendre le dernier petit Mistral instruct. **(Qwen écarté — préférence US/EU de l'utilisateur.)**
+- **Où** : **GPU** (l'orchestrateur décide toutes les qq s, pas de latence critique → 7-8B sur GPU = sweet spot). RAM (64 Go) = réservé à un éventuel "penseur lent" offline (70B, 1-3 tok/s) plus tard.
+- **Sortie** : **tool-calling** (agents = tools) → décision structurée, pas de parsing fragile.
+- **RAG** (perso) : **Chroma** + embedder `nomic-embed-text` (Ollama). Indexe jargon/méca CoC + contexte clan + préférences. MAJ = ajouter des docs, zéro ré-entraînement.
+- **Découpage** : V5.3 = `LocalLLMBrain.decide(world)` (orchestre, RAG minimal) ; V5.4 = ChatAgent↔LLM + RAG complet (parole/ordres).
 
 - [ ] **Intégration Ollama** (`uv add ollama`) → `LocalLLMBrain` derrière l'interface `Brain` (V5.1).
 - [ ] **Mode coach** : après chaque attaque, contexte → analyse NL → log ou chat clan.
@@ -146,17 +174,14 @@
 
 > Idées pas encore assignées à une version. On pioche ici quand on a du temps.
 
-### 🎯🔨 GROS CHANTIER — Inventaire & déploiement pilotés par le grisé (zéro compteur)
+### 🔨 Hardening grisé (ex-"GROS CHANTIER zéro compteur", requalifié Session 15)
 
-> **Décidé Session 14, à faire (assez gros, ne pas oublier).** Objectif final : ajouter une troupe/engin/sort = **retrain le CNN + 1 ligne de data**, JAMAIS toucher au code Python. Et un déploiement robuste à la taille des camps / au changement de compo.
+> **Requalifié Session 15.** La prémisse du chantier (« il n'existe pas de compteur fiable ») est **obsolète depuis le digit-CNN** (seed au reset + re-lecture live à chaque `observe`, validé en réel). La refonte "zéro compteur" (obs présence-par-rôle) est **abandonnée** : elle dégraderait l'observation — moins d'info que les vrais comptes, désormais fiables. Architecture actée : **compteurs digit-CNN = source primaire, grisé = autorité de fin / filet de sécurité** (`default_max` ne subsiste que comme fallback basse-confiance ~8% des lectures, corrigé au runtime par le grisé).
 
-**Pourquoi** : il n'existe **pas de compteur fiable** (l'OCR des compteurs a été retiré Session 13). Aujourd'hui `_remaining_troops` est initialisé à `default_max` (par troupe, codé en dur dans `TROOP_TYPES`) — fragile : les camps grossissent, on change de compo. Le **seul signal fiable = `is_grayed`** du CNN troop bar (déjà exploité par `_sync_remaining_from_perception` qui met à 0 les grisés). Le `max` et la logique compteur sont **couplés** → on ne peut pas juste retirer `max` (l'heuristique construit sa séquence à l'avance à partir des compteurs).
-
-**À faire (cohérent, un seul chantier)** :
-- [x] **Registre data-driven** (Session 14) : `configs/troops.json` = SSOT `{name, role, max?}` ; `TROOP_TYPES` (`legacy/agent.py`) + `ROLE_TO_TROOPS` (`action_space.py`, group-by rôle) en **dérivent** via `combat/troop_registry.py`. **47 troupes** (toutes les classes déployables du CNN). Ajouter une troupe = 1 ligne JSON + retrain CNN, **zéro code**. Existantes préservées à l'identique, obs 54 dims (checkpoint-safe). → **corrige l'urgence "nouvelles troupes pas déployées"** (golem_glace, bebe_dragon, gargouille, yeti, etc.). `max` gardé comme borne haute optionnelle (défaut par rôle) — pas encore "zéro compteur".
-- [ ] **Deploy-until-grayed** (reste du chantier) : `_execute_deploy(role)` déploie la troupe non-grisée du rôle ; le **mask** active `deploy(role)` tant qu'une troupe du rôle est non-grisée ; l'heuristique = "déploie ce rôle tant que pas grisé" (boucle runtime). → supprime `max`/`default_max` définitivement + rend le sanity-rescan inutile.
+**Ce qui reste (petits items)** :
+- [x] **Registre data-driven** (Session 14) : `configs/troops.json` = SSOT `{name, role, max?}` ; `TROOP_TYPES` + `ROLE_TO_TROOPS` en dérivent via `combat/troop_registry.py`. **47 troupes**, ajouter une troupe = 1 ligne JSON + retrain CNN, **zéro code**. (Détail → CHANGELOG.)
+- [ ] **Mask ceinture-bretelles** : autoriser `deploy(role)` tant qu'une troupe du rôle est **non-grisée**, même si le compteur lu dit 0 (protège d'une lecture basse erronée). Petit changement, pas une refonte.
 - [ ] **Rôles best-guess à valider** : les rôles des troupes récentes dans `troops.json` sont des estimations (éditables sans code). Vérifier en jeu et ajuster.
-- [ ] **Impact RL** : change la sémantique de l'obs (role_counts → présence par rôle) → **re-train** (acceptable, checkpoint actuel faible : 0★ 27%, 80 ep). **Test émulateur requis.**
 - [ ] **Sorts** : ajouter un sort change la dim d'obs (`SPELL_FEATURES`) → pas checkpoint-safe (à gérer à part des troupes).
 - [ ] **Full-auto (horizon LLM)** : classe CNN inconnue → l'orchestrateur LLM déduit le rôle (connaissance jeu + RAG) et remplit le registre tout seul. Rejoint *Apprentissage continu*.
 
@@ -165,6 +190,20 @@
 - [~] **Spam de sorts** : l'heuristique balance tous les sorts d'affilée. **Atténué** Session 14 : `_spread_cluster_point` étale les casts cluster (plus d'empilement spatial). **Reste (vu run Session 14)** :
   - Espacement **temporel** (l'heuristique enchaîne les casts ; timing géré par l'orchestrateur LLM à terme).
   - **Gel re-gèle la même défense déjà gelée** → `SpellCaster` doit mémoriser les défenses gelées récemment (cooldown ~5s) et viser la suivante. Petit fix dédié possible.
+
+**🔨 Robustesse du déploiement** *(2 bugs liés, vus run Session 14)*
+- [ ] **Taps de deploy invalides** : `_execute_deploy` tape `self._deploy_positions[i]` (périmètre murs/bâtiments) — parfois le point tombe sur un bâtiment / dans la base / zone rouge non-déployable → tap sans effet, mais le compteur décrémente quand même. Fixes (simple→robuste) :
+  1. **Push outward** : décaler les positions du périmètre vers l'extérieur (loin de la base, sur l'herbe) d'une marge.
+  2. **Snap zone déployable** : masque herbe verte (HSV) OU détection de l'overlay rouge (frame avec troupe sélectionnée) → snapper chaque position au point valide le plus proche. Pas de train.
+  3. **Validation post-deploy** : après le tap, vérifier qu'une unité est apparue (compteur baissé / YOLO troupe) ; sinon retry à un offset. Filet de sécurité.
+- [ ] **Capacités des héros déployés au rescan jamais jouées** : l'heuristique file les `ability(i)` selon l'inventaire de DÉPART. Un héros déployé **tard** (au `cleanup`, car son deploy initial a raté — cf ci-dessus) n'a pas sa capa dans la séquence → oubliée. Fix : déclenchement **piloté par perception** — après `cleanup()` (et périodiquement), passe "fire abilities" qui, pour chaque héros dont le CNN voit la capa dispo (non grisée) + non utilisée → `_execute_ability`. Le `hero_manager` détecte déjà les `*_capa`. *(Lien : fixer les taps invalides réduit les héros déployés tard ; cette passe = filet.)*
+
+**🔨 Combat réactif / autonome (moins scripté)** *(objectif clé, noté Session 14)*
+> Le déroulé `deploy→sorts→rescan→observe` visible = l'**heuristique** (prof BC + fallback). L'agent RL décide déjà action-par-action selon l'obs, mais 3 choses le brident → le rendre vraiment libre/réactif :
+- [ ] **Obs tactique riche** : savoir *où sont mes troupes* (→ **retrain `yolo_troops`**), où le push progresse/bloque, position relative des défenses. Sans ça l'agent est aveugle → reste proche du script. **Prérequis #1.**
+- [ ] **Reward de timing** : récompenser rage sur troupes engagées, soin sur troupes blessées, gel sur défense dangereuse active, renfort là où ça bloque. Aujourd'hui reward ≈ destruction/étoiles → signal trop pauvre pour la tactique réactive.
+- [ ] **Moins d'ancrage BC** : l'agent démarre scripté (clone heuristique) ; avec bon reward + assez d'épisodes, PPO s'en écarte. Option : réduire le poids/durée du BC après un premier baseline.
+- [ ] **Horizon LLM (V6)** : le cerveau LLM raisonne sur la bataille en temps réel = l'autonomie ultime. Rejoint *Cerveau LLM local*.
 
 **Combat intelligent**
 - [ ] Estimation loot avant attaque (OCR ressources adverses → skip si pas rentable).

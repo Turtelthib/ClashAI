@@ -13,6 +13,8 @@ Historique chronologique des features livrées, du plus récent au plus ancien.
 
 Plomberie pour les sous-agents. Posé à côté du système existant → le bot tourne identique tant que `brain.py` n'est pas branché sur le scheduler.
 
+- ✅ **Validation en conditions réelles (Session 15)** : rework 16 sorts + seed digit-CNN testés en run réel → OK. **Re-train sur la nouvelle obs 67 dims / 50 actions lancé** (gros run = baseline avant la suite).
+- ✅ **Décision (Session 15) — chantier "deploy-until-grayed" requalifié en hardening** : sa prémisse (« pas de compteur fiable ») est obsolète depuis le digit-CNN (seed reset + re-lecture live). La refonte obs "présence-par-rôle" est **abandonnée** (perdrait de l'info vs les vrais comptes, désormais fiables). Architecture actée : **compteurs digit-CNN = source primaire, grisé = autorité de fin / filet**. Restent des petits items (mask "deploy si non-grisé", validation des rôles best-guess) → voir backlog ROADMAP.
 - ✅🐛 **Sorts non tous lancés + rage mal placé** (Session 14, suite du rework) :
   - *Leftover* : `_execute_spell` plafonnait au compteur seedé à `default_max` = `max` JSON (gel=1, rage=3) → laissait 2 gel / 1 rage. Fix : les sorts **ignorent le `max` JSON** et sont seedés généreux (`DEFAULT_MAX_BY_ROLE['spell']=8`, cast-until-grayed) → le grisé coupe au vrai compte.
   - *Rage au centre* : la détection terrain (`yolo_troops.pt`, sous-entraînée) trouve souvent 0 troupe → `main_cluster` tombe sur le fallback `village_center`. Fix : support spells (cluster/heal) visent le **chemin de marche** (`_troop_march_point`, côté attaque→cœur) quand `num_troops==0`, + **spread** des casts cluster consécutifs (`_spread_cluster_point`) pour ne plus empiler les rages. (Le gel marchait déjà : `_find_freeze_target` cherche une défense proche.) Fix de fond = retrain `yolo_troops.pt` (ROADMAP).
@@ -71,7 +73,9 @@ Phases 1-2 livrées (3-4 optionnelles, voir ROADMAP).
 
 ---
 
-## V4.4 — Polish perception (en cours) — Session 14
+## V4.4 — Polish perception (en cours) — Session 14-15
+
+- ✅ **Digit CNN validé en conditions réelles (Session 15)** : seed au reset + re-lecture live confirmés en run réel → le mini-CNN chiffres est clos (reste le renfort data au fil de l'eau). Dernière étape V4.4 = le gros run (re-train 67 dims, en cours).
 
 - ✅🐛 **Sorts château de clan écrasés + flèche siège/gardien** (Session 14, avant gros run) :
   - *Doublons château* : un sort présent 2× (armée x3 + château x1). 3 bugs combinés : (a) `read_bar_counts`/`to_positions` keyés par nom → compteur+position **écrasés** → fix **somme** + positions en liste/refresh ; (b) le **vrai bloqueur** : `_sync_remaining_from_perception` zérotait par nom → l'icône armée grisée mettait `rage=0` alors que le château était actif → 4e cast refusé. Fix : dépletion seulement si **toutes** les icônes du nom sont grisées ; (c) `finder.positions` rafraîchi **avant chaque deploy/sort** → une fois l'armée grisée, `select()` tape l'icône château.
