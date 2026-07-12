@@ -126,8 +126,8 @@
 
 > Prend tout son sens une fois le LLM en place : visualiser le raisonnement du cerveau + l'activité des agents + les perfs, et **contrôler**.
 
-- [ ] **Maquette + spec** des pages AVANT le code (composants, sources, refresh, endpoints REST/WS).
-- [ ] Pages : **Cerveau** (décisions LLM + tool-calls + chat), état agents (scheduler), Training (reward/PPO stats), Replay (overlays par épisode), Village, **Vision Agent** (flux annoté temps réel via push pipeline V5.0).
+- [~] **Maquette + spec** des pages AVANT le code — **brief complet écrit** : [`docs/dashboard_brief.md`](dashboard_brief.md) (contexte, panneaux, sources, direction visuelle « poste de commande », tech cible). Maquette v1 faite (skill artifact-design) ; version finale à générer via **Claude Design** (produit séparé) → docs → dev.
+- [ ] Pages/panneaux : **Cerveau** (décisions LLM + tool-calls), **Agents** (scheduler), **État des CNN** (statut live + ms/inférence par modèle ; `yolo_troops` en alerte), **Vision** (flux annoté temps réel), **Combat/RL** (reward + stats), **Chat**, **Village**, **Journal** (.md), **Contrôle**.
 - [ ] Contrôle : start/stop, commandes manuelles, override.
 - [ ] Stack : **FastAPI + WebSocket** ; front HTML/JS ou htmx (ou React).
 - [ ] **Bonus pré-dashboard** : commande `--live` (fenêtre OpenCV temps réel) pour débugger la vision sans attendre le web.
@@ -145,6 +145,15 @@
 ### Cerveau LLM local (coach + parole + RAG)
 
 > 100% local, 0€/mois. C'est l'aboutissement de la vision : on parle à l'IA en langage naturel via le chat clan, elle supervise les sous-agents. Voir mémoire `project_llm_brain_vision`.
+
+**🔧 Division du travail — archi figée (Session 15, validée par le schéma utilisateur)** :
+- **LLM = manager/stratège** : vue globale (via `build_world` + RAG), décide **QUOI/QUAND** (attaquer, up quel bâtiment, quelle compo), **coache le RL** (debrief post-attaque → reward shaping + mémoire), parle au clan.
+- **Sous-agents = yeux+mains+experts** : chacun (1) exécute une tâche, (2) **rapporte** ce qu'il a vu/fait, (3) **escalade les décisions** au LLM. Pattern : l'agent fait le check *pas cher* (perception), le LLM tranche le *cher* (raisonnement).
+- **Agent combat/RL** : reçoit compo+cible du LLM → exécute le **micro** (temps réel) → rapporte le résultat → LLM debriefe. Le LLM **ne remplace pas** le RL (trop lent pour le micro) ; le RL **ne remplace pas** le LLM (pas de raisonnement/stratégie).
+- **Exécution : heuristique-guidée-par-LLM d'abord** (pragmatique, marche tout de suite), RL pour l'optim micro **quand** il apporte un gain (le run baseline plafonne ~1.4★ → RL pas prioritaire).
+- **Seuil de décision** : l'agent décide seul le routinier ; escalade au LLM le stratégique/ambigu (évite d'appeler le LLM 1000×/min).
+- **Canaux** : dialogue live agent↔LLM = **tool-calls** ; **`.md` = carnet durable** (log décisions lisible par l'humain + mémoire RAG + canal d'instructions humaines). Inter-agents via le LLM au début (bus direct → V7+).
+- **4/6 agents déjà faits** (V5.1 : Combat/Chat/GdC/ClanCastle) ; restent Village + JeuxClan (V5.2) + le LLM (V5.3).
 
 **🔧 Stack figé (Session 14)** :
 - **Runtime** : **Ollama** (serveur local, offload GPU/RAM auto, tool-calling), appelé via `ollama-python` (HTTP `localhost:11434`).

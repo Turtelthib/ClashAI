@@ -13,6 +13,7 @@ Historique chronologique des features livrées, du plus récent au plus ancien.
 
 Plomberie pour les sous-agents. Posé à côté du système existant → le bot tourne identique tant que `brain.py` n'est pas branché sur le scheduler.
 
+- ✅ **Baseline RL figé + outil de comparaison** (Session 15) : le run PPO brut (350 ép, obs 67/actions 50) a **plateauté ~1.7★ / 53% de 2★+** = niveau BC/heuristique → le RL brut ne casse pas le plafond (confirme que le levier est le cerveau LLM, pas plus d'épisodes). Archivé `weights/baselines/v4.4-ppo-350ep/` (log+checkpoint+`stats.json`, local car `weights/` gitignoré) ; trace git `docs/baselines.md` ; outil `tools/train/compare_baseline.py` compare un run au baseline (côte à côte + delta), sans re-déduire.
 - ✅ **Validation en conditions réelles (Session 15)** : rework 16 sorts + seed digit-CNN testés en run réel → OK. **Re-train sur la nouvelle obs 67 dims / 50 actions lancé** (gros run = baseline avant la suite).
 - ✅ **Décision (Session 15) — chantier "deploy-until-grayed" requalifié en hardening** : sa prémisse (« pas de compteur fiable ») est obsolète depuis le digit-CNN (seed reset + re-lecture live). La refonte obs "présence-par-rôle" est **abandonnée** (perdrait de l'info vs les vrais comptes, désormais fiables). Architecture actée : **compteurs digit-CNN = source primaire, grisé = autorité de fin / filet**. Restent des petits items (mask "deploy si non-grisé", validation des rôles best-guess) → voir backlog ROADMAP.
 - ✅🐛 **Sorts non tous lancés + rage mal placé** (Session 14, suite du rework) :
