@@ -159,7 +159,11 @@ class TroopDetector:
                     if y_ratio < UI_TOP_Y_RATIO or y_ratio > UI_BOTTOM_Y_RATIO:
                         continue
 
-                class_name = TROOP_CLASSES[cls_id] if cls_id < len(TROOP_CLASSES) else f"unk_{cls_id}"
+                # Noms lus depuis le MODÈLE (pas une liste codée en dur) : le
+                # modèle 51-classes déployé a des indices au-delà de l'ancienne
+                # liste → sinon golem_glace / enemi_artilleur / … sortaient en
+                # 'unk_N' (et le split héros/troupe + l'exclusion ennemis cassés).
+                class_name = self._model.names.get(cls_id, f"unk_{cls_id}")
 
                 detections.append(Detection(
                     class_name=class_name,

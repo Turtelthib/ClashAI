@@ -29,10 +29,47 @@ REWARD_ZERO_STAR_PENALTY = -50
 REWARD_THREE_STAR_BONUS = 50
 REWARD_FIRST_STAR_BONUS = 50
 
-# Smart retreat detection (V3 era — kept for back-compat with the V3 env).
+# Smart retreat detection (V3 era — kept for back-compat with the V3 env + as
+# fallback when the yolo_troops CNN is unavailable).
 GREEN_DEAD_THRESHOLD = 2
 NO_TROOPS_CHECKS_THRESHOLD = 3
 NO_TROOPS_MIN_WAIT = 5.0
+
+# V4.4: abandon piloté par le CNN troupes terrain (remplace les barres vertes).
+# yolo_troops voit le SPRITE de la troupe (même blessée = barre orange), donc
+# "0 troupe détectée" est bien plus fiable que "0 barre verte" (qui comptait une
+# troupe blessée comme morte → abandon à 99% alors que le 3★ était faisable).
+# Fenêtre de confirmation un peu conservatrice : ne pas abandonner sur quelques
+# frames ratées ou des troupes momentanément hors-écran (caméra).
+FIELD_NO_TROOPS_CHECKS = 4
+
+
+def _count_field_troops(env, img_pil):
+    """Nombre de MES troupes encore sur le terrain, via le CNN yolo_troops
+    (exclut les unités ennemies). Fallback sur les barres de vie si le détecteur
+    est absent. Renvoie un int, ou None si non mesurable."""
+    detector = None
+    obs = getattr(env, '_combat_observer', None)
+    if obs is not None:
+        detector = getattr(obs, '_troop_detector', None)
+    if detector is None and getattr(env, 'models', None):
+        detector = env.models.get('troop_detector')
+    if detector is not None:
+        try:
+            grouped = detector.detect_grouped(img_pil)
+            mine = [d for d in grouped.get('all', [])
+                    if not str(getattr(d, 'class_name', '')).startswith(('enemi', 'enemy'))]
+            return len(mine)
+        except Exception:
+            pass
+    # Fallback : barres de vie vertes (signal fragile, historique)
+    try:
+        img_cv = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
+        from clashai.combat.combat_observer import detect_troop_bars, detect_hero_bars
+        green_pos, _ = detect_troop_bars(img_cv)
+        return len(green_pos) + len(detect_hero_bars(img_cv))
+    except Exception:
+        return None
 
 
 def compute_reward(stars: int, percentage: int) -> float:
@@ -141,41 +178,31 @@ def wait_for_battle_end(env):
             final_img = env._adb_screenshot()
             return final_img if final_img else img_pil
 
-        # 2. Scan GREEN troop / hero bars (orange/red = injured or enemy)
+        # 2. Compte MES troupes via le CNN yolo_troops (voit le sprite même
+        #    blessé). On abandonne seulement après FIELD_NO_TROOPS_CHECKS scans
+        #    consécutifs à 0 troupe → fini l'abandon prématuré à 99%.
         if img_pil is not None and not surrendered:
-            try:
-                img_cv = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
-                from clashai.combat.combat_observer import detect_troop_bars, detect_hero_bars
-                green_pos, _ = detect_troop_bars(img_cv)
-                hero_pos = detect_hero_bars(img_cv)
-                green_count = len(green_pos) + len(hero_pos)
-
+            troop_count = _count_field_troops(env, img_pil)
+            if troop_count is not None:
                 if env.verbose:
-                    pp(f" Scan: {len(green_pos)} green, "
-                       f"{len(hero_pos)} heroes → alive={green_count}",
-                       tag='scan')
+                    pp(f" Troupes terrain (CNN) : {troop_count}", tag='scan')
 
-                if green_count <= GREEN_DEAD_THRESHOLD:
+                if troop_count == 0:
                     no_troops_consecutive += 1
                     if env.verbose:
-                        pp(f" Below threshold "
-                           f"({no_troops_consecutive}/{NO_TROOPS_CHECKS_THRESHOLD})",
+                        pp(f" 0 troupe "
+                           f"({no_troops_consecutive}/{FIELD_NO_TROOPS_CHECKS})",
                            tag='warning')
                 else:
                     no_troops_consecutive = 0
 
-                if no_troops_consecutive >= NO_TROOPS_CHECKS_THRESHOLD:
+                if no_troops_consecutive >= FIELD_NO_TROOPS_CHECKS:
                     if env.verbose:
-                        pp(f" Troops dead "
-                           f"(green<={GREEN_DEAD_THRESHOLD} "
-                           f"x{NO_TROOPS_CHECKS_THRESHOLD})", tag='retreat')
+                        pp(f" Troupes mortes (CNN : 0 x{FIELD_NO_TROOPS_CHECKS}) "
+                           f"→ abandon", tag='retreat')
                     env._surrender()
                     surrendered = True
                     min_wait = NO_TROOPS_MIN_WAIT
-
-            except Exception as e:
-                if env.verbose:
-                    print(f" WARNING: Troop scan failed: {e}")
 
         time.sleep(WAIT_BATTLE_CHECK)
 

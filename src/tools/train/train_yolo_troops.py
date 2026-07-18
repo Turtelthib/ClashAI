@@ -41,8 +41,8 @@ BEST_WEIGHTS = os.path.join(WEIGHTS_DIR, 'best.pt')
 # Default hyperparameters
 DEFAULT_EPOCHS = 100
 DEFAULT_BATCH = 16
-DEFAULT_IMG_SIZE = 640
-DEFAULT_MODEL = 'yolo11m.pt'
+DEFAULT_IMG_SIZE = 832
+DEFAULT_MODEL = 'yolo26m.pt'
 
 
 # =============================================================================
