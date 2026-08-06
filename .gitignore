@@ -9,6 +9,8 @@ build/
 .ruff_cache/
 
 # Weights
+*.pt
+*.pth
 weights/*.pt
 weights/*.pth
 weights/*.json
@@ -18,7 +20,10 @@ weights/rl_v3/
 weights/yolo_troops/
 weights/
 
-# Datasets
+# Data root (datasets, captures, templates, debug output, raw sources)
+data/
+
+# Datasets (legacy root paths, kept for safety)
 datasets/
 dataset/
 dataset_cnn/
@@ -26,13 +31,14 @@ dataset_screen/
 dataset_troops/
 data_source/
 combat_captures/
+needLabelisation/
 
 # Debug outputs
 debug_*/
 runs/
 *.log
 
-# Templates images
+# Templates images (legacy root path)
 templates/
 
 # OS
@@ -42,3 +48,34 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+claude.md
+
+logs/
+
+.gitignore
+
+old_training_log_v4.json
+
+test_deploy.py
+test_gpu.py
+
+# Config projet Claude Code : les skills sont versionnes (convention d'equipe),
+# seules les permissions locales restent personnelles.
+.claude/*
+!.claude/skills/
+.claude/settings.local.json
+
+update_AI_on_roboflow.py
+
+SchémaLLM-SubAgent.png
+
+migration_v3_to_v4.md
+
+dashboard_brief.md
+
+ClashAI_Session7_Resume.md
+
+ClashAI_Session6_Resume.md
+
+docs/V4.1/

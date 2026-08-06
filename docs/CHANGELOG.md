@@ -9,6 +9,17 @@ Historique chronologique des features livrées, du plus récent au plus ancien.
 
 ---
 
+## V5.2 — Outillage & audit (en cours)
+
+> Préparatifs du cycle V5.2. La feature V5.2 elle-même (CNN UI + agents village/jeux de clan) reste à faire → [ROADMAP](ROADMAP.md).
+
+- ✅ **Audit projet complet** (5 août 2026) : 4 sous-agents en parallèle (duplication/SSOT, architecture/couplage, qualité Python, config/doc) → [`docs/AUDIT_2026-08-05.md`](AUDIT_2026-08-05.md), ~60 constats classés par gravité + plan en 7 phases. Fichier **temporaire**, à dissoudre dans ROADMAP/TROUBLESHOOTING au fil du tri. Chiffres corrigés au passage : les **17 sorts / 68 dims / 51 actions** réels (la doc annonçait 16/67/50) ; la baseline `v4.4-ppo-350ep` est bien **compatible** (checkpoint vérifié en 68/51), seul son texte de description était faux.
+- ✅ **Refonte des skills Claude Code** : les 8 `.md` à plat dans `.claude/skills/` n'étaient **chargés par personne** (Claude Code exige `<nom>/SKILL.md` + frontmatter YAML). 7 skills convertis et désormais actifs — `project-mapper`, `refacto-architect`, `roadmap-manager`, `uv-workflow`, `yolo-expert`, `stop-slop`, `context-engineering`. `UI-UX.md` (README d'un installeur tiers, pas un skill) déplacé en `docs/vendor/`. Liens morts retirés (`references/*.md` de stop-slop, 15 sous-skills de context-engineering). Chaque skill projet gagne une commande de vérification manuelle.
+- ✅ **`PROJECT_MAP.md`** créé à la racine (attendu par `project-mapper` depuis toujours) : arborescence annotée de `src/`, sens des dépendances, points d'entrée, repères chiffrés vérifiés.
+- ✅ **`.claude/skills/` versionné** (`.gitignore` ignorait tout `.claude/`) ; `settings.local.json` reste exclu.
+
+---
+
 ## V5.1 — Foundation multi-agents (en cours)
 
 Plomberie pour les sous-agents. Posé à côté du système existant → le bot tourne identique tant que `brain.py` n'est pas branché sur le scheduler.
