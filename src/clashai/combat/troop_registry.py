@@ -106,7 +106,10 @@ def build_role_to_troops(troop_types=None):
 #   enemy's most dangerous defense. Overridable per-spell via "target" in the
 #   JSON. Best-guess for the spells you don't tune — edit as data, not code.
 SPELL_TARGET_DEFAULTS = {
-    'soin': 'heal', 'rage': 'cluster', 'gel': 'defense',
+    # soin → cluster (pas 'heal') : la détection des troupes blessées (barres de
+    # vie HSV) est fragile ; viser la masse de troupes est plus fiable et le soin
+    # soigne une zone de toute façon. Cohérent avec rage/speed.
+    'soin': 'cluster', 'rage': 'cluster', 'gel': 'defense',
     'zap': 'defense', 'saut': 'defense', 'clone': 'cluster',
     'rappel': 'cluster', 'resurrection': 'heal', 'totem': 'cluster',
     'poison': 'defense', 'seisme': 'defense', 'speed': 'cluster',

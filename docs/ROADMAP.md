@@ -93,14 +93,15 @@
 
 ## 📅 À venir
 
-### V5.2 — Perception + agents (règles)
+### V5.2 — CNN UI universel + agents (règles)
 
-> CNN barre d'options + 2 agents à base de règles (pas de RL). Pipeline perception **identique au digit/troop bar**.
+> **CNN UI (détecteur de boutons universel)** + 2 agents à base de règles (pas de RL). Généralise l'idée "barre d'options" ET remplace `ui_positions.json` (positions codées en dur) + le template "Demander" (~50%). Décidé Session 15.
 
-**🔧 CNN barre d'options bâtiment** — taper un bâtiment ouvre une barre de ~6-8 boutons (Demander, Renforcer, Améliorer…). Le template matching sur "Demande" est fragile (~50%).
-- [ ] Collect crops (barre bas y~860-1080 quand un bâtiment est tapé) → label boutons (`demander/renforcer/ameliorer/tresorerie/collecter/rechercher…`) → train **YOLO nano** → `OptionsBarDetector` `{name,x,y,conf}`. Data ~200-500 crops. **Unlock** l'agent village.
+**🔧 CNN UI — détecteur de boutons** — une seule YOLO qui détecte **tous** les boutons à l'écran (`retraite, confirmer, annuler, demander, renforcer, ameliorer, collecter, attaquer, suivant, retour…`). Combinée au CNN état-écran : écran → *quel* écran, CNN UI → *où* sont les boutons dessus. L'agent tape la position **détectée**, plus rien en dur.
+- [ ] `UIButtonDetector` : screenshot → `{name: (x,y,conf)}` + `find_button(name)`. Entraînement = script **générique** `tools/train/kaggle_train_yolo_troops.py` (lit n'importe quel dataset Roboflow). **Data + label = côté utilisateur** (captures des écrans à boutons, Roboflow) — pas d'outil de collecte à faire.
+- [ ] **Migration progressive + sûre** : `find_button()` avec **fallback `ui_positions.json`** si non détecté → migrer les appelants un par un (retraite → dialogues confirmer/annuler → demander château → menus bâtiment). Robuste aux changements d'UI / résolution.
 
-**Agent village** (`village/`, `VillageAgent(BaseAgent)`, règles) — constructeurs libres, queue d'upgrade (murs→défenses→ressources), labo, collecte ; clique via `OptionsBarDetector`. State machine simple.
+**Agent village** (`village/`, `VillageAgent(BaseAgent)`, règles) — constructeurs libres, queue d'upgrade (murs→défenses→ressources), labo, collecte ; clique via `UIButtonDetector`. State machine simple.
 **Agent jeux de clan** (`clan_games/`) — détecter si actifs, lire les tâches (OCR), exécuter.
 
 ### V5.3 — Cerveau LLM v1 (orchestrateur)
@@ -228,7 +229,7 @@
 - [ ] Annonces de recrutement (chat global) ; réponses aux commandes membres ; rejoindre les guerres auto.
 
 **Infrastructure & UX**
-- [ ] Calibration UI automatique (remplacer `ui_positions.json` par détection YOLO/template).
+- [~] Calibration UI automatique (remplacer `ui_positions.json` par détection YOLO) → **fusionné dans le CNN UI de V5.2**.
 - [ ] Replay vidéo des attaques (enregistrement ADB) ; multi-compte (plusieurs émulateurs) ; comportement humain (délais/patterns) ; mode coaching.
 
 **ML & training**
