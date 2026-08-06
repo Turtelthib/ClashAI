@@ -32,6 +32,15 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/clashai"]
 
+[tool.pytest.ini_options]
+# testpaths est indispensable : sans lui, un `pytest` lance a la racine collecte
+# src/tools/debug/test_deploy.py, qui n'a PAS de garde `if __name__` -> l'import
+# seul charge les modeles YOLO/CNN sur GPU puis pilote l'emulateur.
+# Ne pas retirer tant que ces scripts n'ont pas ete renommes en debug_*.py.
+testpaths = ["tests"]
+pythonpath = ["tests"]
+addopts = "-q --strict-markers"
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
