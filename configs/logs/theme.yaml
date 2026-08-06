@@ -1,0 +1,73 @@
+# configs/logs/theme.yaml
+# Colors + style overrides for the ClashAI terminal output.
+#
+# Edit and re-run any command — changes apply at next module import.
+# See clashai/config/logging.py for how this file is consumed.
+
+# Per-level styles for the rich console.
+# Style strings follow the rich syntax: "<fgcolor>[ on <bg>][ <attr>]".
+# Examples: "bold green", "yellow", "bright_red on black", "dim cyan".
+levels:
+  DEBUG:    "dim cyan"
+  INFO:     "white"
+  WARNING:  "bold yellow"
+  ERROR:    "bold red"
+  CRITICAL: "bold red on yellow"
+
+# Styles for the pp() pretty-print helpers (used in env / training loops).
+tags:
+  # Layout
+  banner:    "bold cyan on black"
+  section:   "bold magenta"
+
+  # Step types
+  step:      "white"
+  deploy:    "green"
+  spell:     "bold blue"
+  ability:   "bold magenta"
+  observe:   "dim white"
+  wait:      "dim white"
+  reward:    "bold yellow"
+  done:      "bold green"
+
+  # Status
+  warning:   "bold yellow"
+  error:     "bold red"
+  ok:        "bold green"
+  skip:      "dim white"
+
+  # Init / loading
+  init:      "#7AB8E6"
+  init_done: "bold #9CC9E8"
+
+  # YOLO — Ultralytics palette
+  yolo:      "bold #042AFF"
+  yolo_dim:  "#5566B8"
+  yolo_alt:  "bold #E1FF25"
+
+  # Defense name (SpellCaster freeze target)
+  def_name:  "bold #FF9F40"
+
+  # Priority gradient (used by priority_tag())
+  prio_low:  "bold green"
+  prio_med:  "bold yellow"
+  prio_high: "bold #FF9000"
+  prio_max:  "bold red"
+
+  # Battle wait / cleanup phase
+  scan:      "cyan"
+  retreat:   "bold #FF6B35"
+  cleanup:   "dim white"
+
+  # Result gradient (used by result_tag())
+  result_excellent: "bold #FFD700"
+  result_good:      "bold yellow"
+  result_meh:       "bold #FF9000"
+  result_bad:       "bold #FF3030"
+  banner_label:     "bold white"
+
+# Misc
+show_path:       false   # rich's "path:line" prefix on each log
+show_time:       true    # "[HH:MM:SS]" prefix on each log
+markup:          true    # interpret rich [bold]markup[/bold] in messages
+rich_tracebacks: true    # pretty exception tracebacks

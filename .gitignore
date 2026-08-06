@@ -51,14 +51,18 @@ Thumbs.db
 
 claude.md
 
-logs/
+# Ancre a la racine : sans le '/', ce motif masquait aussi configs/logs/,
+# donc le theme Rich lu par config/logging.py n'etait pas versionne.
+/logs/
 
 .gitignore
 
 old_training_log_v4.json
 
-test_deploy.py
-test_gpu.py
+# Ancres : sans le '/', ces motifs masquaient aussi src/tools/debug/,
+# ou ces deux outils existaient sur disque sans jamais etre versionnes.
+/test_deploy.py
+/test_gpu.py
 
 # Config projet Claude Code : les skills sont versionnes (convention d'equipe),
 # seules les permissions locales restent personnelles.
