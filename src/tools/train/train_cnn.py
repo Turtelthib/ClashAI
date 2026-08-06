@@ -1,17 +1,16 @@
-import os
 import json
+import os
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, random_split
+from torchvision import datasets, transforms
 from tqdm import tqdm
-
-from clashai.perception.screen_classifier import MyCustomCNN
 
 # --- CONFIGURATION ---
 from clashai.paths import PROJECT_ROOT as project_root
+from clashai.perception.screen_classifier import MyCustomCNN
 
 DATA_DIR = os.path.join(project_root, 'dataset_cnn')
 WEIGHTS_DIR = os.path.join(project_root, 'weights')
@@ -55,7 +54,7 @@ val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 model = MyCustomCNN(num_classes).to(DEVICE)
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
-scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS) 
+scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
 
 # --- TRAINING ---
 print("\n Démarrage de l'entraînement...")

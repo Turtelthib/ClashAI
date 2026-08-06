@@ -2,11 +2,15 @@
 # Destruction percentage via digit template matching.
 
 import os
+
 import cv2
 import numpy as np
 
 from clashai.perception.reward_reader.constants import (
-    DIGITS_DIR, DIGIT_MATCH_THRESHOLD, PCT_MATCH_THRESHOLD, DEBUG_DIR,
+    DEBUG_DIR,
+    DIGIT_MATCH_THRESHOLD,
+    DIGITS_DIR,
+    PCT_MATCH_THRESHOLD,
 )
 from clashai.perception.reward_reader.green import isolate_green
 

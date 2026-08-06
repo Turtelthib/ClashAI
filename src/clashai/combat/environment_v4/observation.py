@@ -6,12 +6,16 @@ import time
 import numpy as np
 
 from clashai.combat.action_space import (
-    DEPLOY_ROLES, SPELL_NAMES, compute_action_mask,
+    DEPLOY_ROLES,
+    SPELL_NAMES,
+    compute_action_mask,
 )
 from clashai.combat.agent_v4 import (
-    ROLE_FEATURES, SPELL_FEATURES, COMBAT_FEATURES_SIZE,
+    COMBAT_FEATURES_SIZE,
+    ROLE_FEATURES,
+    SPELL_FEATURES,
 )
-from clashai.combat.legacy.agent import TROOP_TYPES, TROOP_NAME_TO_IDX
+from clashai.combat.legacy.agent import TROOP_NAME_TO_IDX, TROOP_TYPES
 
 
 class ObservationMixin:

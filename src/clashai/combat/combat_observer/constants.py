@@ -2,7 +2,7 @@
 # HSV thresholds for health bars, bar geometry, UI zones, clustering params.
 
 # Re-imported from clashai/config/screen.py (Phase A) — re-exported.
-from clashai.config import ADB_WIDTH, ADB_HEIGHT  # noqa: F401
+from clashai.config import ADB_HEIGHT, ADB_WIDTH  # noqa: F401
 
 # --- Green health bars (healthy troops) ---
 HP_GREEN_H_RANGE = (45, 85)

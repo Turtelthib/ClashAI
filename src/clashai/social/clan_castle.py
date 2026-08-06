@@ -30,7 +30,6 @@ import numpy as np
 
 from clashai.paths import PROJECT_ROOT
 
-
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -180,7 +179,7 @@ class ClanCastleManager:
             models_ok = "ok" if models is not None else "MANQUANT"
             print(f" CC Manager — models: {models_ok} | template request: {status}")
             if self._tmpl_request is None:
-                print(f" → uv run python -m clashai.social.clan_castle --capture")
+                print(" → uv run python -m clashai.social.clan_castle --capture")
 
     # -----------------------------------------------------------------
     # API principale
@@ -297,7 +296,7 @@ class ClanCastleManager:
         3. Tap "Send" (stable popup → calibrate_ui)
         """
         if self.verbose:
-            print(f" Requesting CC troops...")
+            print(" Requesting CC troops...")
 
         # 1. Tap on the clan castle
         tap_fn(cc_pos[0], cc_pos[1])
@@ -389,20 +388,20 @@ if __name__ == "__main__":
 
             print(f"\n Bar → {bar_path}")
             print(f" Screenshot → {full_path}")
-            print(f"\n Now:")
+            print("\n Now:")
             print(f" 1. Open {bar_path}")
-            print(f" 2. Crop the 'Request' button → request.png")
+            print(" 2. Crop the 'Request' button → request.png")
             print(f" 3. Save in {CC_TEMPLATES_DIR}/")
-            print(f"\n Then calibrate the 'Send' button:")
-            print(f" uv run python -m clashai.navigation.calibrate_ui")
-            print(f" → add cdc_confirmation (green 'Send' button)")
+            print("\n Then calibrate the 'Send' button:")
+            print(" uv run python -m clashai.navigation.calibrate_ui")
+            print(" → add cdc_confirmation (green 'Send' button)")
 
     elif args.test:
         print("Test template matching CC\n")
         mgr = ClanCastleManager(building_detector=None)
         if mgr._tmpl_request is None:
             print(" ERROR: Template 'request' missing")
-            print(f" → uv run python -m clashai.social.clan_castle --capture")
+            print(" → uv run python -m clashai.social.clan_castle --capture")
         else:
             # Phase B.1: canonical adb_screenshot (WGC → ADB fallback).
             from clashai.navigation.game_loop import adb_screenshot

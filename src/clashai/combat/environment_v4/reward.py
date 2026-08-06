@@ -2,11 +2,13 @@
 # RewardMixin — V4.2 reward shaping, dispatched on action_type.
 
 from clashai.combat.action_space import DEPLOY_ROLES, HERO_NAMES, decode_action
-from clashai.combat.reward_shaping import (
-    compute_deploy_reward, compute_combat_reward,
-    compute_leftover_penalty, compute_spell_leftover_penalty,
-)
 from clashai.combat.legacy.agent import TROOP_TYPES
+from clashai.combat.reward_shaping import (
+    compute_combat_reward,
+    compute_deploy_reward,
+    compute_leftover_penalty,
+    compute_spell_leftover_penalty,
+)
 
 
 class RewardMixin:

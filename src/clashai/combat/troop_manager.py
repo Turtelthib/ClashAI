@@ -10,23 +10,27 @@
 # Separated from the environment to keep files under 500 lines.
 
 import time
+
 import cv2
 import numpy as np
 
 from clashai.combat.action_space import (
-    DEPLOY_ROLES, ROLE_TO_TROOPS, DEPLOY_SECTORS,
-    SECTOR_OFFSETS, NUM_POSITIONS,
+    DEPLOY_ROLES,
+    DEPLOY_SECTORS,
+    NUM_POSITIONS,
+    ROLE_TO_TROOPS,
+    SECTOR_OFFSETS,
 )
-
 
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
-
 # Re-imported from clashai/config/ (Phase A).
 from clashai.config import (
-    SCREEN_WIDTH, SCREEN_HEIGHT,
-    DELAY_SWITCH_TROOP, DELAY_DEPLOY,
+    DELAY_DEPLOY,
+    DELAY_SWITCH_TROOP,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
 )  # noqa: E402
 
 SLOT_SATURATION_THRESHOLD = 40

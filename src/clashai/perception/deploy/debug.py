@@ -1,19 +1,21 @@
 # clashai/perception/deploy/debug.py
 # Debug visualisations + the legacy get_smart_deploy_positions facade.
 
-import cv2
-import numpy as np
-from PIL import Image
 import os
 from datetime import datetime
 
-from clashai.config import ADB_WIDTH, ADB_HEIGHT
-from clashai.perception.deploy.constants import DEPLOY_OFFSET, DIRECTION_LABELS
-from clashai.perception.deploy.boundary import detect_village_boundary
-from clashai.perception.deploy.positions import (
-    compute_deploy_positions, get_village_center_adb, _fallback_positions,
-)
+import cv2
+import numpy as np
+from PIL import Image
 
+from clashai.config import ADB_HEIGHT, ADB_WIDTH
+from clashai.perception.deploy.boundary import detect_village_boundary
+from clashai.perception.deploy.constants import DEPLOY_OFFSET, DIRECTION_LABELS
+from clashai.perception.deploy.positions import (
+    _fallback_positions,
+    compute_deploy_positions,
+    get_village_center_adb,
+)
 
 DEBUG_DEPLOY_SAVE = True
 

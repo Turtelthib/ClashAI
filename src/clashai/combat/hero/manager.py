@@ -5,10 +5,12 @@ import time
 
 import numpy as np
 
-from clashai.config import HERO_NAMES, NUM_HEROES
 from clashai.combat.hero.constants import (
-    HERO_ABILITY_NAMES, CAPA_SUFFIX, DEPLOY_TO_SCAN_DELAY,
+    CAPA_SUFFIX,
+    DEPLOY_TO_SCAN_DELAY,
+    HERO_ABILITY_NAMES,
 )
+from clashai.config import HERO_NAMES, NUM_HEROES
 
 
 def _adb_tap(x, y, delay=0.1):

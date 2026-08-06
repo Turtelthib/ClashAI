@@ -2,7 +2,7 @@
 # UI button positions, target-list zone, scroll + wait timings.
 
 # Re-imported from clashai/config (Phase A) — kept importable for back-compat.
-from clashai.config import ADB_WIDTH, ADB_HEIGHT  # noqa: F401
+from clashai.config import ADB_HEIGHT, ADB_WIDTH  # noqa: F401
 
 
 def _get_ui_pos(name):

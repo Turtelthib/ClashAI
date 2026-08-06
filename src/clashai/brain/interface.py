@@ -43,7 +43,10 @@ class HeuristicBrain(Brain):
 
 if __name__ == "__main__":
     from clashai.agents import (
-        AgentScheduler, CombatAgent, GdCAgent, ClanCastleAgent,
+        AgentScheduler,
+        ClanCastleAgent,
+        CombatAgent,
+        GdCAgent,
     )
 
     class _FakeCC:

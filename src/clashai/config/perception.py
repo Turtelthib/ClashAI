@@ -18,9 +18,9 @@
 # is itself broken at import time.
 def _import_imgsz():
     from clashai.navigation.game_loop import YOLO_BUILDINGS_IMGSZ
+    from clashai.perception.deploy_zone import YOLO_WALLS_IMGSZ
     from clashai.perception.troop_bar_detector import YOLO_IMGSZ as YOLO_TROOP_BAR_IMGSZ
     from clashai.perception.troop_detector import YOLO_TROOPS_IMGSZ
-    from clashai.perception.deploy_zone import YOLO_WALLS_IMGSZ
     return {
         'YOLO_BUILDINGS_IMGSZ':  YOLO_BUILDINGS_IMGSZ,
         'YOLO_TROOP_BAR_IMGSZ':  YOLO_TROOP_BAR_IMGSZ,

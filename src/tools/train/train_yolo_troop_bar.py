@@ -14,11 +14,12 @@
 # destructive click consequence).
 # ============================================================
 
+import os
+import shutil
 import subprocess
-import yaml
 
+import yaml
 from ultralytics import YOLO
-import shutil, os
 
 DATA_YAML = './datasets/dataset_troupe_barre/dataa.yaml'
 MODEL      = 'yolo26s.pt'
@@ -28,7 +29,7 @@ IMG_SIZE   = 1088
 OUTPUT_DIR = './weights/yolo_troupes_barre/V2/'
 
 if __name__ == '__main__':
-    
+
     subprocess.run(['pip', 'install', 'ultralytics', '-q'], check=True)
 
     print(f'Dataset: {DATA_YAML}')
@@ -65,7 +66,7 @@ if __name__ == '__main__':
         hsv_h=0.01,
         hsv_s=0.3,
         hsv_v=0.3,
-        fliplr=0.0, 
+        fliplr=0.0,
         flipud=0.0,
         degrees=3.0,
         scale=0.2,
@@ -84,7 +85,7 @@ if __name__ == '__main__':
     else:
         print('WARNING: best.pt not found')
 
-    print(f'\nFinal metrics:')
+    print('\nFinal metrics:')
     print(f'  mAP50    : {results.results_dict.get("metrics/mAP50(B)", 0):.3f}')
     print(f'  mAP50-95 : {results.results_dict.get("metrics/mAP50-95(B)", 0):.3f}')
     print(f'  Precision: {results.results_dict.get("metrics/precision(B)", 0):.3f}')

@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from clashai.combat.agent_v4.constants import MAX_GRAD_NORM, LEARNING_RATE
+from clashai.combat.agent_v4.constants import LEARNING_RATE, MAX_GRAD_NORM
 
 
 class BehavioralCloningMixin:

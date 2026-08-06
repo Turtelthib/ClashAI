@@ -17,6 +17,7 @@ from PIL import Image, ImageDraw
 
 # SSOT: repo root from clashai.paths (robust to the src/ layout).
 from clashai.paths import PROJECT_ROOT as _ROOT
+
 PROJECT_ROOT = Path(_ROOT)
 
 MODEL_PATH = PROJECT_ROOT / 'weights' / 'yolo_troupes_barre' / 'troop_bar.pt'

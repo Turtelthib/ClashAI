@@ -42,7 +42,8 @@ class CaptureMixin:
         try:
             import cv2
             import numpy as np
-            from clashai.navigation.game_loop import classify_screen, analyze_village
+
+            from clashai.navigation.game_loop import analyze_village, classify_screen
 
             ep_dir = os.path.join('logs', f'episode_{episode:04d}')
             os.makedirs(ep_dir, exist_ok=True)

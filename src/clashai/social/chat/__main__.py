@@ -1,19 +1,22 @@
 # clashai/social/chat/__main__.py
 # Test CLI: `uv run python -m clashai.social.chat --test-parse | --test-ocr`
 
-import sys
 import argparse
+import sys
 
 import cv2
 import numpy as np
 
-from clashai.social.chat.constants import (
-    DEFAULT_BOT_NAME,
-    CHAT_ZONE_LEFT, CHAT_ZONE_RIGHT, CHAT_ZONE_TOP, CHAT_ZONE_BOTTOM,
-)
 from clashai.social.chat.adb_io import _adb_screenshot
+from clashai.social.chat.constants import (
+    CHAT_ZONE_BOTTOM,
+    CHAT_ZONE_LEFT,
+    CHAT_ZONE_RIGHT,
+    CHAT_ZONE_TOP,
+    DEFAULT_BOT_NAME,
+)
 from clashai.social.chat.ocr import _ocr_read
-from clashai.social.chat.parser import parse_command, parse_all_commands
+from clashai.social.chat.parser import parse_all_commands, parse_command
 
 
 def main():

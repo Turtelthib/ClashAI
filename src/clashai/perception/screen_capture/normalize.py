@@ -12,7 +12,7 @@ import ctypes.wintypes
 
 from PIL import Image
 
-from clashai.config import SCREEN_WIDTH, SCREEN_HEIGHT
+from clashai.config import SCREEN_HEIGHT, SCREEN_WIDTH
 
 # Canonical resolution downstream code expects (matches ADB screencap).
 CANONICAL_W = SCREEN_WIDTH

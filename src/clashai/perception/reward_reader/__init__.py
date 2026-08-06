@@ -12,18 +12,18 @@
 #   from clashai.perception.reward_reader import read_attack_results
 
 from clashai.perception.reward_reader.green import isolate_green
-from clashai.perception.reward_reader.stars import count_stars
 from clashai.perception.reward_reader.percentage import (
-    read_percentage,
-    read_percentage_from_stars,
     find_pct_region,
     load_digit_templates,
+    read_percentage,
+    read_percentage_from_stars,
 )
 from clashai.perception.reward_reader.results import (
-    read_attack_results,
     calculate_reward,
     extract_result_screen,
+    read_attack_results,
 )
+from clashai.perception.reward_reader.stars import count_stars
 
 __all__ = [
     'isolate_green',

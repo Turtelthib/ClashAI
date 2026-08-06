@@ -8,21 +8,23 @@
 # uv run python tools/train/train_rl_v4.py --pretrain 15 --episodes 500
 # uv run python tools/train/train_rl_v4.py --pretrain 15 --bc-epochs 15 --episodes 500
 
-import os
-import json
-import time
 import argparse
+import json
+import os
+import time
 from datetime import datetime
 
-from clashai.paths import RL_WEIGHTS_DIR
-
-from clashai.combat.environment_v4 import ClashEnvV4
-from clashai.combat.agent_v4 import (
-    PPOAgentV4, BATCH_SIZE, VECTOR_SIZE,
-)
 from clashai.combat.action_space import (
-    MAX_STEPS_SAFETY, TOTAL_ACTIONS,
+    MAX_STEPS_SAFETY,
+    TOTAL_ACTIONS,
 )
+from clashai.combat.agent_v4 import (
+    BATCH_SIZE,
+    VECTOR_SIZE,
+    PPOAgentV4,
+)
+from clashai.combat.environment_v4 import ClashEnvV4
+from clashai.paths import RL_WEIGHTS_DIR
 
 
 def main():
@@ -65,7 +67,7 @@ def main():
 
     from clashai.config.logging import banner, section
     banner(
-        f"ClashAI V4 — Entraînement RL",
+        "ClashAI V4 — Entraînement RL",
         f"Mode: {mode}  |  Episodes: {args.episodes}  |  "
         f"Actions: {TOTAL_ACTIONS}  |  Vector: {VECTOR_SIZE} dims",
     )

@@ -43,8 +43,8 @@ def _find(base, candidates):
 def main():
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-U", "ultralytics"],
                    check=False)
-    from ultralytics import YOLO
     import yaml
+    from ultralytics import YOLO
 
     if not os.path.isdir(DATASET_DIR):
         print(f"ERREUR: DATASET_DIR introuvable : {DATASET_DIR}")

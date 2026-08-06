@@ -5,8 +5,8 @@ import os
 import time
 from datetime import datetime
 
-from clashai.paths import RL_WEIGHTS_DIR
 from clashai.config import DEFAULT_BOT_NAME
+from clashai.paths import RL_WEIGHTS_DIR
 
 
 class BrainCoreMixin:
@@ -127,7 +127,11 @@ class BrainCoreMixin:
         # V5.1: assemble the agent scheduler + swappable Brain.
         # Each agent wraps an already-loaded module (no double init).
         from clashai.agents import (
-            AgentScheduler, CombatAgent, GdCAgent, ClanCastleAgent, ChatAgent,
+            AgentScheduler,
+            ChatAgent,
+            ClanCastleAgent,
+            CombatAgent,
+            GdCAgent,
         )
         from clashai.brain.interface import HeuristicBrain
 

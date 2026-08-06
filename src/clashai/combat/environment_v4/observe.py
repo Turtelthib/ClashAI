@@ -3,7 +3,7 @@
 # blocking YOLO (fallback), and keep troop counters in sync.
 
 from clashai.combat.action_space import build_spell_inventory
-from clashai.combat.legacy.agent import TROOP_TYPES, TROOP_NAME_TO_IDX
+from clashai.combat.legacy.agent import TROOP_NAME_TO_IDX, TROOP_TYPES
 
 
 class ObserveMixin:

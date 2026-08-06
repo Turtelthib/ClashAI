@@ -4,13 +4,17 @@
 import cv2
 import numpy as np
 
+from clashai.combat.combat_observer.clustering import _cluster_positions
 from clashai.combat.combat_observer.constants import (
-    ADB_WIDTH, ADB_HEIGHT, COMBAT_FEATURES_SIZE,
+    ADB_HEIGHT,
+    ADB_WIDTH,
+    COMBAT_FEATURES_SIZE,
 )
 from clashai.combat.combat_observer.health_bars import (
-    detect_troop_bars, detect_hurt_bars, detect_hero_bars,
+    detect_hero_bars,
+    detect_hurt_bars,
+    detect_troop_bars,
 )
-from clashai.combat.combat_observer.clustering import _cluster_positions
 
 
 class CombatObserver:

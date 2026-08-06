@@ -18,7 +18,6 @@ import threading
 from collections import defaultdict
 from typing import Callable, Dict, List
 
-
 # Canonical event names. Use these constants rather than raw strings so
 # typos surface as AttributeError at the call site.
 EVENT_PERCEPTION_UPDATED = 'perception_updated'  # any inference cycle finished

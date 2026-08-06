@@ -12,7 +12,7 @@
 import time
 from collections import deque
 
-from clashai.agents.base import BaseAgent, AgentResult
+from clashai.agents.base import AgentResult, BaseAgent
 
 
 class GdCAgent(BaseAgent):
@@ -104,8 +104,8 @@ class GdCAgent(BaseAgent):
 # =============================================================================
 
 if __name__ == "__main__":
-    from clashai.agents.scheduler import AgentScheduler
     from clashai.agents.combat_agent import CombatAgent
+    from clashai.agents.scheduler import AgentScheduler
 
     print("GdCAgent offline demo (queue + priority + mode gating)\n")
     sched = AgentScheduler()

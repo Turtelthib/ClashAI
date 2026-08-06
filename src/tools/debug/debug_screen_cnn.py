@@ -5,12 +5,15 @@
 # Usage:
 #   uv run python tools/debug/debug_screen_cnn.py
 
-import os, sys, json, torch
-from torchvision import transforms
+import json
+import os
+import sys
+
+import torch
 from PIL import Image
+from torchvision import transforms
 
 from clashai.paths import PROJECT_ROOT as project_root
-
 from clashai.paths import WEIGHTS_DIR
 from clashai.perception.screen_classifier import MyCustomCNN
 

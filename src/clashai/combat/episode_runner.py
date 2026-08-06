@@ -19,8 +19,8 @@ def run_attack_episode(models, agent=None, use_heuristic=True, verbose=True):
     Returns:
         info: dict with episode results (stars, percentage, …), or None on failure.
     """
-    from clashai.combat.environment_v4 import ClashEnvV4
     from clashai.combat.action_space import MAX_STEPS_SAFETY
+    from clashai.combat.environment_v4 import ClashEnvV4
 
     try:
         env = ClashEnvV4(models=models, verbose=verbose)

@@ -16,11 +16,11 @@
 # Each file is written ONCE per episode (idempotent on label).
 
 import os
-import time
 import threading
+import time
+
 import cv2
 import numpy as np
-
 
 # Per-label annotation profile. Each profile is a set of annotation tags
 # applied to the captured frame.

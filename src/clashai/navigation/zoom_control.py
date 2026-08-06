@@ -12,11 +12,10 @@
 #
 # Currently: Google Play Games (localhost:6520) → CTRL_SCROLL = False
 
-import time
-import sys
 import ctypes
 import ctypes.wintypes
-
+import sys
+import time
 
 # =============================================================================
 # CONFIGURATION
@@ -132,7 +131,7 @@ def zoom_out(scrolls=None):
     result = _find_emulator_hwnd()
     if result is None:
         print(" WARNING: Emulator window not found — zoom_out skipped")
-        print(f" Add the window title to EMULATOR_WINDOW_KEYWORDS in zoom_control.py")
+        print(" Add the window title to EMULATOR_WINDOW_KEYWORDS in zoom_control.py")
         return False
 
     hwnd, title = result

@@ -6,23 +6,22 @@
 #   uv run python tools/debug/test_deploy_zone.py
 #   uv run python tools/debug/test_deploy_zone.py --image path/to/screenshot.png
 
-import os
-import sys
 import argparse
-import subprocess
 import io
+import os
+import subprocess
+import sys
 
 import cv2
 import numpy as np
 from PIL import Image
 
-from clashai.paths import PROJECT_ROOT as project_root
-
-from clashai.paths import WEIGHTS_DIR, ADB_DEVICE
 from clashai.combat.action_space import NUM_POSITIONS
+from clashai.paths import ADB_DEVICE, WEIGHTS_DIR
+from clashai.paths import PROJECT_ROOT as project_root
 from clashai.perception.deploy_zone import (
-    get_perimeter_from_walls,
     get_perimeter_from_buildings,
+    get_perimeter_from_walls,
 )
 
 WALLS_MODEL_PATH = os.path.join(WEIGHTS_DIR, 'yolo_walls_seg', 'walls_detection.pt')
@@ -76,7 +75,7 @@ def main():
     img_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
     print(f"Screenshot: {screenshot.width}×{screenshot.height}")
 
-    #  Detect buildings first (used by both tests) 
+    #  Detect buildings first (used by both tests)
     buildings = []
     if yolo_buildings is not None:
         res_b = yolo_buildings.predict(np.array(screenshot), conf=0.25, verbose=False)
@@ -89,7 +88,7 @@ def main():
             })
         print(f"\n[0] Buildings detected: {len(buildings)}")
 
-    #  Test 1: walls + buildings combined 
+    #  Test 1: walls + buildings combined
     print("\n[1] get_perimeter_from_walls() with buildings...")
     wall_positions, wall_center, wall_ok = get_perimeter_from_walls(
         screenshot, yolo_walls,
@@ -120,7 +119,7 @@ def main():
     else:
         print("    FAILED — no valid positions from walls")
 
-    #  Test 2: building hull fallback (comparison) 
+    #  Test 2: building hull fallback (comparison)
     if buildings:
         print("\n[2] get_perimeter_from_buildings() (fallback comparison)...")
         b_positions, b_center, b_ok, _ = get_perimeter_from_buildings(
@@ -132,7 +131,7 @@ def main():
         else:
             print("    FAILED")
 
-    #  Save result 
+    #  Save result
     out_path = os.path.join(project_root, '_test_deploy_zone.png')
     cv2.imwrite(out_path, img_cv)
     print(f"\nResult saved: {out_path}")

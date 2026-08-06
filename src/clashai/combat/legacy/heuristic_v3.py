@@ -10,11 +10,18 @@
 #   env._buildings, env._remaining_troops, env.verbose
 
 from clashai.combat.legacy.agent import (
-    TROOP_TYPES, TROOP_NAME_TO_IDX,
+    ACTION_ABILITY_CHAMP,
+    ACTION_ABILITY_GG,
+    ACTION_ABILITY_PG,
+    ACTION_ABILITY_REINE,
+    ACTION_ABILITY_ROI,
+    ACTION_DONE,
+    ACTION_WAIT_COMBAT,
+    ACTION_WAIT_LONG,
+    ACTION_WAIT_SHORT,
     NUM_POSITIONS,
-    ACTION_WAIT_SHORT, ACTION_WAIT_LONG, ACTION_WAIT_COMBAT, ACTION_DONE,
-    ACTION_ABILITY_ROI, ACTION_ABILITY_REINE,
-    ACTION_ABILITY_GG, ACTION_ABILITY_CHAMP, ACTION_ABILITY_PG,
+    TROOP_NAME_TO_IDX,
+    TROOP_TYPES,
 )
 from clashai.combat.state_encoder import find_best_attack_side
 

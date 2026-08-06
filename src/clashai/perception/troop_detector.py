@@ -16,7 +16,6 @@ from typing import Optional
 
 from clashai.paths import WEIGHTS_DIR
 
-
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -43,7 +42,7 @@ DEFAULT_CONF = 0.35
 YOLO_TROOPS_IMGSZ = 640
 
 # Re-imported from clashai/config/screen.py (Phase A).
-from clashai.config import ADB_WIDTH, ADB_HEIGHT  # noqa: E402
+from clashai.config import ADB_HEIGHT, ADB_WIDTH  # noqa: E402
 
 # UI exclusion zone (do not detect in the troop bar / header)
 UI_TOP_Y_RATIO = 0.06
@@ -227,6 +226,7 @@ class TroopDetector:
 
 if __name__ == "__main__":
     import sys
+
     from PIL import Image
 
     print("Test TroopDetector\n")

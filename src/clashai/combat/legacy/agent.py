@@ -41,22 +41,22 @@
 # 288 : wait_combat (2s observation during combat)
 
 import os
+
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.distributions import Categorical
 
-
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
-
 # MASTER list of all troops/spells/heroes — now DATA-DRIVEN.
 # SSOT = configs/troops.json (via clashai.combat.troop_registry). Adding a
 # troop = 1 line in that JSON + retrain the CNN, zero code. Same dict shape as
 # before ({name, default_max, role}) so every consumer is unchanged.
 from clashai.combat.troop_registry import load_troop_types as _load_troop_types
+
 TROOP_TYPES = _load_troop_types()
 
 NUM_TROOP_TYPES = len(TROOP_TYPES)
@@ -105,11 +105,12 @@ STEP_FEATURES = 1
 
 # New V3 features
 from clashai.combat.combat_observer import COMBAT_FEATURES_SIZE
+
 HERO_STATUS_SIZE = NUM_HERO_ABILITIES
 PHASE_SIZE = 1
 
-VECTOR_SIZE = (VILLAGE_FEATURES + TROOP_FEATURES + DEPLOY_MAP_SIZE 
-               + STEP_FEATURES + COMBAT_FEATURES_SIZE + HERO_STATUS_SIZE 
+VECTOR_SIZE = (VILLAGE_FEATURES + TROOP_FEATURES + DEPLOY_MAP_SIZE
+               + STEP_FEATURES + COMBAT_FEATURES_SIZE + HERO_STATUS_SIZE
                + PHASE_SIZE)
 
 # PPO Hyperparameters
@@ -632,7 +633,7 @@ class PPOAgentV3:
         try:
             checkpoint = torch.load(path, map_location=self.device, weights_only=False)
             version = checkpoint.get('version', 'v2')
-            
+
             if version == 'v3':
                 # Normal V3 load
                 self.network.load_state_dict(checkpoint['network'])
@@ -642,17 +643,17 @@ class PPOAgentV3:
                 print(" V2 checkpoint detected, partial load...")
                 v2_state = checkpoint['network']
                 v3_state = self.network.state_dict()
-                
+
                 loaded = 0
                 for key in v2_state:
                     if key in v3_state and v2_state[key].shape == v3_state[key].shape:
                         v3_state[key] = v2_state[key]
                         loaded += 1
-                
+
                 self.network.load_state_dict(v3_state)
                 print(f" {loaded}/{len(v2_state)} layers loaded from V2")
                 # Do not load the optimizer (incompatible)
-            
+
             self.update_count = checkpoint.get('update_count', 0)
             self.total_episodes = checkpoint.get('total_episodes', 0)
             print(f"Agent V3 loaded : {path} "
@@ -689,7 +690,7 @@ def test_agent():
         for step in range(MAX_STEPS_PER_EPISODE):
             step_norm = np.array([step / MAX_STEPS_PER_EPISODE], dtype=np.float32)
             phase_indicator = np.array([0.0 if phase == 'deploy' else 1.0], dtype=np.float32)
-            
+
             vector = np.concatenate([
                 features, remaining / 10.0, deploy_map, step_norm,
                 combat_features, hero_status, phase_indicator

@@ -30,11 +30,10 @@
 #        images/
 #        labels/
 
-import os
 import argparse
+import os
 
 from clashai.paths import PROJECT_ROOT as project_root
-
 
 # =============================================================================
 #                         CONFIGURATION
@@ -113,13 +112,13 @@ def train(epochs=DEFAULT_EPOCHS, batch=DEFAULT_BATCH, img_size=DEFAULT_IMG_SIZE,
 
 
         mosaic=1.0,
-        mixup=0.05,            
-        copy_paste=0.10,       
+        mixup=0.05,
+        copy_paste=0.10,
         hsv_h=0.015,
         hsv_s=0.7,
         hsv_v=0.4,
         fliplr=0.5,
-        flipud=0.0,  
+        flipud=0.0,
         degrees=5.0,
         scale=0.5,
         translate=0.1,
@@ -159,8 +158,9 @@ def test(image_path=None, conf=0.35, save=True):
         source = image_path
     else:
         print("   Source : screenshot ADB")
-        import subprocess
         import io
+        import subprocess
+
         from PIL import Image
 
         from clashai.paths import ADB_DEVICE
@@ -182,7 +182,7 @@ def test(image_path=None, conf=0.35, save=True):
         conf=conf,
         save=save,
         save_txt=True,
-        retina_masks=True,  
+        retina_masks=True,
         project=os.path.join(WEIGHTS_DIR, 'test'),
         name='predict',
         exist_ok=True,

@@ -3,17 +3,18 @@
 # Uses the project's MyCustomCNN — simple, fast, proven working.
 # Add more images to datasets/dataset_screen/<class>/ then retrain.
 
-import os
 import json
+import os
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, random_split
+from torchvision import datasets, transforms
 from tqdm import tqdm
-from clashai.perception.screen_classifier import MyCustomCNN
 
 from clashai.paths import PROJECT_ROOT as project_root
+from clashai.perception.screen_classifier import MyCustomCNN
 
 DATA_DIR    = os.path.join(project_root, 'datasets', 'dataset_screen')
 WEIGHTS_DIR = os.path.join(project_root, 'weights')

@@ -16,22 +16,22 @@
 # 3. The user clicks on the button in the image
 # 4. Coordinates are converted to ADB and saved
 
+import json
 import os
 import sys
-import json
 import time
 
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
-
 # SSOT: paths come from clashai.paths (canonical configs/ui_positions.json).
-from clashai.paths import PROJECT_ROOT as project_root, UI_POSITIONS_FILE  # noqa: E402
+from clashai.paths import PROJECT_ROOT as project_root  # noqa: E402
+from clashai.paths import UI_POSITIONS_FILE
 
 POSITIONS_FILE = UI_POSITIONS_FILE
 
 # Re-imported from clashai/config/screen.py (Phase A).
-from clashai.config import ADB_WIDTH, ADB_HEIGHT  # noqa: E402
+from clashai.config import ADB_HEIGHT, ADB_WIDTH  # noqa: E402
 
 # All buttons to calibrate, grouped by context
 # Each entry: (json_key, description, required_screen, pre_delay)
@@ -122,7 +122,6 @@ DEFAULT_POSITIONS = {
 # Re-exported from the canonical implementation in game_loop (Phase B.1).
 # That version routes through WGC (fast, occlusion-proof) with ADB fallback.
 from clashai.navigation.game_loop import adb_screenshot as _adb_screenshot  # noqa: E402
-
 
 _click_result = {'x': None, 'y': None, 'done': False}
 
@@ -235,11 +234,11 @@ def save_positions(positions):
     """Saves positions to the JSON file."""
     # Convert tuples to lists for JSON
     data = {k: list(v) for k, v in positions.items()}
-    
+
     tmp_path = POSITIONS_FILE + '.tmp'
     with open(tmp_path, 'w') as f:
         json.dump(data, f, indent=2)
-    
+
     # Atomic rename
     if os.path.exists(POSITIONS_FILE):
         os.replace(tmp_path, POSITIONS_FILE)
@@ -280,52 +279,52 @@ def calibrate(groups=None):
         groups: list of groups to calibrate (None = all)
     """
     positions = load_positions()
-    
+
     print(f"\n{'='*60}")
-    print(f" ClashAI — Calibration de l'interface")
+    print(" ClashAI — Calibration de l'interface")
     print(f"{'='*60}")
-    print(f"\n Pour chaque bouton, un screenshot s'affiche dans une fenêtre.")
-    print(f" Cliquez sur le bouton dans l'image.")
-    print(f" Echap = passer un bouton.")
-    print(f" Les positions sont sauvegardées dans ui_positions.json\n")
-    
+    print("\n Pour chaque bouton, un screenshot s'affiche dans une fenêtre.")
+    print(" Cliquez sur le bouton dans l'image.")
+    print(" Echap = passer un bouton.")
+    print(" Les positions sont sauvegardées dans ui_positions.json\n")
+
     if groups is None:
         groups = list(BUTTONS_TO_CALIBRATE.keys())
-    
+
     calibrated = 0
     skipped = 0
-    
+
     for group_name in groups:
         if group_name not in BUTTONS_TO_CALIBRATE:
             print(f" WARNING: Groupe '{group_name}' inconnu")
             continue
-        
+
         buttons = BUTTONS_TO_CALIBRATE[group_name]
         print(f"\n  {group_name.upper()} ")
-        
+
         for key, description, required_screen, delay in buttons:
             current = positions.get(key)
             current_str = f" (actuel: {current})" if current else ""
-            
+
             print(f"\n {description}{current_str}")
-            
+
             if required_screen:
                 print(f" WARNING: Assurez-vous d'être sur l'écran : {required_screen}")
-            
+
             # Wait delay if needed (to get into position)
             if delay > 0:
                 print(f" {delay}s pour vous mettre en position...")
                 for remaining in range(delay, 0, -5):
                     print(f" {remaining}s...", end='\r')
                     time.sleep(min(5, remaining))
-                print(f" C'est parti ! ")
-            
-            print(f" → Un screenshot va s'afficher, CLIQUEZ sur le bouton")
-            print(f" (Echap = passer)")
-            
+                print(" C'est parti ! ")
+
+            print(" → Un screenshot va s'afficher, CLIQUEZ sur le bouton")
+            print(" (Echap = passer)")
+
             # Screenshot + click in the OpenCV window
             pos = capture_click(description=description)
-            
+
             if pos is not None:
                 x, y = pos
                 positions[key] = (x, y)
@@ -339,30 +338,30 @@ def calibrate(groups=None):
                     positions[key] = default
                     print(f"  Valeur par défaut : {default}")
                 skipped += 1
-    
+
     # Save
     save_positions(positions)
-    
+
     print(f"\n{'='*60}")
-    print(f" Calibration terminée !")
+    print(" Calibration terminée !")
     print(f" {calibrated} boutons calibrés, {skipped} passés")
     print(f" Sauvegardé dans : {POSITIONS_FILE}")
     print(f"{'='*60}\n")
-    
+
     return positions
 
 
 def show_positions():
     """Displays all calibrated positions."""
     positions = load_positions()
-    
+
     print(f"\nPositions UI ({POSITIONS_FILE}) :\n")
-    
+
     if not positions:
         print(" (aucune position calibrée)")
-        print(f" Lancez : python scripts/rl/calibrate_ui.py")
+        print(" Lancez : python scripts/rl/calibrate_ui.py")
         return
-    
+
     for group_name, buttons in BUTTONS_TO_CALIBRATE.items():
         print(f"  {group_name.upper()} ")
         for key, description, _, _ in buttons:
@@ -383,7 +382,7 @@ def show_positions():
 
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="ClashAI UI Calibrator")
     parser.add_argument('--show', action='store_true',
                         help="Afficher les positions actuelles")
@@ -392,9 +391,9 @@ if __name__ == "__main__":
                              "(village, chat, matchmaking, results, gdc, general, retreat)")
     parser.add_argument('--reset', action='store_true',
                         help="Remettre toutes les positions par défaut")
-    
+
     args = parser.parse_args()
-    
+
     if args.show:
         show_positions()
     elif args.reset:

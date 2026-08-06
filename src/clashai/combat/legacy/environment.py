@@ -34,30 +34,42 @@
 # obs, mask, reward, done, info = env.step(action)
 # if done: break
 
-import time
 import random
+import time
 
-import numpy as np
 import cv2
+import numpy as np
+
+from clashai.combat.combat_observer import COMBAT_FEATURES_SIZE, CombatObserver
+from clashai.combat.hero_ability import HERO_NAMES, HeroAbilityManager
+from clashai.combat.legacy.agent import (
+    ACTION_DONE,
+    ACTION_WAIT_COMBAT,
+    ACTION_WAIT_LONG,
+    ACTION_WAIT_SHORT,
+    GRID_CHANNELS,
+    GRID_SIZE,
+    MAX_COMBAT_STEPS,
+    MAX_STEPS_PER_EPISODE,
+    NUM_POSITIONS,
+    NUM_TROOP_TYPES,
+    TOTAL_ACTIONS,
+    TROOP_NAME_TO_IDX,
+    TROOP_TYPES,
+    VECTOR_SIZE,
+    VILLAGE_FEATURES,
+    compute_action_mask,
+    decode_action,
+    get_initial_troop_counts,
+    get_troop_counts_from_finder,
+)
+from clashai.combat.spell_caster import SpellCaster
 
 # Project imports
-
 from clashai.combat.state_encoder import encode_state, find_best_attack_side
-from clashai.perception.deploy_zone import (get_full_perimeter_positions)
+from clashai.perception.deploy_zone import get_full_perimeter_positions
 from clashai.perception.reward_reader import read_attack_results
-from clashai.combat.spell_caster import SpellCaster
 from clashai.perception.troop_counter import read_troop_counts
-from clashai.combat.combat_observer import CombatObserver, COMBAT_FEATURES_SIZE
-from clashai.combat.hero_ability import HeroAbilityManager, HERO_NAMES
-
-from clashai.combat.legacy.agent import (
-    TROOP_TYPES, NUM_TROOP_TYPES, NUM_POSITIONS,
-    TOTAL_ACTIONS, ACTION_WAIT_SHORT, ACTION_WAIT_LONG, ACTION_DONE,
-    ACTION_WAIT_COMBAT, MAX_STEPS_PER_EPISODE, MAX_COMBAT_STEPS,
-    GRID_CHANNELS, GRID_SIZE, VILLAGE_FEATURES, VECTOR_SIZE,
-    decode_action, compute_action_mask, get_initial_troop_counts,
-    get_troop_counts_from_finder, TROOP_NAME_TO_IDX,
-)
 
 # Optional zoom import
 try:
@@ -74,9 +86,14 @@ except (ImportError, OSError):
 # Screen / timing constants moved to clashai/config/ — see Phase A migration.
 # Re-imported here under the same names so existing call sites keep working.
 from clashai.config import (
-    SCREEN_WIDTH, SCREEN_HEIGHT,
-    WAIT_DECORATIONS, WAIT_BATTLE_MAX, WAIT_BATTLE_CHECK,
-    WAIT_RESULT_SCREEN, WAIT_NAVIGATION, WAIT_MATCHMAKING,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    WAIT_BATTLE_CHECK,
+    WAIT_BATTLE_MAX,
+    WAIT_DECORATIONS,
+    WAIT_MATCHMAKING,
+    WAIT_NAVIGATION,
+    WAIT_RESULT_SCREEN,
 )
 
 # Delays between actions
@@ -226,9 +243,10 @@ class ClashEnvV3:
     def _try_load_troop_detector():
         """Attempts to load the YOLO TroopDetector. Returns None if unavailable."""
         try:
-            from clashai.perception.troop_detector import TroopDetector, YOLO_TROOPS_PATH
             import os
+
             from clashai.config.logging import pp
+            from clashai.perception.troop_detector import YOLO_TROOPS_PATH, TroopDetector
             if os.path.exists(YOLO_TROOPS_PATH):
                 detector = TroopDetector(verbose=True)
                 pp(" TroopDetector YOLO chargé (mode V4)", tag='yolo')
@@ -267,6 +285,7 @@ class ClashEnvV3:
                 dx, dy = random.randint(-150, 150), random.randint(-100, 100)
                 try:
                     import subprocess
+
                     from clashai.paths import ADB_DEVICE as _ADB_DEV
                     subprocess.run(
                         ["adb", "-s", _ADB_DEV, "shell",
@@ -490,7 +509,7 @@ class ClashEnvV3:
                 self._adb_tap(*self._ui['close_popup'])
                 time.sleep(WAIT_NAVIGATION)
             else:
-                self._adb_tap(30, 540) 
+                self._adb_tap(30, 540)
                 time.sleep(WAIT_NAVIGATION)
         return False
 

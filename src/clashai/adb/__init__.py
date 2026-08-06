@@ -9,9 +9,9 @@
 from clashai.adb.client import ADBClient, get_client
 from clashai.adb.exceptions import (
     ADBError,
+    ADBNotConnectedError,
     ADBNotFoundError,
     ADBTimeoutError,
-    ADBNotConnectedError,
 )
 
 __all__ = [

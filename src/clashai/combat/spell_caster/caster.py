@@ -4,11 +4,14 @@
 import cv2
 import numpy as np
 
+from clashai.combat.spell_caster.clustering import cluster_positions
 from clashai.combat.spell_caster.constants import (
-    ADB_WIDTH, ADB_HEIGHT, FREEZE_PRIORITY_WEIGHTS, FREEZE_MAX_RANGE,
+    ADB_HEIGHT,
+    ADB_WIDTH,
+    FREEZE_MAX_RANGE,
+    FREEZE_PRIORITY_WEIGHTS,
 )
 from clashai.combat.spell_caster.health_bars import detect_health_bars
-from clashai.combat.spell_caster.clustering import cluster_positions
 
 
 class SpellCaster:

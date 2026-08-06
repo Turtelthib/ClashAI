@@ -7,8 +7,8 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from clashai.combat.spell_caster.constants import ADB_WIDTH, ADB_HEIGHT
 from clashai.combat.spell_caster.caster import SpellCaster
+from clashai.combat.spell_caster.constants import ADB_HEIGHT, ADB_WIDTH
 
 
 def test_spell_caster(image_path=None):

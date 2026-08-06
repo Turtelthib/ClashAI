@@ -6,11 +6,14 @@ import time
 import cv2
 import numpy as np
 
-from clashai.navigation.gdc.constants import (
-    _get_ui_pos, MAX_RETRIES,
-    WAIT_NAVIGATION, WAIT_MENU_LOAD, WAIT_MATCHMAKING,
-)
 from clashai.navigation.gdc.adb_io import _adb_screenshot, _adb_tap
+from clashai.navigation.gdc.constants import (
+    MAX_RETRIES,
+    WAIT_MATCHMAKING,
+    WAIT_MENU_LOAD,
+    WAIT_NAVIGATION,
+    _get_ui_pos,
+)
 
 
 class GdCNavigator:

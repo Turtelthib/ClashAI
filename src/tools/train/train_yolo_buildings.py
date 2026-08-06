@@ -1,6 +1,7 @@
-from ultralytics import YOLO
 import os
 import shutil
+
+from ultralytics import YOLO
 
 # --- 1. PATH CONFIGURATION ---
 # Get the folder where this script lives (scripts/)
@@ -24,10 +25,10 @@ results = model.train(
     patience=50,
     imgsz=1600,
     batch=4,
-    cos_lr=True, 
+    cos_lr=True,
     project=os.path.join(project_root, 'runs/detect'),
     name='FinishedTrain',
-    mixup=0.1, 
+    mixup=0.1,
     exist_ok=True,
     amp=True
 )

@@ -4,8 +4,8 @@
 import numpy as np
 
 from clashai.combat.action_space import TOTAL_ACTIONS, decode_action
-from clashai.combat.agent_v4.constants import GRID_CHANNELS, GRID_SIZE, VECTOR_SIZE
 from clashai.combat.agent_v4.agent import PPOAgentV4
+from clashai.combat.agent_v4.constants import GRID_CHANNELS, GRID_SIZE, VECTOR_SIZE
 
 
 def main():

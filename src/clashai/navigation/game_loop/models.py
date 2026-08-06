@@ -2,16 +2,16 @@
 # load_models() — load screen CNN, YOLO buildings, building CNN, walls,
 # troop bar detector + start the async PerceptionThread.
 
+import json
 import os
 import sys
-import json
 
 import torch
 from ultralytics import YOLO
 
+from clashai.navigation.game_loop.constants import DEVICE
 from clashai.paths import PROJECT_ROOT, WEIGHTS_DIR
 from clashai.perception.screen_classifier import MyCustomCNN
-from clashai.navigation.game_loop.constants import DEVICE
 
 
 def load_models():
@@ -93,7 +93,7 @@ def load_models():
         models['troop_bar_detector'] = TroopBarDetector(troop_bar_path)
     else:
         models['troop_bar_detector'] = None
-        print(f"WARNING: troop_bar.pt not found — using template matching fallback")
+        print("WARNING: troop_bar.pt not found — using template matching fallback")
 
     # --- 6) Async perception thread ---
     from clashai.perception.perception_thread import PerceptionThread

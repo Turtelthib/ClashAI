@@ -3,9 +3,12 @@
 
 # Re-imported from clashai/config (Phase A) — kept importable for back-compat.
 from clashai.config import (  # noqa: F401
-    ADB_WIDTH, ADB_HEIGHT,
-    MONITOR_INTERVAL, DEFAULT_BOT_NAME,
-    MAX_COMMAND_AGE_MINUTES, MAX_HISTORY,
+    ADB_HEIGHT,
+    ADB_WIDTH,
+    DEFAULT_BOT_NAME,
+    MAX_COMMAND_AGE_MINUTES,
+    MAX_HISTORY,
+    MONITOR_INTERVAL,
 )
 
 # Chat zone on screen (when the chat is open).

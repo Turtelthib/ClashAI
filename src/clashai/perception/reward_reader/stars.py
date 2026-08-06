@@ -2,11 +2,16 @@
 # Star counting (0-3) via HSV silver detection.
 
 import os
+
 import cv2
 import numpy as np
 
 from clashai.perception.reward_reader.constants import (
-    STAR_MIN_AREA, STAR_MAX_ASPECT, STAR_SATURATION_MAX, STAR_VALUE_MIN, DEBUG_DIR,
+    DEBUG_DIR,
+    STAR_MAX_ASPECT,
+    STAR_MIN_AREA,
+    STAR_SATURATION_MAX,
+    STAR_VALUE_MIN,
 )
 
 

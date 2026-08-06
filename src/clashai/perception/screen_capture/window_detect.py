@@ -11,6 +11,8 @@ import numpy as np
 
 from clashai.config import (
     EMULATOR_WINDOW_KEYWORDS,
+)
+from clashai.config import (
     title_is_excluded as _title_is_excluded,
 )
 from clashai.perception.screen_capture.gdi_capture import printwindow_single

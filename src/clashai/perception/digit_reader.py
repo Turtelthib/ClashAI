@@ -14,8 +14,8 @@
 # glyph crops it was trained on. The classifier is optional: segment_glyphs()
 # works standalone (used to build the per-digit dataset).
 
-import numpy as np
 import cv2
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -144,6 +144,7 @@ def _load_model():
     if _MODEL is not None:
         return _MODEL
     import os
+
     from clashai.paths import WEIGHTS_DIR
     path = os.path.join(WEIGHTS_DIR, 'digit_cnn.pt')
     if not os.path.exists(path):

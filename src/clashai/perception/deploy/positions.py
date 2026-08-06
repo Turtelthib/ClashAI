@@ -5,11 +5,14 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from clashai.config import ADB_WIDTH, ADB_HEIGHT
-from clashai.perception.deploy.constants import (
-    UI_EXCLUSION_ZONES, SCREEN_MARGIN, DEPLOY_OFFSET, DIRECTION_ANGLES,
-)
+from clashai.config import ADB_HEIGHT, ADB_WIDTH
 from clashai.perception.deploy.boundary import detect_village_boundary
+from clashai.perception.deploy.constants import (
+    DEPLOY_OFFSET,
+    DIRECTION_ANGLES,
+    SCREEN_MARGIN,
+    UI_EXCLUSION_ZONES,
+)
 
 
 def _sample_hull_point(hull_pts, frac):

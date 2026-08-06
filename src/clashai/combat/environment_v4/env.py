@@ -8,14 +8,14 @@
 # - Centralized reward shaping
 # - Agent freely chooses the order of spells/abilities
 
-from clashai.combat.legacy.environment import ClashEnvV3
-from clashai.combat.environment_v4.core import CoreMixin
-from clashai.combat.environment_v4.observation import ObservationMixin
 from clashai.combat.environment_v4.actions import ActionsMixin
-from clashai.combat.environment_v4.reward import RewardMixin
-from clashai.combat.environment_v4.observe import ObserveMixin
 from clashai.combat.environment_v4.capture import CaptureMixin
+from clashai.combat.environment_v4.core import CoreMixin
 from clashai.combat.environment_v4.heuristic import HeuristicMixin
+from clashai.combat.environment_v4.observation import ObservationMixin
+from clashai.combat.environment_v4.observe import ObserveMixin
+from clashai.combat.environment_v4.reward import RewardMixin
+from clashai.combat.legacy.environment import ClashEnvV3
 
 
 class ClashEnvV4(

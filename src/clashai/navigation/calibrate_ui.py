@@ -16,20 +16,19 @@
 # 3. The user clicks on the button in the image
 # 4. Coordinates are converted to ADB and saved
 
-import os
 import json
+import os
 import time
 
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
-
 from clashai.paths import UI_POSITIONS_FILE as _UI_POS
 
 POSITIONS_FILE = _UI_POS
 
 # Re-imported from clashai/config/screen.py (Phase A).
-from clashai.config import ADB_WIDTH, ADB_HEIGHT  # noqa: E402
+from clashai.config import ADB_HEIGHT, ADB_WIDTH  # noqa: E402
 
 # All buttons to calibrate, grouped by context
 # Each entry: (json_key, description, required_screen, pre_delay)
@@ -117,7 +116,6 @@ DEFAULT_POSITIONS = {
 # Re-exported from the canonical implementation in game_loop (Phase B.1).
 # That version routes through WGC (fast, occlusion-proof) with ADB fallback.
 from clashai.navigation.game_loop import adb_screenshot as _adb_screenshot  # noqa: E402
-
 
 _click_result = {'x': None, 'y': None, 'done': False}
 
@@ -274,7 +272,7 @@ def calibrate(groups=None):
         groups: list of groups to calibrate (None = all)
     """
     positions = load_positions()
-    
+
     print(f"\n{'='*60}")
     print(" ClashAI — Calibration de l'interface")
     print(f"{'='*60}")
@@ -282,27 +280,27 @@ def calibrate(groups=None):
     print(" Cliquez sur le bouton dans l'image.")
     print(" Echap = passer un bouton.")
     print(" Les positions sont sauvegardées dans ui_positions.json\n")
-    
+
     if groups is None:
         groups = list(BUTTONS_TO_CALIBRATE.keys())
-    
+
     calibrated = 0
     skipped = 0
-    
+
     for group_name in groups:
         if group_name not in BUTTONS_TO_CALIBRATE:
             print(f" WARNING: Groupe '{group_name}' inconnu")
             continue
-        
+
         buttons = BUTTONS_TO_CALIBRATE[group_name]
         print(f"\n  {group_name.upper()} ")
-        
+
         for key, description, required_screen, delay in buttons:
             current = positions.get(key)
             current_str = f" (actuel: {current})" if current else ""
-            
+
             print(f"\n {description}{current_str}")
-            
+
             if required_screen:
                 print(f" WARNING: Assurez-vous d'être sur l'écran : {required_screen}")
 
@@ -319,7 +317,7 @@ def calibrate(groups=None):
 
             # Screenshot + click in the OpenCV window
             pos = capture_click(description=description)
-            
+
             if pos is not None:
                 x, y = pos
                 positions[key] = (x, y)
@@ -333,23 +331,23 @@ def calibrate(groups=None):
                     positions[key] = default
                     print(f"  Valeur par défaut : {default}")
                 skipped += 1
-    
+
     # Save
     save_positions(positions)
-    
+
     print(f"\n{'='*60}")
     print(" Calibration terminée !")
     print(f" {calibrated} boutons calibrés, {skipped} passés")
     print(f" Sauvegardé dans : {POSITIONS_FILE}")
     print(f"{'='*60}\n")
-    
+
     return positions
 
 
 def show_positions():
     """Displays all calibrated positions."""
     positions = load_positions()
-    
+
     print(f"\nUI Positions ({POSITIONS_FILE}):\n")
 
     if not positions:
@@ -377,7 +375,7 @@ def show_positions():
 
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="ClashAI UI Calibrator")
     parser.add_argument('--show', action='store_true',
                         help="Afficher les positions actuelles")
@@ -386,9 +384,9 @@ if __name__ == "__main__":
                              "(village, chat, matchmaking, results, gdc, general, retreat)")
     parser.add_argument('--reset', action='store_true',
                         help="Remettre toutes les positions par défaut")
-    
+
     args = parser.parse_args()
-    
+
     if args.show:
         show_positions()
     elif args.reset:

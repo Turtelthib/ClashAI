@@ -3,10 +3,10 @@
 
 import argparse
 
-from clashai.config import DEFAULT_BOT_NAME
 from clashai.brain.core import BrainCoreMixin
 from clashai.brain.loop import BrainLoopMixin
 from clashai.brain.navigation import BrainNavigationMixin
+from clashai.config import DEFAULT_BOT_NAME
 
 
 class ClashBrain(

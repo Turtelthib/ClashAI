@@ -25,11 +25,9 @@ import time
 import cv2
 import numpy as np
 
-
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
-
 from clashai.paths import TROOP_TEMPLATES_DIR
 
 TEMPLATES_DIR = TROOP_TEMPLATES_DIR
@@ -46,7 +44,6 @@ MATCH_THRESHOLD = 0.45
 
 # Multi-scale list re-imported from clashai/config/perception.py (Phase A).
 from clashai.config import MATCH_SCALES  # noqa: E402
-
 
 # =============================================================================
 # ADB FUNCTIONS
@@ -67,7 +64,6 @@ def adb_swipe(x1, y1, x2, y2, duration_ms=300):
 # Re-exported from the canonical implementation in game_loop (Phase B.1).
 # That version routes through WGC (fast, occlusion-proof) with ADB fallback.
 from clashai.navigation.game_loop import adb_screenshot  # noqa: E402
-
 
 # =============================================================================
 # TROOP FINDER

@@ -24,11 +24,10 @@
 # python scripts/rl/train_yolo_troops.py --test
 # python scripts/rl/train_yolo_troops.py --test --image combat_captures/combat_001.png
 
-import os
 import argparse
+import os
 
 from clashai.paths import PROJECT_ROOT as project_root
-
 
 # =============================================================================
 # CONFIGURATION
@@ -149,8 +148,9 @@ def test(image_path=None, conf=0.35, save=True):
     else:
         # ADB screenshot
         print(" Source : screenshot ADB")
-        import subprocess
         import io
+        import subprocess
+
         from PIL import Image
 
         result = subprocess.run(

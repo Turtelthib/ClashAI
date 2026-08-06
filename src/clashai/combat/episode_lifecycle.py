@@ -16,10 +16,11 @@ import cv2
 import numpy as np
 
 from clashai.config import (
-    WAIT_BATTLE_MAX, WAIT_BATTLE_CHECK, WAIT_RESULT_SCREEN,
+    WAIT_BATTLE_CHECK,
+    WAIT_BATTLE_MAX,
+    WAIT_RESULT_SCREEN,
 )
 from clashai.perception.reward_reader import read_attack_results
-
 
 # Reward weights — kept local to this module since the only callers are
 # compute_reward + finish_episode. If a future PPO version needs to read
@@ -65,7 +66,7 @@ def _count_field_troops(env, img_pil):
     # Fallback : barres de vie vertes (signal fragile, historique)
     try:
         img_cv = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
-        from clashai.combat.combat_observer import detect_troop_bars, detect_hero_bars
+        from clashai.combat.combat_observer import detect_hero_bars, detect_troop_bars
         green_pos, _ = detect_troop_bars(img_cv)
         return len(green_pos) + len(detect_hero_bars(img_cv))
     except Exception:
@@ -271,7 +272,7 @@ def finish_episode(env):
     reward = compute_reward(stars, percentage)
 
     if env.verbose:
-        from clashai.config.logging import banner, pp, styled, result_tag
+        from clashai.config.logging import banner, pp, result_tag, styled
         retreat_str = "  (retreat)" if env._no_troops_count >= NO_TROOPS_CHECKS_THRESHOLD else ""
         stars_str = styled(f"⭐ {stars}/3", result_tag(stars, 0, 3))
         pct_str = styled(f"{percentage}%", result_tag(percentage, 0, 100))

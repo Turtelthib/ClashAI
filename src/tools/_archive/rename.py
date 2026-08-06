@@ -1,6 +1,7 @@
 import os
 import shutil
 
+
 def renommer_et_deplacer():
     # --- PATHS ---
     script_dir = os.path.dirname(os.path.abspath(__file__))

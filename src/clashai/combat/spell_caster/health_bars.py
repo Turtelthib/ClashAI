@@ -5,11 +5,23 @@ import cv2
 import numpy as np
 
 from clashai.combat.spell_caster.constants import (
-    HP_BAR_H_MIN, HP_BAR_H_MAX, HP_BAR_S_MIN, HP_BAR_V_MIN,
-    HP_RED_H_MIN, HP_RED_H_MAX, HP_RED_S_MIN, HP_RED_V_MIN,
-    HP_ORANGE_H_MIN, HP_ORANGE_H_MAX, HP_ORANGE_S_MIN, HP_ORANGE_V_MIN,
-    HP_BAR_MIN_AREA, HP_BAR_MAX_AREA, HP_BAR_MIN_RATIO,
-    UI_EXCLUSION_Y, UI_EXCLUSION_TOP,
+    HP_BAR_H_MAX,
+    HP_BAR_H_MIN,
+    HP_BAR_MAX_AREA,
+    HP_BAR_MIN_AREA,
+    HP_BAR_MIN_RATIO,
+    HP_BAR_S_MIN,
+    HP_BAR_V_MIN,
+    HP_ORANGE_H_MAX,
+    HP_ORANGE_H_MIN,
+    HP_ORANGE_S_MIN,
+    HP_ORANGE_V_MIN,
+    HP_RED_H_MAX,
+    HP_RED_H_MIN,
+    HP_RED_S_MIN,
+    HP_RED_V_MIN,
+    UI_EXCLUSION_TOP,
+    UI_EXCLUSION_Y,
 )
 
 

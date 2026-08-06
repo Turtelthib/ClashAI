@@ -29,8 +29,8 @@
 #   pt.resume()  # when attack starts
 #   pt.stop()    # clean shutdown
 
-import threading
 import queue
+import threading
 import time
 import traceback
 
@@ -264,10 +264,10 @@ class PerceptionThread:
             troop_bar = []       # raw detections from TroopBarDetector
             troop_positions = {} # active positions {name: (x, y, conf)}
 
-            #  1. YOLO buildings + building CNN 
+            #  1. YOLO buildings + building CNN
             try:
                 buildings = analyze_village(frame, self.models)
-            except Exception as e:
+            except Exception:
                 if self.verbose:
                     traceback.print_exc()
 
@@ -281,7 +281,7 @@ class PerceptionThread:
                         frame,
                         buildings_count=len(buildings) if buildings else None,
                     )
-            except Exception as e:
+            except Exception:
                 if self.verbose:
                     traceback.print_exc()
 
@@ -298,7 +298,7 @@ class PerceptionThread:
             #  4. Screen classifier
             try:
                 screen_state, screen_conf = classify_screen(frame, self.models)
-            except Exception as e:
+            except Exception:
                 if self.verbose:
                     traceback.print_exc()
 
@@ -333,9 +333,9 @@ class PerceptionThread:
     def _emit_events(self, state):
         """Fire push events derived from the latest inference cycle."""
         from clashai.perception.events import (
+            EVENT_BUILDINGS_DESTROYED,
             EVENT_PERCEPTION_UPDATED,
             EVENT_SCREEN_STATE_CHANGED,
-            EVENT_BUILDINGS_DESTROYED,
             EVENT_TROOP_BAR_CHANGED,
         )
 

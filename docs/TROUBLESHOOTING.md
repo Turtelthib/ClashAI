@@ -19,6 +19,55 @@ Si un de ces problèmes réapparaît, relire le bloc correspondant avant de re-d
 - [Deploy de troupes grisées pendant le burst (taps gaspillés)](#-deploy-de-troupes-grisées-pendant-le-burst)
 - [Sorts : sous-cast + rage mal placé](#-sorts--sous-cast--rage-mal-placé)
 - [Troop bar : doublons château écrasés + flèche de mode siège/gardien](#-troop-bar--doublons-château--flèche-de-mode)
+- [`ruff --fix` casse le code : ré-exports F401 + import local shadowing](#-ruff---fix-casse-le-code)
+
+---
+
+## 🔧 `ruff --fix` casse le code
+
+> Avant de lancer `ruff check --fix` sur ce dépôt, relire ce bloc. Deux régressions réelles, dont une invisible au lint.
+
+**Symptômes**
+- `UnboundLocalError: cannot access local variable 'INFERENCE_LOCK' where it is not associated with a value` dans `analyze_village()` → la perception plante à la première frame.
+- `ImportError: cannot import name 'DEBUG_DIR' from 'clashai.perception.reward_reader.constants'` → `reward_reader` et `episode_lifecycle` ne s'importent plus (137 ok / 1 fail → 130 ok / 3 fail).
+
+**Cause**
+
+*Régression 1 — le shadowing local.* `navigation/game_loop/analysis.py` importait `INFERENCE_LOCK` **quatre fois** : une au niveau module et trois en local. Ruff (`F811 redefined-while-unused`) en a retiré deux, mais **pas** celle enfouie dans la boucle `for box in results[0].boxes:` de `analyze_village`. Un `import` dans un corps de fonction crée une liaison **locale pour toute la fonction**, quelle que soit sa position. L'import restant en fin de fonction a donc rendu `INFERENCE_LOCK` local, et le `with INFERENCE_LOCK:` situé **plus haut** est devenu une référence avant affectation. Le code d'origine fonctionnait par accident : l'import du haut liait le nom avant le premier usage.
+
+*Régression 2 — les ré-exports.* `F401 unused-import` **est bien auto-corrigé** par `--fix`, contrairement à ce que laisse croire le marqueur `[-]` dans `--statistics`. Or `perception/reward_reader/constants.py` ne fait que republier des chemins (`from clashai.paths import REWARD_TEMPLATES_DIR, REWARD_DIGITS_DIR, DEBUG_DIR`) : inutilisés *dans ce fichier*, mais importés depuis lui par `percentage.py:10` et `stars.py:10`. Ruff a supprimé la ligne entière.
+
+**Fix**
+1. Lancer `ruff check src/ --fix --ignore F401`. Les 285 corrections restantes (tri d'imports, espaces, `f""` sans placeholder) sont sûres.
+2. Retirer à la main le dernier import local de `analysis.py` — le module-level suffit pour les trois usages.
+3. Traiter F401 séparément, fichier par fichier, en protégeant d'abord les ré-exports (`__all__` ou `per-file-ignores` ruff), jamais en masse.
+
+**Pièges**
+- ⚠️ **Le lint ne voit pas la régression 2.** Un ré-export supprimé mais consommé via un import *paresseux* (dans un corps de fonction) ne casse ni le lint ni le balayage d'imports — ça pète au runtime, potentiellement des heures plus tard. C'est la raison de ne pas appliquer F401 en masse ici.
+- La régression 1 **ne se voit pas non plus** dans le diff : le diff de `analysis.py` semble parfaitement correct. Seul `F823 undefined-local`, qui **apparaît** après le fix, la trahit. Toujours comparer les codes d'erreur avant/après, pas seulement le total.
+- Le total qui baisse (456 → 168) ne prouve rien sur la correction du code.
+
+**Tests**
+```bash
+# 1. la bombe de shadowing (doit dire KeyError, pas UnboundLocalError)
+uv run python -c "
+from clashai.navigation.game_loop.analysis import analyze_village
+try: analyze_village(None, {})
+except UnboundLocalError as e: print('CASSE ->', e)
+except Exception as e: print('OK ->', type(e).__name__)"
+
+# 2. balayage d'imports — doit rester 137 ok / 1 fail
+uv run python -c "
+import pkgutil, importlib, clashai
+ok=fail=0
+for m in pkgutil.walk_packages(clashai.__path__,'clashai.'):
+    try: importlib.import_module(m.name); ok+=1
+    except Exception: fail+=1
+print(ok,'ok /',fail,'fail')"
+
+# 3. aucun NOUVEAU code d'erreur ruff par rapport a l'avant
+uv run --with ruff ruff check src/ --statistics
+```
 
 ---
 

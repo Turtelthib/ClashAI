@@ -6,16 +6,24 @@ import time
 import numpy as np
 
 from clashai.combat.action_space import (
-    TOTAL_ACTIONS, NUM_ROLES, NUM_SECTORS, NUM_HEROES,
-    SPELL_NAMES, NUM_POSITIONS, MAX_STEPS_SAFETY,
-    decode_action, build_role_inventory, build_spell_inventory,
+    MAX_STEPS_SAFETY,
+    NUM_HEROES,
+    NUM_POSITIONS,
+    NUM_ROLES,
+    NUM_SECTORS,
+    SPELL_NAMES,
+    TOTAL_ACTIONS,
+    build_role_inventory,
+    build_spell_inventory,
+    decode_action,
 )
 from clashai.combat.agent_v4 import VECTOR_SIZE
-from clashai.combat.troop_manager import TroopManager
+from clashai.combat.legacy.agent import TROOP_NAME_TO_IDX, TROOP_TYPES
 from clashai.combat.reward_shaping import (
-    compute_spell_leftover_penalty, compute_hero_survival_bonus,
+    compute_hero_survival_bonus,
+    compute_spell_leftover_penalty,
 )
-from clashai.combat.legacy.agent import TROOP_TYPES, TROOP_NAME_TO_IDX
+from clashai.combat.troop_manager import TroopManager
 
 
 class CoreMixin:
@@ -239,8 +247,8 @@ class CoreMixin:
             shot = self._adb_screenshot()
             if shot is None:
                 return
-            from clashai.perception.digit_reader import read_bar_counts
             from clashai.combat.troop_manager import ALIAS_MAP
+            from clashai.perception.digit_reader import read_bar_counts
             counts = read_bar_counts(shot, bar.detect(shot), position='combat')
         except Exception:
             return
@@ -307,10 +315,11 @@ class CoreMixin:
 
         # V4.3: deploy zone — walls segmentation (primary) then building hull (fallback)
         if self._buildings:
-            from clashai.perception.deploy_zone import (
-                get_perimeter_from_buildings, get_perimeter_from_walls,
-            )
             from clashai.combat.state_encoder import find_best_attack_side
+            from clashai.perception.deploy_zone import (
+                get_perimeter_from_buildings,
+                get_perimeter_from_walls,
+            )
 
             debug_screenshot = self._adb_screenshot()
             yolo_ok = False

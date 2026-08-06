@@ -1,18 +1,18 @@
 # clashai/perception/deploy/constants.py
 # Constants for deploy-zone detection (HSV ranges, offsets, directions).
 
+import os
+from datetime import datetime
+
 import cv2
 import numpy as np
 from PIL import Image
-import os
-from datetime import datetime
 
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
-
 # ADB resolution — re-imported from clashai/config/screen.py (Phase A).
-from clashai.config import ADB_WIDTH, ADB_HEIGHT  # noqa: E402
+from clashai.config import ADB_HEIGHT, ADB_WIDTH  # noqa: E402
 
 # UI exclusion zones (in ADB coordinates 1920×1080)
 # Taps in these zones trigger buttons instead of deploying troops

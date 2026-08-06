@@ -1,8 +1,9 @@
 # clashai/combat/agent_v4/constants.py
 # Observation-space dimensions + PPO hyperparameters for the V4 agent.
 
-from clashai.combat.action_space import NUM_ROLES, NUM_SECTORS, NUM_HEROES, SPELL_NAMES
+from clashai.combat.action_space import NUM_HEROES, NUM_ROLES, NUM_SECTORS, SPELL_NAMES
 from clashai.combat.combat_observer import COMBAT_FEATURES_SIZE
+
 # Re-imported from clashai/config/rl.py (Phase A) — re-exported for back-compat.
 from clashai.config import GRID_CHANNELS, GRID_SIZE, VILLAGE_FEATURES  # noqa: F401
 

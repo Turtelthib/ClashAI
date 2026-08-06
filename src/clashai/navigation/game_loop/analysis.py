@@ -4,11 +4,16 @@
 import numpy as np
 import torch
 
-from clashai.perception.inference_lock import INFERENCE_LOCK
 from clashai.navigation.game_loop.constants import (
-    DEVICE, screen_transform, building_transform,
-    YOLO_CONF, YOLO_IOU, YOLO_BUILDINGS_IMGSZ, BUILDING_CONFIDENCE_THRESHOLD,
+    BUILDING_CONFIDENCE_THRESHOLD,
+    DEVICE,
+    YOLO_BUILDINGS_IMGSZ,
+    YOLO_CONF,
+    YOLO_IOU,
+    building_transform,
+    screen_transform,
 )
+from clashai.perception.inference_lock import INFERENCE_LOCK
 
 
 def classify_screen(img_pil, models):
@@ -16,7 +21,6 @@ def classify_screen(img_pil, models):
     Determines the current screen state.
     Returns (state, confidence).
     """
-    from clashai.perception.inference_lock import INFERENCE_LOCK
     tensor = screen_transform(img_pil).unsqueeze(0).to(DEVICE)
     with INFERENCE_LOCK, torch.no_grad():
         outputs = models['screen_cnn'](tensor)
@@ -37,13 +41,12 @@ def analyze_village(img_pil, models):
     # as BGR but a PIL image as RGB; np.array(rgb_pil) would swap R/B
     # channels. img_np is kept only for the clamp bounds below.
     img_np = np.array(img_pil)
-    from clashai.perception.inference_lock import INFERENCE_LOCK
     with INFERENCE_LOCK:
         results = models['yolo'].predict(
             img_pil, conf=YOLO_CONF, iou=YOLO_IOU,
             imgsz=YOLO_BUILDINGS_IMGSZ, verbose=False,
         )
-    
+
     buildings = []
     for box in results[0].boxes:
         x1, y1, x2, y2 = map(int, box.xyxy[0])
@@ -57,7 +60,6 @@ def analyze_village(img_pil, models):
         crop = img_pil.crop((x1, y1, x2, y2))
         tensor = building_transform(crop).unsqueeze(0).to(DEVICE)
 
-        from clashai.perception.inference_lock import INFERENCE_LOCK
         with INFERENCE_LOCK, torch.no_grad():
             outputs = models['building_cnn'](tensor)
             probs = torch.softmax(outputs, dim=1)

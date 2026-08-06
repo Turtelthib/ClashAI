@@ -14,6 +14,7 @@
 
 import ctypes
 import ctypes.wintypes
+
 import numpy as np
 from PIL import Image
 

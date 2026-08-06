@@ -14,7 +14,6 @@
 
 import numpy as np
 
-
 # =============================================================================
 # RÔLES DE DEPLOY
 # =============================================================================
@@ -26,6 +25,7 @@ NUM_ROLES = len(DEPLOY_ROLES)
 # DATA-DRIVEN: derived from configs/troops.json (clashai.combat.troop_registry),
 # so a new troop in that JSON is automatically deployable — zero code here.
 from clashai.combat.troop_registry import build_role_to_troops as _build_role_to_troops
+
 ROLE_TO_TROOPS = _build_role_to_troops()
 # Ensure every deploy role exists as a key, even if it has no troops yet.
 for _r in DEPLOY_ROLES:
@@ -63,6 +63,7 @@ NUM_DEPLOY_ACTIONS = NUM_ROLES * NUM_SECTORS
 # the index layout below is computed from len(SPELL_NAMES). Adding a spell to
 # troops.json (once the CNN detects it) grows this automatically → re-train.
 from clashai.combat.troop_registry import load_spell_names as _load_spell_names
+
 SPELL_NAMES = _load_spell_names()
 NUM_SPELLS = len(SPELL_NAMES)
 ACTION_SPELL_START = NUM_DEPLOY_ACTIONS

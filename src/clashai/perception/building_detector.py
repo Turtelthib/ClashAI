@@ -1,17 +1,17 @@
-import os
 import json
+import os
 import random
 
 import cv2
 import torch
+from PIL import Image
 from torchvision import transforms
 from ultralytics import YOLO
-from PIL import Image
-
-from clashai.perception.screen_classifier import MyCustomCNN
 
 # --- CONFIGURATION ---
 from clashai.paths import PROJECT_ROOT, WEIGHTS_DIR
+from clashai.perception.screen_classifier import MyCustomCNN
+
 # WEIGHTS_DIR imported from clashai.paths
 
 YOLO_PATH = os.path.join(PROJECT_ROOT, 'runs', 'detect', 'FinishedTrain', 'weights', 'best.pt')

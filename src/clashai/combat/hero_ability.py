@@ -5,9 +5,11 @@
 #   from clashai.combat.hero_ability import HeroAbilityManager, HERO_NAMES
 
 from clashai.combat.hero import (  # noqa: F401
+    CAPA_SUFFIX,
+    HERO_ABILITY_NAMES,
+    HERO_NAMES,
+    NUM_HEROES,
     HeroAbilityManager,
-    HERO_NAMES, NUM_HEROES,
-    HERO_ABILITY_NAMES, CAPA_SUFFIX,
 )
 
 __all__ = [

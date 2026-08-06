@@ -3,16 +3,19 @@
 
 import os
 import sys
+
 import cv2
 import numpy as np
 from PIL import Image
 
 from clashai.navigation.game_loop import adb_screenshot
 from clashai.perception.reward_reader.constants import DEBUG_DIR, TEMPLATES_DIR
-from clashai.perception.reward_reader.stars import count_stars
 from clashai.perception.reward_reader.percentage import (
-    read_percentage, read_percentage_from_stars, find_pct_region,
+    find_pct_region,
+    read_percentage,
+    read_percentage_from_stars,
 )
+from clashai.perception.reward_reader.stars import count_stars
 
 
 def read_attack_results(img_pil=None, debug=False):

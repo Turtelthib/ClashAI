@@ -13,22 +13,22 @@
 # python scripts/rl/train_rl_v3.py --episodes 50
 # python scripts/rl/train_rl_v3.py --from-v2 weights/rl_v2/agent_v2_best.pth
 
+import argparse
+import json
 import os
 import time
-import json
-import argparse
 from datetime import datetime
 
 import numpy as np
 
+from clashai.combat.legacy.agent import (
+    MAX_STEPS_PER_EPISODE,
+    PPOAgentV3,
+)
+from clashai.combat.legacy.environment import ClashEnvV3
+
 # Setup
 from clashai.paths import PROJECT_ROOT as project_root
-
-from clashai.combat.legacy.environment import ClashEnvV3
-from clashai.combat.legacy.agent import (
-    PPOAgentV3, MAX_STEPS_PER_EPISODE,
-)
-
 
 # =============================================================================
 # CONFIGURATION

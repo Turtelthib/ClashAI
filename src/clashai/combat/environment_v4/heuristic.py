@@ -2,7 +2,10 @@
 # HeuristicMixin — scripted V4 action sequence (one action per unit).
 
 from clashai.combat.action_space import (
-    HERO_NAMES, SPELL_NAMES, build_role_inventory, build_spell_inventory,
+    HERO_NAMES,
+    SPELL_NAMES,
+    build_role_inventory,
+    build_spell_inventory,
 )
 from clashai.combat.legacy.agent import TROOP_TYPES
 

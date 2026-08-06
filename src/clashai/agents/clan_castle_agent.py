@@ -9,7 +9,7 @@
 
 import time
 
-from clashai.agents.base import BaseAgent, AgentResult
+from clashai.agents.base import AgentResult, BaseAgent
 from clashai.config import REQUEST_COOLDOWN
 
 

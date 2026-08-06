@@ -7,11 +7,16 @@ import time
 import cv2
 import numpy as np
 
-from clashai.social.chat.constants import (
-    CHAT_ZONE_LEFT, CHAT_ZONE_RIGHT, CHAT_ZONE_TOP, CHAT_ZONE_BOTTOM,
-    _get_chat_button_pos, DEFAULT_BOT_NAME, MONITOR_INTERVAL,
-)
 from clashai.social.chat.adb_io import _adb_screenshot, _adb_tap
+from clashai.social.chat.constants import (
+    CHAT_ZONE_BOTTOM,
+    CHAT_ZONE_LEFT,
+    CHAT_ZONE_RIGHT,
+    CHAT_ZONE_TOP,
+    DEFAULT_BOT_NAME,
+    MONITOR_INTERVAL,
+    _get_chat_button_pos,
+)
 from clashai.social.chat.ocr import _ocr_read
 from clashai.social.chat.parser import parse_command
 

@@ -1,7 +1,7 @@
 # clashai/perception/reward_reader/constants.py
 # Thresholds + template dirs for reward (stars + %) reading.
 
-from clashai.paths import REWARD_TEMPLATES_DIR, REWARD_DIGITS_DIR, DEBUG_DIR
+from clashai.paths import DEBUG_DIR, REWARD_DIGITS_DIR, REWARD_TEMPLATES_DIR
 
 TEMPLATES_DIR = REWARD_TEMPLATES_DIR
 DIGITS_DIR = REWARD_DIGITS_DIR

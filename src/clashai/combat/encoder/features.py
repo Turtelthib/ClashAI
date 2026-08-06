@@ -2,14 +2,19 @@
 # Village feature vector + encode_state (grid + features bundle).
 
 import math
+
 import numpy as np
 
-from clashai.config import SCREEN_WIDTH, SCREEN_HEIGHT
 from clashai.combat.encoder.constants import (
-    CATEGORIES, NUM_VILLAGE_FEATURES,
-    INFERNO_CLASSES, EAGLE_CLASSES, SCATTER_CLASSES, CC_CLASSES,
+    CATEGORIES,
+    CC_CLASSES,
+    EAGLE_CLASSES,
+    INFERNO_CLASSES,
+    NUM_VILLAGE_FEATURES,
+    SCATTER_CLASSES,
 )
 from clashai.combat.encoder.grid import buildings_to_grid
+from clashai.config import SCREEN_HEIGHT, SCREEN_WIDTH
 
 
 def extract_features(buildings):

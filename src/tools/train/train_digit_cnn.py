@@ -23,8 +23,9 @@ import torch.nn as nn
 from PIL import Image
 
 from clashai.paths import DATASETS_DIR, WEIGHTS_DIR
+
 # SSOT: the architecture + input size live with the inference reader.
-from clashai.perception.digit_reader import DigitCNN, IMG_SIZE
+from clashai.perception.digit_reader import IMG_SIZE, DigitCNN
 
 
 def _augment_pil(img):

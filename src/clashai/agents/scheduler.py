@@ -18,7 +18,7 @@ import time
 from collections import deque
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
-from clashai.agents.base import BaseAgent, AgentResult
+from clashai.agents.base import AgentResult, BaseAgent
 
 
 class AgentScheduler:

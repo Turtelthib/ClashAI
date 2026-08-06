@@ -8,7 +8,7 @@
 # scattered across `environment_v4`, `debug_overlay`, `test_run_capture`,
 # `troop_counter`, `perception_thread`.
 
-from clashai.config import SCREEN_WIDTH, SCREEN_HEIGHT
+from clashai.config import SCREEN_HEIGHT, SCREEN_WIDTH
 
 
 class ImageScaler:

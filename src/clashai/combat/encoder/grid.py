@@ -2,12 +2,17 @@
 # YOLO buildings -> (NUM_CHANNELS, GRID, GRID) tensor + danger heatmaps.
 
 import math
+
 import numpy as np
 
-from clashai.config import GRID_SIZE
 from clashai.combat.encoder.constants import (
-    CLASS_TO_CHANNEL, NUM_CHANNELS, CELL_WIDTH, CELL_HEIGHT, DEFENSE_STATS,
+    CELL_HEIGHT,
+    CELL_WIDTH,
+    CLASS_TO_CHANNEL,
+    DEFENSE_STATS,
+    NUM_CHANNELS,
 )
+from clashai.config import GRID_SIZE
 
 
 def buildings_to_grid(buildings):

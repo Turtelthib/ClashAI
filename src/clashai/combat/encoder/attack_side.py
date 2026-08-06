@@ -2,15 +2,19 @@
 # Pick the weakest side to attack + human-readable state summary.
 
 import math
+
 import numpy as np
 
-from clashai.config import SCREEN_WIDTH, SCREEN_HEIGHT
 from clashai.combat.encoder.constants import (
-    CHANNEL_NAMES, NUM_CHANNELS, NUM_VILLAGE_FEATURES,
-    DEFENSE_STATS, INFERNO_CLASSES, EAGLE_CLASSES,
+    CHANNEL_NAMES,
+    DEFENSE_STATS,
+    EAGLE_CLASSES,
+    INFERNO_CLASSES,
+    NUM_CHANNELS,
+    NUM_VILLAGE_FEATURES,
 )
 from clashai.combat.encoder.features import encode_state
-from clashai.config import GRID_SIZE
+from clashai.config import GRID_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH
 
 
 def find_best_attack_side(buildings, verbose=False):
@@ -47,16 +51,16 @@ def find_best_attack_side(buildings, verbose=False):
         6: (0.05, 0.50),
         7: (0.05, 0.05),
     }
-    
+
     DIRECTION_NAMES = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO']
     MAX_DIST = math.sqrt(2.0)
-    
+
     # Criteria weights
     W_DEFENSE = 1.0
     W_TH = 0.7
     W_INFERNO = 0.5
     W_EAGLE = 0.3
-    
+
     # --- 1. DPS score per sector (existing logic) ---
     sector_dps = [0.0] * 8
     for b in buildings:
@@ -72,34 +76,34 @@ def find_best_attack_side(buildings, verbose=False):
         sector_angle = (angle_deg + 90) % 360
         sector_idx = int(sector_angle / 45) % 8
         sector_dps[sector_idx] += dps
-    
+
     max_dps = max(sector_dps) if max(sector_dps) > 0 else 1.0
-    
+
     # --- 2. Key positions ---
     hdv_pos = None
     inferno_positions = []
     eagle_pos = None
-    
+
     for b in buildings:
         cls = b['class']
         cx_norm = b['center'][0] / SCREEN_WIDTH
         cy_norm = b['center'][1] / SCREEN_HEIGHT
-        
+
         if cls == 'hdv':
             hdv_pos = (cx_norm, cy_norm)
         elif cls in INFERNO_CLASSES:
             inferno_positions.append((cx_norm, cy_norm))
         elif cls in EAGLE_CLASSES:
             eagle_pos = (cx_norm, cy_norm)
-    
+
     # --- 3. Score each direction ---
     scores = []
     for d in range(8):
         deploy_x, deploy_y = DEPLOY_POINTS[d]
-        
+
         # Criterion 1: defensive weakness (inverted: low DPS = good)
         defense_score = 1.0 - (sector_dps[d] / max_dps)
-        
+
         # Criterion 2: TH proximity
         if hdv_pos is not None:
             th_dist = math.sqrt(
@@ -108,7 +112,7 @@ def find_best_attack_side(buildings, verbose=False):
             th_score = 1.0 - (th_dist / MAX_DIST)
         else:
             th_score = 0.5
-        
+
         # Criterion 3: inferno accessibility
         # Take the distance to the CLOSEST inferno
         # (idea: golems reach it → freeze)
@@ -120,7 +124,7 @@ def find_best_attack_side(buildings, verbose=False):
             inferno_score = 1.0 - (min_inf_dist / MAX_DIST)
         else:
             inferno_score = 0.5
-        
+
         # Criterion 4: eagle accessibility
         if eagle_pos is not None:
             eagle_dist = math.sqrt(
@@ -129,13 +133,13 @@ def find_best_attack_side(buildings, verbose=False):
             eagle_score = 1.0 - (eagle_dist / MAX_DIST)
         else:
             eagle_score = 0.5
-        
+
         # Composite score
-        total = (W_DEFENSE * defense_score 
+        total = (W_DEFENSE * defense_score
                  + W_TH * th_score
                  + W_INFERNO * inferno_score
                  + W_EAGLE * eagle_score)
-        
+
         scores.append({
             'direction': d,
             'total': total,
@@ -144,11 +148,11 @@ def find_best_attack_side(buildings, verbose=False):
             'inferno': inferno_score,
             'eagle': eagle_score,
         })
-    
+
     # Sort by descending total score
     scores.sort(key=lambda s: s['total'], reverse=True)
     best = scores[0]
-    
+
     if verbose:
         print("\n Attack side analysis:")
         for s in scores:
@@ -157,7 +161,7 @@ def find_best_attack_side(buildings, verbose=False):
                   f"total={s['total']:.2f} "
                   f"(def={s['defense']:.2f} th={s['th']:.2f} "
                   f"inf={s['inferno']:.2f} eag={s['eagle']:.2f}){marker}")
-    
+
     return best['direction']
 
 

@@ -4,7 +4,7 @@
 import numpy as np
 import torch
 
-from clashai.combat.agent_v4.constants import GAMMA, GAE_LAMBDA
+from clashai.combat.agent_v4.constants import GAE_LAMBDA, GAMMA
 
 
 class RolloutBuffer:

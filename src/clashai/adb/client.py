@@ -18,15 +18,17 @@ from typing import Optional
 
 from PIL import Image
 
-from clashai.paths import ADB_DEVICE
-from clashai.config import (
-    ADB_DELAY_TAP, ADB_DELAY_SCREENSHOT,
-)
 from clashai.adb.exceptions import (
-    ADBError, ADBNotFoundError,
-    ADBTimeoutError, ADBNotConnectedError,
+    ADBError,
+    ADBNotConnectedError,
+    ADBNotFoundError,
+    ADBTimeoutError,
 )
-
+from clashai.config import (
+    ADB_DELAY_SCREENSHOT,
+    ADB_DELAY_TAP,
+)
+from clashai.paths import ADB_DEVICE
 
 # Default subprocess timeout (seconds) for short ADB commands.
 DEFAULT_TIMEOUT = 5

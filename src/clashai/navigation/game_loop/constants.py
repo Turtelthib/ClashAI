@@ -5,8 +5,10 @@ import torch
 from torchvision import transforms
 
 from clashai.config import (
-    ADB_DELAY_TAP, ADB_DELAY_SCREENSHOT,
-    ADB_DELAY_NAVIGATION, ADB_DELAY_MATCHMAKING,
+    ADB_DELAY_MATCHMAKING,
+    ADB_DELAY_NAVIGATION,
+    ADB_DELAY_SCREENSHOT,
+    ADB_DELAY_TAP,
 )
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

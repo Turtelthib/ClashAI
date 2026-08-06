@@ -2,20 +2,30 @@
 # PPOAgentV4 — action selection + PPO update + checkpoint I/O (+ BC mixin).
 
 import torch
-import torch.optim as optim
 import torch.nn as nn
+import torch.optim as optim
 from torch.distributions import Categorical
 
 from clashai.combat.action_space import (
-    TOTAL_ACTIONS, NUM_ROLES, NUM_SECTORS, NUM_HEROES, SPELL_NAMES,
+    NUM_HEROES,
+    NUM_ROLES,
+    NUM_SECTORS,
+    SPELL_NAMES,
+    TOTAL_ACTIONS,
 )
+from clashai.combat.agent_v4.bc import BehavioralCloningMixin
+from clashai.combat.agent_v4.buffer import RolloutBuffer
 from clashai.combat.agent_v4.constants import (
-    VECTOR_SIZE, LEARNING_RATE, BATCH_SIZE, PPO_EPOCHS,
-    CLIP_EPSILON, ENTROPY_COEF, VALUE_COEF, MAX_GRAD_NORM,
+    BATCH_SIZE,
+    CLIP_EPSILON,
+    ENTROPY_COEF,
+    LEARNING_RATE,
+    MAX_GRAD_NORM,
+    PPO_EPOCHS,
+    VALUE_COEF,
+    VECTOR_SIZE,
 )
 from clashai.combat.agent_v4.network import ActorCriticV4
-from clashai.combat.agent_v4.buffer import RolloutBuffer
-from clashai.combat.agent_v4.bc import BehavioralCloningMixin
 
 
 class PPOAgentV4(BehavioralCloningMixin):

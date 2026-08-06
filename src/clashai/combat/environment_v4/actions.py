@@ -4,13 +4,16 @@
 import time
 
 from clashai.combat.action_space import DEPLOY_ROLES, HERO_NAMES, decode_action
+from clashai.combat.legacy.agent import TROOP_NAME_TO_IDX, TROOP_TYPES
 from clashai.combat.troop_manager import TroopManager
 from clashai.combat.troop_registry import load_spell_targets
-from clashai.combat.legacy.agent import TROOP_TYPES, TROOP_NAME_TO_IDX
 from clashai.config import (
-    DELAY_SWITCH_TROOP, DELAY_DEPLOY,
-    DELAY_WAIT_SHORT, DELAY_WAIT_LONG,
-    DELAY_OBSERVE, DELAY_ABILITY,
+    DELAY_ABILITY,
+    DELAY_DEPLOY,
+    DELAY_OBSERVE,
+    DELAY_SWITCH_TROOP,
+    DELAY_WAIT_LONG,
+    DELAY_WAIT_SHORT,
 )
 
 # Spell targeting (data-driven): registry category → SpellCaster output key.
@@ -186,7 +189,7 @@ class ActionsMixin:
     def _spread_cluster_point(self, x, y):
         """Offset consecutive cluster-spell casts (rage/clone/speed…) so the
         agent stops dumping every rage on the exact same spot."""
-        from clashai.combat.spell_caster.constants import ADB_WIDTH, ADB_HEIGHT
+        from clashai.combat.spell_caster.constants import ADB_HEIGHT, ADB_WIDTH
         i = getattr(self, '_cluster_cast_i', 0)
         self._cluster_cast_i = i + 1
         ox, oy = _SPREAD_OFFSETS[i % len(_SPREAD_OFFSETS)]

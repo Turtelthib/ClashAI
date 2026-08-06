@@ -1,29 +1,37 @@
 # clashai/navigation/game_loop/controller.py
 # CLI controller: button coords, state dispatch, test/live loops, main().
 
+import argparse
 import os
 import sys
 import time
-import argparse
 
 import cv2
 import numpy as np
 from PIL import Image
 
 from clashai.config import (
-    SCREEN_WIDTH, SCREEN_HEIGHT,
-    ADB_DELAY_SCREENSHOT, ADB_DELAY_NAVIGATION, ADB_DELAY_MATCHMAKING,
-)
-from clashai.paths import ADB_DEVICE
-from clashai.navigation.game_loop.constants import SCREEN_CONFIDENCE_THRESHOLD
-from clashai.navigation.game_loop.models import load_models
-from clashai.navigation.game_loop.analysis import (
-    classify_screen, analyze_village, get_village_summary,
+    ADB_DELAY_MATCHMAKING,
+    ADB_DELAY_NAVIGATION,
+    ADB_DELAY_SCREENSHOT,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
 )
 from clashai.navigation.game_loop.adb_io import (
-    adb_screenshot, adb_tap, adb_swipe, adb_key, adb_check_connection,
+    adb_check_connection,
+    adb_key,
+    adb_screenshot,
+    adb_swipe,
+    adb_tap,
 )
-
+from clashai.navigation.game_loop.analysis import (
+    analyze_village,
+    classify_screen,
+    get_village_summary,
+)
+from clashai.navigation.game_loop.constants import SCREEN_CONFIDENCE_THRESHOLD
+from clashai.navigation.game_loop.models import load_models
+from clashai.paths import ADB_DEVICE
 
 BUTTONS = {
     # Main village (village_home)

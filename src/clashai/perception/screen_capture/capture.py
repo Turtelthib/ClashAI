@@ -24,12 +24,16 @@ import time
 import numpy as np
 from PIL import Image
 
-from clashai.perception.screen_capture.window_detect import (
-    find_emulator_bbox, find_hwnd, pick_best_render_hwnd,
-)
 from clashai.perception.screen_capture.gdi_capture import printwindow_single
 from clashai.perception.screen_capture.normalize import (
-    normalize_to_canonical, CANONICAL_W, CANONICAL_H,
+    CANONICAL_H,
+    CANONICAL_W,
+    normalize_to_canonical,
+)
+from clashai.perception.screen_capture.window_detect import (
+    find_emulator_bbox,
+    find_hwnd,
+    pick_best_render_hwnd,
 )
 
 
@@ -350,8 +354,9 @@ class ScreenCapture:
             return self._grab_adb()
 
     def _grab_adb(self):
-        import subprocess
         import io
+        import subprocess
+
         from clashai.paths import ADB_DEVICE
         try:
             r = subprocess.run(

@@ -10,7 +10,7 @@
 
 import time
 
-from clashai.agents.base import BaseAgent, AgentResult
+from clashai.agents.base import AgentResult, BaseAgent
 
 
 class ChatAgent(BaseAgent):
@@ -138,9 +138,9 @@ class ChatAgent(BaseAgent):
 # =============================================================================
 
 if __name__ == "__main__":
-    from clashai.agents.scheduler import AgentScheduler
     from clashai.agents.combat_agent import CombatAgent
     from clashai.agents.gdc_agent import GdCAgent
+    from clashai.agents.scheduler import AgentScheduler
 
     class _FakeMonitor:
         """Stand-in for ClanChatMonitor — returns one attack command, no ADB."""

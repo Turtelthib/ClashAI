@@ -1,8 +1,7 @@
 # clashai/combat/encoder/constants.py
 # Building categories, grid channels, defense stats, special class lists.
 
-from clashai.config import GRID_SIZE, SCREEN_WIDTH, SCREEN_HEIGHT
-
+from clashai.config import GRID_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH
 
 CATEGORIES = {
     'defenses_dangereuses': [

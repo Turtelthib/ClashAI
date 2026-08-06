@@ -14,11 +14,11 @@ import sys
 
 from PIL import Image
 
-from clashai.config import HERO_NAMES
-from clashai.paths import WEIGHTS_DIR
-from clashai.navigation.game_loop import adb_screenshot as _adb_screenshot
 from clashai.combat.hero.constants import CAPA_SUFFIX, HERO_ABILITY_NAMES
 from clashai.combat.hero.manager import HeroAbilityManager
+from clashai.config import HERO_NAMES
+from clashai.navigation.game_loop import adb_screenshot as _adb_screenshot
+from clashai.paths import WEIGHTS_DIR
 
 
 def _load_detector():

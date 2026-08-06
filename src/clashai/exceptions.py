@@ -21,7 +21,6 @@
 
 from clashai._core_exceptions import ClashAIError
 
-
 # Perception --------------------------------------------------------------
 
 class PerceptionError(ClashAIError):
@@ -77,7 +76,7 @@ class AgentDisabledError(AgentError):
 
 from clashai.adb.exceptions import (  # noqa: E402
     ADBError,
+    ADBNotConnectedError,
     ADBNotFoundError,
     ADBTimeoutError,
-    ADBNotConnectedError,
 )

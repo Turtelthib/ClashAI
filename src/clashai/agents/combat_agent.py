@@ -8,7 +8,7 @@
 
 import time
 
-from clashai.agents.base import BaseAgent, AgentResult
+from clashai.agents.base import AgentResult, BaseAgent
 
 
 class CombatAgent(BaseAgent):
@@ -64,8 +64,8 @@ class CombatAgent(BaseAgent):
 # =============================================================================
 
 if __name__ == "__main__":
-    from clashai.agents.scheduler import AgentScheduler
     from clashai.agents.clan_castle_agent import ClanCastleAgent
+    from clashai.agents.scheduler import AgentScheduler
 
     class _FakeCC:
         def __init__(self):

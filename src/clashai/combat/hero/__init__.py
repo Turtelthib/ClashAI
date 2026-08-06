@@ -14,9 +14,9 @@
 # Public API re-exported so callers keep using:
 #   from clashai.combat.hero_ability import HeroAbilityManager, HERO_NAMES
 
-from clashai.config import HERO_NAMES, NUM_HEROES
-from clashai.combat.hero.constants import HERO_ABILITY_NAMES, CAPA_SUFFIX
+from clashai.combat.hero.constants import CAPA_SUFFIX, HERO_ABILITY_NAMES
 from clashai.combat.hero.manager import HeroAbilityManager
+from clashai.config import HERO_NAMES, NUM_HEROES
 
 __all__ = [
     'HeroAbilityManager',

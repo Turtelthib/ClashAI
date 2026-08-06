@@ -18,9 +18,13 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw
 
-from clashai.navigation.game_loop import load_models, adb_screenshot, classify_screen, analyze_village
+from clashai.navigation.game_loop import (
+    adb_screenshot,
+    analyze_village,
+    classify_screen,
+    load_models,
+)
 from clashai.paths import ADB_DEVICE
-
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -153,7 +157,7 @@ def main():
 
     print(f"\n{'='*60}")
     print(f"  Done! Check: {OUT_DIR}")
-    print(f"  5 annotated images show what each CNN sees at each moment.")
+    print("  5 annotated images show what each CNN sees at each moment.")
     print(f"{'='*60}")
 
 

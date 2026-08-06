@@ -11,21 +11,21 @@
 # Public API re-exported so callers keep using:
 #   from clashai.perception.deploy_zone import get_perimeter_from_buildings, ...
 
-from clashai.perception.deploy.constants import YOLO_WALLS_IMGSZ
 from clashai.perception.deploy.boundary import detect_village_boundary
+from clashai.perception.deploy.constants import YOLO_WALLS_IMGSZ
+from clashai.perception.deploy.debug import (
+    debug_deploy_zone,
+    get_smart_deploy_positions,
+    save_deploy_debug_image,
+)
 from clashai.perception.deploy.positions import (
     compute_deploy_positions,
-    get_village_center_adb,
     get_full_perimeter_positions,
+    get_village_center_adb,
 )
 from clashai.perception.deploy.yolo_zone import (
-    get_perimeter_from_walls,
     get_perimeter_from_buildings,
-)
-from clashai.perception.deploy.debug import (
-    save_deploy_debug_image,
-    get_smart_deploy_positions,
-    debug_deploy_zone,
+    get_perimeter_from_walls,
 )
 
 __all__ = [

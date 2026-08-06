@@ -14,15 +14,14 @@
 # # counts = {'golem': 2, 'sorcier': 6, 'sorciere': 10, ...}
 
 import os
+
 import cv2
 import numpy as np
 from PIL import Image
 
-
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
-
 from clashai.paths import REWARD_DIGITS_DIR
 
 # Digit templates folder (shared with reward_reader)

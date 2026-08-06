@@ -4,10 +4,14 @@
 import cv2
 import numpy as np
 
-from clashai.config import ADB_WIDTH, ADB_HEIGHT
+from clashai.config import ADB_HEIGHT, ADB_WIDTH
 from clashai.perception.deploy.constants import (
-    UI_EXCLUSION_ZONES, SCREEN_MARGIN,
-    HSV_CHECK_RADIUS, HSV_RED_H_MAX, HSV_RED_SAT_MIN, HSV_RED_RATIO_THRESHOLD,
+    HSV_CHECK_RADIUS,
+    HSV_RED_H_MAX,
+    HSV_RED_RATIO_THRESHOLD,
+    HSV_RED_SAT_MIN,
+    SCREEN_MARGIN,
+    UI_EXCLUSION_ZONES,
 )
 
 
