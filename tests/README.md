@@ -56,8 +56,25 @@ git checkout -- src/clashai/agents/combat_agent.py
 tous les modèles YOLO/CNN sur GPU puis pilote l'émulateur. Ne pas retirer ce réglage tant que ces
 scripts n'ont pas été renommés en `debug_*.py`.
 
+## Bugs connus encodés en `xfail`
+
+Un bug ouvert peut être verrouillé sans rendre la suite rouge :
+
+```python
+@pytest.mark.xfail(strict=True, reason="Bug ouvert (audit item 1.4) : ...")
+def test_every_role_in_the_json_is_a_known_deploy_role():
+    ...
+```
+
+`strict=True` compte double : tant que le bug est là, le test passe en `xfailed` ; le jour où
+quelqu'un le corrige, pytest signale un `XPASS` **en échec** et force à retirer le marqueur.
+L'invariant ne peut donc pas être oublié.
+
+Actuellement un seul : `sorciere_ruine` a le rôle `clean` dans `configs/troops.json`, or `clean`
+n'existe pas dans `DEPLOY_ROLES` — l'unité n'est jamais déployable.
+
 ## Ce qui n'est pas couvert
 
-La logique pure à fort ROI reste à tester (voir `docs/AUDIT_2026-08-05.md` §2) :
-`social/chat/parser.py`, `combat/troop_registry.py`, `combat/reward_shaping.py`,
-`perception/digit_reader.py` (segmentation), `combat/encoder/`.
+Reste à tester (voir `docs/AUDIT_2026-08-05.md` §2) : `perception/digit_reader.py`
+(segmentation — demande de construire des crops synthétiques) et `combat/encoder/`
+(shape/dtype du tenseur, invariants entre entraînement et inférence).
