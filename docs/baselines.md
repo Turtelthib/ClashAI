@@ -17,7 +17,11 @@ uv run python src/tools/train/compare_baseline.py \
 
 ### `v4.4-ppo-350ep` — *2026-07-12*
 
-PPO brut (pretrain BC 30 + PPO), obs **67 dims / 50 actions** (post rework sorts). **Convergé / plateau.**
+> ⚠️ **Checkpoint périmé depuis le rôle `clean` (6 août 2026).** L'obs est passée à **69 dims / 56 actions** ; ce checkpoint est en **68/51**, il ne se recharge plus. `PPOAgentV4.load()` tolère le mismatch et repart de zéro **en silence** — vérifier les logs de démarrage avant de croire à une reprise. Les **stats** ci-dessous restent valables comme point de comparaison de performance (`compare_baseline.py` ne lit que le JSON, pas les poids).
+>
+> *Note : la description dans `stats.json` annonce « 67 dims / 50 actions ». C'est une erreur de saisie d'origine — le checkpoint réel a toujours été en 68/51 (vérifié : `vector_fc.0.weight = (96, 68)`, `actor.2.weight = (51, 128)`).*
+
+PPO brut (pretrain BC 30 + PPO), obs **68 dims / 51 actions** (post rework sorts). **Convergé / plateau.**
 
 | Métrique | Valeur |
 |---|---|

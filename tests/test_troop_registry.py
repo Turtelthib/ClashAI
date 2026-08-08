@@ -7,8 +7,6 @@ permettent, et surtout la coherence entre le JSON et le fallback code en dur.
 
 import json
 
-import pytest
-
 from clashai.combat.action_space import DEPLOY_ROLES
 from clashai.combat.troop_registry import (
     _FALLBACK,
@@ -112,17 +110,13 @@ def test_spell_targets_are_valid_categories():
 
 
 # ---------------------------------------------------------------------------
-# Bug connu, encore ouvert
+# Coherence JSON <-> DEPLOY_ROLES
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Bug ouvert (audit 2026-08-05, item 1.4) : configs/troops.json donne "
-           "le role 'clean' a sorciere_ruine, or 'clean' n'existe pas dans "
-           "DEPLOY_ROLES -> l'unite n'est jamais deployable. Corriger le role "
-           "dans le JSON, puis retirer ce marqueur.",
-)
 def test_every_role_in_the_json_is_a_known_deploy_role():
+    """A ete xfail jusqu'a l'ajout du role 'clean' : sorciere_ruine le portait
+    alors qu'il n'existait pas dans DEPLOY_ROLES, donc l'unite n'etait jamais
+    proposee au deploiement. Un role invente dans le JSON doit echouer ici."""
     unknown = {
         t['name']: t['role']
         for t in load_troop_types()

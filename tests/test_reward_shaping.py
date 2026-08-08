@@ -87,6 +87,64 @@ def test_distance_of_two_sectors_is_neutral():
     assert R.compute_deploy_reward('deploy', RANGED, 0, 1, 1, 2, None) == 0.0
 
 
+# ---------------------------------------------------------------------------
+# Role 'clean' : la sorciere des ruines n'invoque que sur batiment detruit
+# ---------------------------------------------------------------------------
+
+CLEAN = DEPLOY_ROLES.index('clean')
+
+
+def _clean_reward(destroyed_ratio):
+    """combat_features[0] = batiments RESTANTS / initiaux."""
+    features = _features()
+    features[0] = 1.0 - destroyed_ratio
+    return R.compute_deploy_reward('deploy', CLEAN, None, 1, 1, None, features)
+
+
+def test_deploying_clean_at_the_very_start_is_heavily_penalised():
+    assert _clean_reward(0.0) == pytest.approx(R.REWARD_CLEAN_TOO_EARLY)
+
+
+def test_clean_penalty_fades_as_the_base_gets_damaged():
+    """Malus proportionnel, pas une falaise : PPO a besoin d'un gradient."""
+    assert _clean_reward(0.0) < _clean_reward(0.10) < _clean_reward(0.19) < 0
+
+
+def test_clean_is_rewarded_once_the_threshold_is_passed():
+    # Volontairement au-dessus du seuil et pas dessus : `destroyed` est calcule
+    # par 1.0 - features[0], donc la frontiere exacte depend de l'arrondi
+    # flottant (1.0 - 0.8 = 0.19999999999999996). Tester la valeur pile au seuil
+    # testerait l'IEEE 754, pas la regle metier.
+    assert _clean_reward(R.CLEAN_DESTRUCTION_MIN + 0.01) == R.REWARD_CLEAN_GOOD_TIMING
+    assert _clean_reward(0.60) == R.REWARD_CLEAN_GOOD_TIMING
+
+
+def test_clean_timing_reward_is_ordered():
+    assert _clean_reward(0.50) > _clean_reward(0.10)
+
+
+def test_clean_without_perception_is_treated_as_too_early():
+    """Sans combat_features on ne sait pas si la base est entamee -> prudence."""
+    reward = R.compute_deploy_reward('deploy', CLEAN, None, 1, 1, None, None)
+    assert reward == pytest.approx(R.REWARD_CLEAN_TOO_EARLY)
+
+
+def test_clean_role_is_not_masked_out():
+    """L'utilisateur a explicitement choisi de NE PAS brider l'agent : le role
+    'clean' doit rester disponible dans le masque comme n'importe quel autre,
+    seule la reward oriente le timing."""
+    import numpy as np
+
+    from clashai.combat.action_space import NUM_SECTORS, compute_action_mask
+    from clashai.combat.troop_registry import load_troop_types
+
+    troop_types = load_troop_types()
+    remaining = np.ones(len(troop_types), dtype=np.float32)
+    mask = compute_action_mask(remaining, troop_types)
+    start = CLEAN * NUM_SECTORS
+    assert mask[start:start + NUM_SECTORS].sum() == NUM_SECTORS
+
+
 def test_strategic_wait_after_tanks():
     assert R.compute_deploy_reward('wait_long', None, None, 1, 0, None, None) == \
         R.REWARD_WAIT_AFTER_TANK

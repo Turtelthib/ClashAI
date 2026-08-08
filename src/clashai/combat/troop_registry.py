@@ -21,6 +21,8 @@ import os
 # It's an UPPER bound (the grayed signal caps the real count below it); kept
 # bounded so the heuristic doesn't waste the step budget tapping empty slots.
 DEFAULT_MAX_BY_ROLE = {
+    # 'clean' : troupes utiles seulement une fois la base entamée (cf. DEPLOY_ROLES).
+    'clean': 4,
     'tank': 4, 'ranged': 12, 'melee': 8, 'hero': 1, 'siege': 1, 'spell': 8,
 }
 

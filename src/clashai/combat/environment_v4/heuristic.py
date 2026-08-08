@@ -23,7 +23,7 @@ class HeuristicMixin:
         from clashai.combat.action_space import encode_action as enc
 
         FAR_LEFT, LEFT, CENTER, RIGHT, FAR_RIGHT = 0, 1, 2, 3, 4
-        TANK, RANGED, MELEE, HERO, SIEGE = 0, 1, 2, 3, 4
+        TANK, RANGED, MELEE, HERO, SIEGE, CLEAN = 0, 1, 2, 3, 4, 5
 
         actions = []
         role_inv, _ = build_role_inventory(self._remaining_troops, TROOP_TYPES)
@@ -67,6 +67,14 @@ class HeuristicMixin:
         # 6. HEROES — centre
         for _ in range(role_inv.get('hero', 0)):
             actions.append(enc('deploy', HERO, CENTER))
+
+        # 7. CLEAN — en dernier, après une pause : la sorcière des ruines n'invoque
+        # que sur bâtiment détruit, donc on lui laisse le temps que le push entame
+        # la base. Le BC apprend ce timing ; reward_shaping le renforce.
+        if role_inv.get('clean', 0):
+            actions.append(enc('wait_long'))
+            for _ in range(role_inv.get('clean', 0)):
+                actions.append(enc('deploy', CLEAN, CENTER))
 
         # V4.2: no intermediate done — done = end of episode
         # Spells and abilities follow directly after deploy.

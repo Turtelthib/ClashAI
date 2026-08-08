@@ -26,6 +26,13 @@ REWARD_SPREAD = -1.0
 REWARD_WAIT_AFTER_TANK = 3.0
 REWARD_LEFTOVER_TROOPS = -2.0
 
+# Rôle 'clean' (sorcière des ruines) : elle n'attaque pas, elle invoque des
+# troupes quand un bâtiment tombe. La déployer avant que la base soit entamée la
+# gaspille. On ne la MASQUE pas — l'agent reste libre, il apprend le timing.
+CLEAN_DESTRUCTION_MIN = 0.20      # en dessous : trop tôt
+REWARD_CLEAN_TOO_EARLY = -6.0     # malus à 0 % de destruction, atténué jusqu'au seuil
+REWARD_CLEAN_GOOD_TIMING = 4.0    # au-delà du seuil
+
 # Combat reward shaping
 REWARD_ABILITY_GOOD_TIMING = 3.0
 REWARD_ABILITY_BAD_TIMING = -2.0
@@ -78,6 +85,21 @@ def compute_deploy_reward(action_type, role_idx, sector_idx,
         # Rule 2: heroes not before tanks
         if role_name == 'hero' and tanks_deployed == 0:
             reward += REWARD_HERO_BEFORE_TANK
+
+        # Rule 2b: 'clean' troops only pay off once buildings start falling.
+        # combat_features[0] = bâtiments RESTANTS / initiaux → destruction = 1 - f[0].
+        # Malus proportionnel à la précocité (gradient exploitable par PPO) plutôt
+        # qu'une falaise : -6 à 0 % de destruction, 0 au seuil, +4 au-delà.
+        if role_name == 'clean':
+            if combat_features is None:
+                destroyed = 0.0
+            else:
+                destroyed = max(0.0, 1.0 - float(combat_features[0]))
+            if destroyed < CLEAN_DESTRUCTION_MIN:
+                earliness = 1.0 - destroyed / CLEAN_DESTRUCTION_MIN
+                reward += REWARD_CLEAN_TOO_EARLY * earliness
+            else:
+                reward += REWARD_CLEAN_GOOD_TIMING
 
         # Rule 3: troop concentration
         if sector_idx is not None and last_sector is not None:

@@ -11,7 +11,11 @@ CATEGORIES = {
     ],
     'defenses_moyennes': [
         'canon', 'tour_archere', 'mortier', 'multi_mortier', 'tour_sorcier',
-        'tour_bombe', 'canon_double', 'canon_ricochet', 'cracheur_feu',
+        # 'double_canon' et non 'canon_double' : le nom doit correspondre EXACTEMENT
+        # à ce que le CNN émet (weights/classes.json), sinon CLASS_TO_CHANNEL rate
+        # la classe et le bâtiment devient invisible pour l'agent. Cf. test
+        # tests/test_encoder_vocabulary.py.
+        'tour_bombe', 'double_canon', 'canon_ricochet', 'cracheur_feu',
         'super_tour_sorcier', 'tour_archere_multiple', 'tour_archere_rapide',
         'tour_multi_equipe_rapide', 'tour_multi_equipe_lente',
         'cabane_ouvrier_arme'
@@ -81,7 +85,7 @@ DEFENSE_STATS = {
     'multi_mortier': {'range': 350, 'dps': 0.4, 'targets': 'ground'},
     'tour_sorcier': {'range': 350, 'dps': 0.4, 'targets': 'both'},
     'tour_bombe': {'range': 300, 'dps': 0.35, 'targets': 'ground'},
-    'canon_double': {'range': 300, 'dps': 0.4, 'targets': 'ground'},
+    'double_canon': {'range': 300, 'dps': 0.4, 'targets': 'ground'},
     'canon_ricochet': {'range': 350, 'dps': 0.35, 'targets': 'ground'},
     'cracheur_feu': {'range': 250, 'dps': 0.5, 'targets': 'ground'},
     'super_tour_sorcier': {'range': 350, 'dps': 0.5, 'targets': 'both'},

@@ -18,7 +18,13 @@ import numpy as np
 # RÔLES DE DEPLOY
 # =============================================================================
 
-DEPLOY_ROLES = ['tank', 'ranged', 'melee', 'hero', 'siege']
+# 'clean' = troupes qui ne servent qu'une fois la base entamée (sorcière des
+# ruines : elle n'attaque pas, elle invoque quand un bâtiment tombe → la poser
+# au début la gaspille). Le rôle n'est PAS masqué : l'agent reste libre de la
+# déployer quand il veut, c'est reward_shaping qui pénalise un deploy trop tôt.
+# Toujours ajouter les nouveaux rôles À LA FIN : l'heuristique code en dur les
+# indices 0-4 (TANK, RANGED, MELEE, HERO, SIEGE).
+DEPLOY_ROLES = ['tank', 'ranged', 'melee', 'hero', 'siege', 'clean']
 NUM_ROLES = len(DEPLOY_ROLES)
 
 # Mapping role → ordered list of troop names (deploy priority).

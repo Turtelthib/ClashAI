@@ -192,6 +192,8 @@
 - [x] **Registre data-driven** (Session 14) : `configs/troops.json` = SSOT `{name, role, max?}` ; `TROOP_TYPES` + `ROLE_TO_TROOPS` en dérivent via `combat/troop_registry.py`. **47 troupes**, ajouter une troupe = 1 ligne JSON + retrain CNN, **zéro code**. (Détail → CHANGELOG.)
 - [ ] **Mask ceinture-bretelles** : autoriser `deploy(role)` tant qu'une troupe du rôle est **non-grisée**, même si le compteur lu dit 0 (protège d'une lecture basse erronée). Petit changement, pas une refonte.
 - [ ] **Rôles best-guess à valider** : les rôles des troupes récentes dans `troops.json` sont des estimations (éditables sans code). Vérifier en jeu et ajuster.
+- [x] **Rôle `clean` (sorcière des ruines)** — *fait 6 août 2026*. 6ᵉ rôle de deploy pour la seule troupe qui n'attaque pas (elle invoque quand un bâtiment tombe → la poser au début la gaspille). **Pas de masque** : l'agent reste libre, c'est `reward_shaping` qui pénalise un deploy précoce (malus proportionnel à la précocité, seuil 20 % de destruction). Heuristique : deploy en dernier. obs **68→69**, actions **51→56** → **re-train requis**, baseline `v4.4-ppo-350ep` non rechargeable. (Détail → CHANGELOG.)
+- [ ] **⚠️ Re-train après le rôle `clean`** : l'heuristique tourne immédiatement, mais le RL doit être ré-entraîné en 69/56 avant de servir de référence. Refaire une baseline ensuite.
 - [ ] **Sorts** : ajouter un sort change la dim d'obs (`SPELL_FEATURES`) → pas checkpoint-safe (à gérer à part des troupes).
 - [ ] **Full-auto (horizon LLM)** : classe CNN inconnue → l'orchestrateur LLM déduit le rôle (connaissance jeu + RAG) et remplit le registre tout seul. Rejoint *Apprentissage continu*.
 
