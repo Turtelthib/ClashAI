@@ -80,6 +80,9 @@ BUTTONS_TO_CALIBRATE = {
         # 2. The CONFIRMATION button in the popup
         ('confirm_ff', 'Bouton CONFIRMER la retraite (dans la popup de confirmation)', None, 0),
     ],
+    'cdc': [
+        ('cdc_confirmation', 'Bouton CONFIRMATION de demande de renfort', 'village_home', 0),
+    ],
 }
 
 # Default positions (fallback if not calibrated)
@@ -106,6 +109,7 @@ DEFAULT_POSITIONS = {
     'close_popup': (1300, 100),
     'ff_button': (1850, 550),
     'confirm_ff': (700, 550),
+    'cdc_confirmation': (960, 620),
 }
 
 
@@ -211,17 +215,42 @@ def capture_click(description=""):
 # LOAD / SAVE
 # =============================================================================
 
+_POSITIONS_CACHE = None
+_POSITIONS_MTIME = None
+
+
 def load_positions():
-    """Loads positions from the JSON file."""
-    if os.path.exists(POSITIONS_FILE):
-        try:
-            with open(POSITIONS_FILE, 'r') as f:
-                data = json.load(f)
-            # Convert lists to tuples
-            return {k: tuple(v) for k, v in data.items()}
-        except (json.JSONDecodeError, Exception):
-            pass
-    return {}
+    """Loads positions from the JSON file.
+
+    Cached on the file's mtime: get_position() used to re-read and re-parse the
+    JSON on *every* call (~24 disk reads for a single GdC navigation). Saving a
+    new calibration bumps the mtime, so the cache still picks it up without a
+    restart.
+    """
+    global _POSITIONS_CACHE, _POSITIONS_MTIME
+
+    if not os.path.exists(POSITIONS_FILE):
+        return {}
+
+    try:
+        mtime = os.path.getmtime(POSITIONS_FILE)
+    except OSError:
+        mtime = None
+
+    if _POSITIONS_CACHE is not None and mtime == _POSITIONS_MTIME:
+        return _POSITIONS_CACHE
+
+    try:
+        with open(POSITIONS_FILE, 'r') as f:
+            data = json.load(f)
+        positions = {k: tuple(v) for k, v in data.items()}
+    except Exception as e:
+        print(f"WARNING: {POSITIONS_FILE} unreadable ({e}) -> defaults only")
+        return {}
+
+    _POSITIONS_CACHE = positions
+    _POSITIONS_MTIME = mtime
+    return positions
 
 
 def save_positions(positions):
@@ -373,19 +402,21 @@ def show_positions():
 # MAIN
 # =============================================================================
 
-if __name__ == "__main__":
+def main(argv=None):
+    """Entrée CLI. Extraite du bloc __main__ pour que `src/tools/setup/` puisse
+    la lancer sans dupliquer le module (il en était un fork de ~400 lignes)."""
     import argparse
 
+    groups = ', '.join(BUTTONS_TO_CALIBRATE)
     parser = argparse.ArgumentParser(description="ClashAI UI Calibrator")
     parser.add_argument('--show', action='store_true',
                         help="Afficher les positions actuelles")
     parser.add_argument('--only', type=str, nargs='+',
-                        help="Calibrer seulement certains groupes "
-                             "(village, chat, matchmaking, results, gdc, general, retreat)")
+                        help=f"Calibrer seulement certains groupes ({groups})")
     parser.add_argument('--reset', action='store_true',
                         help="Remettre toutes les positions par défaut")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.show:
         show_positions()
@@ -395,3 +426,7 @@ if __name__ == "__main__":
         show_positions()
     else:
         calibrate(groups=args.only)
+
+
+if __name__ == "__main__":
+    main()

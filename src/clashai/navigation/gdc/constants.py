@@ -5,32 +5,20 @@
 from clashai.config import ADB_HEIGHT, ADB_WIDTH  # noqa: F401
 
 
-def _get_ui_pos(name):
-    """UI button position from ui_positions.json (calibrate_ui), with fallback."""
-    try:
-        from clashai.navigation.calibrate_ui import get_position
-        return get_position(name)
-    except ImportError:
-        defaults = {
-            'chat_open': (47, 400),
-            'chat_close_tap': (1400, 400),
-            'gdc_open': (47, 560),
-            'gdc_war_ended_see_map': (960, 700),
-            'gdc_enemy_map': (1700, 540),
-            'gdc_ally_map': (200, 540),
-            'gdc_attack_target': (900, 660),
-            'gdc_village_next': (1050, 680),
-            'gdc_village_prev': (100, 680),
-            'gdc_return_home': (80, 780),
-            'attack_button': (80, 830),
-            'start_attack': (960, 700),
-            'open_profil': (40, 50),
-            'close_profil': (1270, 90),
-            'close_menu': (1340, 95),
-            'close_popup': (1300, 100),
-            'return_home': (960, 800),
-        }
-        return defaults.get(name, (960, 400))
+def _get_ui_pos(name, screenshot=None):
+    """Position d'un bouton de l'UI.
+
+    Delegue a `perception.ui_buttons.find_button`, le point d'acces unique :
+    detecteur CNN UI si installe ET si une frame est fournie, position calibree
+    sinon.
+
+    La table de defauts locale (17 cles recopiees a l'identique de
+    `calibrate_ui.DEFAULT_POSITIONS`) a ete supprimee : duplication stricte, et
+    le seul endroit du projet ou les defauts pouvaient diverger sans que
+    personne ne le voie.
+    """
+    from clashai.perception.ui_buttons import find_button
+    return find_button(name, screenshot=screenshot)
 
 
 # Zone where enemy target numbers appear (the enemy list with their #).
