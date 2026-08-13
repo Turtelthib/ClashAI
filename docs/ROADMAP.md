@@ -103,7 +103,11 @@
 - [x] **Abandon *state-dependent*** : `env._surrender()` → `capituler`+`confirmer` (troupes vivantes) ou `terminer_bataille` (aucune), lu au CNN, filet calibration.
 - [ ] **Migrer les appelants restants vers `find_button()`** (17 appels directs à `get_position` + 18 taps en dur hors JSON) : retraite → dialogues confirmer/annuler → demander château → menus bâtiment. Sans urgence : le seam existe, ces appelants marchent déjà via la calibration. **Valider en réel les mappings ambigus** (`find_match`, `gdc_open`) sur captures.
 
-**Agent village** (`village/`, `VillageAgent(BaseAgent)`, règles) — constructeurs libres, queue d'upgrade (murs→défenses→ressources), labo, collecte ; clique via `UIButtonDetector`. State machine simple.
+**Agent village** (`village/`, `VillageAgent(BaseAgent)`, règles) — clique via `UIDetector`. State machine simple, par incréments :
+- [x] **Incr. 1 — Récolte (13 août 2026)** : `village/collector.py` tape les icônes `recolter_or`/`recolter_elixir`/`recolter_elixir_noire` détectées par le CNN UI. Sûr (aucune dépense), idempotent. Agent prio **15** (entre `clan_castle` 20 et `combat` 10), cooldown 5 min. 8 tests. No-op si CNN UI absent. (Détail → CHANGELOG.)
+- [ ] **Incr. 2 — File d'upgrade** : constructeurs libres → queue (murs → défenses → ressources), navigation menus bâtiment + coûts.
+- [ ] **Incr. 3 — Labo** : lancer une recherche si un labo est libre.
+
 **Agent jeux de clan** (`clan_games/`) — détecter si actifs, lire les tâches (OCR), exécuter.
 
 ### V5.3 — Cerveau LLM v1 (orchestrateur)

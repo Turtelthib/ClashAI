@@ -11,8 +11,14 @@ Historique chronologique des features livrées, du plus récent au plus ancien.
 
 ## V5.2 — Outillage & audit (en cours)
 
-> Le **CNN UI est livré et branché** ; restent les **agents village / jeux de clan** → [ROADMAP](ROADMAP.md).
+> Le **CNN UI est livré et branché**. **Agent village (incr. 1 : récolte)** livré ; restent ses upgrades/labo + l'**agent jeux de clan** → [ROADMAP](ROADMAP.md).
 
+- ✅ **Agent village — incrément 1 : récolte des ressources** — premier agent V5.2 à base de règles, exploite directement le CNN UI. `village/collector.py` (`VillageCollector`) détecte les icônes de récolte (`recolter_or` / `recolter_elixir` / `recolter_elixir_noire`) et tape chacune ; `agents/village_agent.py` (`VillageAgent(BaseAgent)`) l'ordonnance.
+  - **Sûr par construction** : ne fait que taper des collecteurs pleins (aucune dépense, idempotent). No-op propre si le CNN UI est absent (`detect_raw` vide → 0 récolte, aucune erreur) ou si pas de frame.
+  - Priorité **15** — entre `clan_castle` (20) et `combat` (10) : la récolte passe avant une attaque quand son cooldown (5 min) est écoulé, puis rend le sol au combat. Même raisonnement que le cooldown de `ClanCastleAgent`.
+  - Réutilise le détecteur déjà branché (`ui_buttons.get_detector()`) — pas de second chargement du YOLO ; fallback instance dédiée.
+  - Pattern `ClanCastleAgent`→`ClanCastleManager` : wrapper agent mince dans `agents/`, logique métier dans `village/` (extensible aux upgrades/labo). Enregistré dans `brain/core` (tous modes).
+  - **8 tests** (`test_village_agent.py`, reflet de la démo offline) : récolte de chaque icône, no-op écran vide / frame absente, ignore les classes non-`recolter_*`, gating `village_home`, cooldown, et priorité village↔combat. **160 tests.**
 - ✅ **CNN UI universel livré + branché** — le YOLO « boutons / éléments d'interface » (**124 classes**, mAP50 **0.957** / mAP50-95 **0.822**, imgsz 1280) reconnaît les boutons par leur apparence + leur **texte**. Matrice de confusion à **diagonale propre : aucune confusion bouton↔bouton** (les rares ratés partent en `background` = classes à 1-2 exemples). Seuil de conf optimal ~0.48 (courbe F1 = 0.83).
   - `perception/ui_detector.py` : `UIDetector` à deux niveaux — `detect_raw()` → `{classe_cnn: [Detection]}` (brut, noms **français**, primitive des futurs agents village/GdC) et `detect()` → `{clé: (x,y,conf)}` (contrat `set_detector`). Noms lus **depuis le modèle** (`model.names`), jamais une liste en dur.
   - **Désambiguïsation des boutons génériques par position** : `fermer`/`confirmer` apparaissent à plusieurs endroits ; pour une clé de calibration on prend l'instance **la plus proche** de sa position calibrée (`close_profil` haut-droite vs `close_popup` centre se démêlent sans classe dédiée).

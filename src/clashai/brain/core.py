@@ -147,6 +147,7 @@ class BrainCoreMixin:
             ClanCastleAgent,
             CombatAgent,
             GdCAgent,
+            VillageAgent,
         )
         from clashai.brain.interface import HeuristicBrain
 
@@ -156,6 +157,13 @@ class BrainCoreMixin:
         self._scheduler.register(CombatAgent(
             models=self._models, agent=self._agent,
             use_heuristic=self._use_heuristic, verbose=self.verbose,
+        ))
+
+        # Village (récolte des ressources) — always. Utilise le CNN UI ; no-op si
+        # le modèle est absent (detect_raw = vide → 0 récolte, aucune erreur).
+        self._scheduler.register(VillageAgent(
+            screenshot_fn=self._adb_screenshot, tap_fn=self._adb_tap,
+            verbose=self.verbose,
         ))
 
         # Clan castle — always (CC troops help farm + war).
