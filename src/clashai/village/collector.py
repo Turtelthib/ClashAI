@@ -2,20 +2,34 @@
 # Récolte des ressources du village via le CNN UI (V5.2, increment 1).
 #
 # Quand un collecteur (mine d'or, collecteur d'élixir, foreuse d'élixir noir) est
-# plein, une petite icône flottante apparaît au-dessus. Le CNN UI les détecte
-# toutes d'un coup (classes recolter_or / recolter_elixir / recolter_elixir_noire)
-# → on tape chaque icône détectée. Aucune dépense, action sûre et idempotente.
+# plein, une petite icône flottante apparaît au-dessus (classes CNN
+# recolter_or / recolter_elixir / recolter_elixir_noire).
+#
+# ⚠️ Méca CoC : taper UNE icône de récolte en récolte automatiquement d'autres.
+# Donc on ne tape PAS toutes les positions détectées d'un coup — après le 1er tap
+# les autres icônes disparaissent, et taper leur ancienne position taperait un
+# bâtiment au hasard. On boucle : capture FRAÎCHE → tape UNE icône → attend →
+# re-scanne, jusqu'à ce qu'il n'y ait plus rien. Robuste aux deux cas (un tap
+# vide tout → 1 passe ; un tap vide un seul → plusieurs passes).
 #
 # On réutilise le détecteur déjà branché (ui_buttons.set_detector au démarrage)
 # pour ne pas recharger le modèle YOLO ; fallback : une instance dédiée.
 
 import time
 
-# Classes CNN des icônes de récolte (une icône = un tap).
+# Classes CNN des icônes de récolte.
 RESOURCE_CLASSES = ('recolter_or', 'recolter_elixir', 'recolter_elixir_noire')
 
-# Petit délai entre deux taps (laisse l'animation de récolte se jouer).
-TAP_DELAY = 0.3
+# Délai après un tap : laisse la récolte se propager + l'icône disparaître avant
+# la capture suivante (sinon on re-détecte une icône déjà partie).
+PASS_DELAY = 0.6
+
+# Garde-fou : nombre max de passes (un village se vide en 1-2 taps en pratique).
+MAX_PASSES = 8
+
+# Rayon (px ADB) sous lequel deux détections successives = "la même icône" → si
+# rien n'a bougé après un tap, on arrête (évite de re-taper une icône bloquée).
+_SAME_ICON_PX = 40
 
 
 class VillageCollector:
@@ -35,36 +49,46 @@ class VillageCollector:
                 self._detector = UIDetector(verbose=self.verbose)
         return self._detector
 
+    @staticmethod
+    def _best_icon(raw):
+        """Meilleure icône de récolte (conf max, toutes classes), ou None."""
+        cands = []
+        for cls in RESOURCE_CLASSES:
+            cands.extend(raw.get(cls, []))
+        return max(cands, key=lambda d: d.conf) if cands else None
+
     def collect(self, screenshot_fn, tap_fn) -> int:
-        """Détecte puis tape toutes les icônes de récolte présentes.
+        """Récolte en boucle avec re-scan entre chaque tap.
 
         Args:
             screenshot_fn: () -> PIL.Image | None (frame courante du village).
             tap_fn:        (x, y) -> None (tap ADB).
 
         Returns:
-            Nombre d'icônes tapées (0 si rien à récolter / pas de frame).
+            Nombre de taps effectués (0 si rien à récolter / pas de frame).
         """
-        img = screenshot_fn()
-        if img is None:
-            return 0
-
-        raw = self._get_detector().detect_raw(img)
-
+        detector = self._get_detector()
         taps = 0
-        by_class = {}
-        for cls in RESOURCE_CLASSES:
-            dets = raw.get(cls, [])
-            by_class[cls] = len(dets)
-            for d in dets:
-                tap_fn(d.x, d.y)
-                taps += 1
-                time.sleep(TAP_DELAY)
+        last = None
+
+        for _ in range(MAX_PASSES):
+            img = screenshot_fn()
+            if img is None:
+                break
+            icon = self._best_icon(detector.detect_raw(img))
+            if icon is None:
+                break
+            # Rien n'a bougé depuis le tap précédent → icône bloquée, on arrête.
+            if last is not None and abs(icon.x - last[0]) < _SAME_ICON_PX \
+                    and abs(icon.y - last[1]) < _SAME_ICON_PX:
+                break
+            tap_fn(icon.x, icon.y)
+            last = (icon.x, icon.y)
+            taps += 1
+            time.sleep(PASS_DELAY)
 
         if self.verbose and taps:
             from clashai.config.logging import pp
-            detail = ', '.join(f"{n}×{c.replace('recolter_', '')}"
-                               for c, n in by_class.items() if n)
-            pp(f" Village : {taps} ressources récoltées ({detail})", tag='ok')
+            pp(f" Village : récolte effectuée ({taps} tap(s))", tag='ok')
 
         return taps
