@@ -519,28 +519,61 @@ class ClashEnvV3:
 
     def _surrender(self):
         """
-        Surrenders the battle by pressing the white flag then confirming.
+        Abandonne la bataille — bouton dépendant de l'état (V5.2 CNN UI) :
+          - troupes vivantes  → 'Capituler' puis 'Confirmer' (popup).
+          - aucune troupe      → 'Terminer la bataille' (direct, sans popup).
 
-        Called when the smart retreat detects 0 living troops.
-        Flow: white flag → wait for popup → confirm → results screen.
+        Le CNN UI lit l'écran pour taper le bon bouton ; la calibration
+        (ff_button / confirm_ff) reste le filet si le détecteur est absent,
+        échoue, ou passe sous le seuil de confiance.
 
         Returns:
-            success: bool (True if buttons were pressed successfully)
+            success: bool (True si les boutons ont été pressés).
         """
+        from clashai.config.logging import pp
+        from clashai.perception.ui_buttons import (
+            DETECTOR_MIN_CONFIDENCE,
+            find_button,
+            get_detector,
+        )
+
         if self.verbose:
-            from clashai.config.logging import pp
             pp(" Surrendering combat...", tag='retreat')
 
-        # 1. Press the white flag (FF button)
-        self._adb_tap(*self._ui['ff_button'])
+        img = self._adb_screenshot()
+        detector = get_detector()
+        detections = {}
+        if detector is not None and img is not None:
+            try:
+                detections = detector.detect(img)
+            except Exception as e:
+                pp(f" détecteur UI KO à l'abandon ({e}) → calibration", tag='retreat')
+
+        term = detections.get('terminer_bataille')
+        capi = detections.get('capituler')
+
+        # 1. Aucune troupe vivante → 'Terminer' (direct, pas de confirmation)
+        if term is not None and term[2] >= DETECTOR_MIN_CONFIDENCE:
+            self._adb_tap(int(term[0]), int(term[1]))
+            time.sleep(0.5)
+            if self.verbose:
+                pp(" 'Terminer la bataille' (direct)", tag='retreat')
+            return True
+
+        # 2. Sinon → 'Capituler' puis confirmation (popup)
+        if capi is not None and capi[2] >= DETECTOR_MIN_CONFIDENCE:
+            self._adb_tap(int(capi[0]), int(capi[1]))
+        else:
+            # filet : ancienne position calibrée du drapeau blanc
+            self._adb_tap(*self._ui['ff_button'])
         time.sleep(1.0)
 
-        # 2. Press the confirmation button
-        self._adb_tap(*self._ui['confirm_ff'])
+        # confirmation : CNN 'confirmer' via find_button, sinon confirm_ff calibré
+        cx, cy = find_button('confirm_ff', screenshot=self._adb_screenshot())
+        self._adb_tap(cx, cy)
         time.sleep(0.5)
 
         if self.verbose:
-            from clashai.config.logging import pp
             pp(" Retreat confirmed, waiting for results screen...", tag='retreat')
 
         return True

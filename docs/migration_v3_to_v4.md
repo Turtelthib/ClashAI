@@ -12,7 +12,7 @@
 |--------|---------|
 | `agent_v3.py` | `clashai/combat/agent.py` |
 | `environment_v3.py` | `clashai/combat/environment.py` |
-| `train_rl_v3.py` | `tools/train_rl.py` |
+| `train_rl_v3.py` | `tools/train/train_rl.py` |
 | `troop_count_reader.py` | `clashai/perception/troop_counter.py` |
 | `model.py` | `clashai/perception/screen_classifier.py` |
 | `combine.py` | `clashai/perception/building_detector.py` |

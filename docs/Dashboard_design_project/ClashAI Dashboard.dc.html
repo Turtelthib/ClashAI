@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box;}
+    html,body{margin:0;padding:0;height:100%;}
+    a{color:var(--cyan);text-decoration:none;}
+    a:hover{color:var(--green);}
+    ::-webkit-scrollbar{width:9px;height:9px;}
+    ::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:5px;}
+    ::-webkit-scrollbar-thumb:hover{background:var(--muted);}
+    ::-webkit-scrollbar-track{background:transparent;}
+    textarea::placeholder{color:var(--muted);}
+    textarea:focus{outline:none;border-color:var(--purple)!important;}
+    @keyframes pulseDot{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.35;transform:scale(.78);}}
+    @keyframes scanMove{0%{transform:translateY(-20%);}100%{transform:translateY(2200%);}}
+  </style>
+</helmet>
+<div ref="{{ rootRef }}" style="--bg:#0a0f14;--panel:#111827;--surface:#1a2234;--text:#ffffff;--muted:#8b96ad;--border:rgba(255,255,255,0.08);--border-strong:rgba(255,255,255,0.16);--green:#00f5a0;--cyan:#00d9ff;--blue:#3a86ff;--purple:#8338ec;--amber:#ffb020;--red:#ff4d6d;--track:#1a2234; display:flex; height:100vh; width:100%; background:var(--bg); color:var(--text); font-family:'IBM Plex Sans',system-ui,sans-serif; overflow:hidden; font-size:14px;">
+
+  <aside style="width:236px; flex:0 0 236px; background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; padding:16px 12px;">
+    <div style="display:flex; align-items:center; gap:10px; padding:6px 8px 14px;">
+      <span style="width:10px; height:10px; border-radius:50%; background:var(--green); box-shadow:0 0 10px var(--green); animation:pulseDot 1.8s ease-in-out infinite;"></span>
+      <div style="line-height:1.2;">
+        <div style="font-weight:700; font-size:14px; letter-spacing:.02em;">Agent Control</div>
+        <div style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--muted); letter-spacing:.03em;">ClashAI · dashboard v6</div>
+      </div>
+    </div>
+
+    <nav style="display:flex; flex-direction:column; gap:3px; margin-top:6px;">
+      <sc-for list="{{ navItems }}" as="item" hint-placeholder-count="4">
+        <div onClick="{{ item.onClick }}" style="{{ item.style }}">
+          <span style="{{ item.glyphStyle }}">{{ item.glyph }}</span>
+          <span>{{ item.label }}</span>
+        </div>
+      </sc-for>
+    </nav>
+
+    <div style="flex:1;"></div>
+
+    <button onClick="{{ noop }}" style="display:flex; align-items:center; justify-content:center; gap:9px; width:100%; padding:12px; border:none; border-radius:9px; background:var(--green); color:#062018; font-family:'IBM Plex Sans',sans-serif; font-weight:700; font-size:13.5px; cursor:pointer; box-shadow:0 4px 16px color-mix(in srgb, var(--green) 30%, transparent);">
+      <span style="width:11px; height:11px; background:#062018; border-radius:2px; display:inline-block;"></span>
+      Arrêter le bot
+    </button>
+
+    <div style="margin-top:16px; padding:12px; border:1px dashed var(--border-strong); border-radius:9px;">
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">À venir</div>
+      <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted); line-height:1.7;">
+        <div><span style="color:var(--amber);">V5.3</span> — agent jeux de clan</div>
+        <div><span style="color:var(--amber);">V6</span> — dashboard web complet</div>
+      </div>
+    </div>
+  </aside>
+
+  <div style="flex:1; display:flex; flex-direction:column; min-width:0;">
+
+    <header style="height:52px; flex:0 0 52px; border-bottom:1px solid var(--border); background:var(--panel); display:flex; align-items:center; justify-content:space-between; padding:0 18px; gap:16px;">
+      <div style="display:flex; align-items:center; gap:16px; font-family:'IBM Plex Mono',monospace; font-size:11.5px; min-width:0; overflow:hidden; flex-wrap:wrap; max-height:38px;">
+        <div style="display:flex; align-items:center; gap:7px;">
+          <span style="width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); animation:pulseDot 1.8s ease-in-out infinite;"></span>
+          <span style="color:var(--green); font-weight:600; letter-spacing:.04em;">SYSTÈME ACTIF</span>
+        </div>
+        <span style="color:var(--border-strong);">|</span>
+        <div style="display:flex; align-items:center; gap:7px; color:var(--muted);">
+          <span style="width:7px; height:7px; border-radius:50%; background:var(--green);"></span>
+          ÉMULATEUR CONNECTÉ
+        </div>
+        <span style="color:var(--border-strong);">|</span>
+        <div style="display:flex; align-items:center; gap:7px; color:var(--muted);">
+          <span style="width:7px; height:7px; border-radius:50%; background:var(--amber);"></span>
+          MODE <span style="color:var(--amber); font-weight:600;">FARM</span>
+        </div>
+        <span style="color:var(--border-strong);">|</span>
+        <div style="color:var(--muted);">UPTIME <span style="color:var(--text); font-weight:600; font-variant-numeric:tabular-nums;">02:14:07</span></div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);">Thème sombre / clair</span>
+        <div onClick="{{ toggleTheme }}" style="width:46px; height:25px; border-radius:13px; background:var(--track); border:1px solid var(--border-strong); position:relative; cursor:pointer;">
+          <div style="{{ toggleKnobStyle }}"></div>
+        </div>
+      </div>
+    </header>
+
+    <main style="flex:1; overflow:auto; padding:16px;">
+
+      <!-- ============ VUE D'ENSEMBLE ============ -->
+      <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+      <div style="display:grid; grid-template-columns:1fr 372px; gap:16px; height:100%; min-height:520px;">
+
+        <div style="display:flex; flex-direction:column; gap:16px; min-height:0;">
+
+          <section style="background:var(--panel); border:1px solid var(--border); border-radius:12px; flex:1; display:flex; flex-direction:column; min-height:0; overflow:hidden;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-bottom:1px solid var(--border);">
+              <div style="display:flex; align-items:center; gap:8px; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--cyan);">
+                <span style="width:8px; height:8px; border-radius:50%; background:var(--cyan); box-shadow:0 0 8px var(--cyan);"></span>
+                Vision temps réel — annotation YOLO
+              </div>
+              <div style="display:flex; gap:8px; font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--muted);">
+                <span style="padding:3px 8px; border:1px solid var(--border); border-radius:5px;">écran <span style="color:var(--cyan);">phase_attaque · 96%</span></span>
+                <span style="padding:3px 8px; border:1px solid var(--border); border-radius:5px;">bâtiments <span style="color:var(--text);">77</span></span>
+                <span style="padding:3px 8px; border:1px solid var(--border); border-radius:5px;">deploy <span style="color:var(--text);">11/20</span></span>
+              </div>
+            </div>
+
+            <div style="flex:1; position:relative; background:#05080b; background-image:repeating-linear-gradient(135deg, rgba(255,255,255,0.02) 0 2px, transparent 2px 9px); overflow:hidden; min-height:240px;">
+              <div style="{{ scanStyle }}"></div>
+              <div style="position:absolute; left:44%; top:33%; width:16%; height:26%; border:1.5px solid var(--cyan); border-radius:3px; box-shadow:0 0 14px color-mix(in srgb, var(--cyan) 45%, transparent);">
+                <span style="position:absolute; top:-19px; left:-1px; background:var(--cyan); color:#04141a; font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:600; padding:1px 6px; border-radius:3px; white-space:nowrap;">dragon 0.94</span>
+              </div>
+              <div style="position:absolute; left:20%; top:52%; width:19%; height:22%; border:1.5px solid var(--green); border-radius:3px; box-shadow:0 0 14px color-mix(in srgb, var(--green) 40%, transparent);">
+                <span style="position:absolute; top:-19px; left:-1px; background:var(--green); color:#04140d; font-family:'IBM Plex Mono',monospace; font-size:10px; font-weight:600; padding:1px 6px; border-radius:3px; white-space:nowrap;">hôtel_de_ville 0.88</span>
+              </div>
+              <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted); letter-spacing:.06em;">FLUX VIDÉO — PLACEHOLDER 1280×720</div>
+              <div style="position:absolute; left:10px; bottom:8px; font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--muted);">● REC · WGC → WebSocket</div>
+            </div>
+
+            <div style="border-top:1px solid var(--border); padding:10px 14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-right:2px;">Troupes de l'agent</span>
+              <sc-for list="{{ troops }}" as="t" hint-placeholder-count="9">
+                <div style="display:flex; align-items:center; gap:6px; padding:4px 9px; background:var(--surface); border:1px solid var(--border); border-radius:6px; font-family:'IBM Plex Mono',monospace; font-size:11px;">
+                  <span style="color:var(--muted);">{{ t.name }}</span>
+                  <span style="color:var(--cyan); font-weight:600;">×{{ t.n }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; flex:0 0 auto;">
+            <section style="background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 16px;">
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:10px;">Ressources récoltées — session en cours</div>
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:34px; font-weight:700; color:var(--green); font-variant-numeric:tabular-nums; line-height:1;">1 240</div>
+              <div style="display:flex; gap:14px; margin-top:12px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);">
+                <span>or <span style="color:var(--text);">520</span></span>
+                <span>élixir <span style="color:var(--text);">480</span></span>
+                <span>é.noir <span style="color:var(--text);">240</span></span>
+              </div>
+            </section>
+            <section style="background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 16px;">
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:10px;">Total cumulé — toutes sessions</div>
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:34px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; line-height:1;">38 920</div>
+              <div style="margin-top:12px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--muted);">session 1 + session 2 + … + n</div>
+            </section>
+          </div>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:16px; min-height:0; overflow:auto; padding-right:2px;">
+
+          <section style="background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px; flex:0 0 auto;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+              <span style="font-weight:600; font-size:13px;">Instruction au LLM</span>
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:9.5px; font-weight:600; letter-spacing:.05em; color:var(--amber); border:1px solid color-mix(in srgb, var(--amber) 35%, transparent); background:color-mix(in srgb, var(--amber) 12%, transparent); padding:2px 7px; border-radius:999px;">⏳ À VENIR · V5.3</span>
+            </div>
+            <textarea placeholder="Décris l'objectif, la stratégie ou une correction pour l'agent…" style="width:100%; height:66px; resize:none; background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:'IBM Plex Sans',sans-serif; font-size:12.5px; padding:10px; line-height:1.5;"></textarea>
+            <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+              <button onClick="{{ noop }}" style="background:var(--purple); color:#fff; border:none; padding:8px 18px; border-radius:7px; font-family:'IBM Plex Sans',sans-serif; font-weight:600; font-size:12.5px; cursor:pointer;">Envoyer</button>
+            </div>
+          </section>
+
+          <section style="background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px; flex:0 0 auto;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+              <div style="display:flex; align-items:center; gap:8px; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--purple);">
+                <span style="width:8px; height:8px; border-radius:50%; background:var(--purple); box-shadow:0 0 8px var(--purple);"></span>
+                Cerveau LLM
+              </div>
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--green); display:flex; align-items:center; gap:5px;"><span style="width:6px; height:6px; border-radius:50%; background:var(--green); animation:pulseDot 1.8s ease-in-out infinite;"></span>en ligne</span>
+            </div>
+
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:6px;">Décision courante</div>
+            <div style="background:color-mix(in srgb, var(--green) 10%, transparent); border:1px solid color-mix(in srgb, var(--green) 32%, transparent); border-radius:8px; padding:10px 12px; font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; color:var(--green);">Attaquer camp Nord avec 2 golems</div>
+
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:14px 0 6px;">Réflexion</div>
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--muted); line-height:1.65;">Ressources suffisantes pour une offensive.<br>Camp Nord détecté en sous-effectif.<br>Priorité : éviter la perte de dragons.</div>
+
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px; font-family:'IBM Plex Mono',monospace; font-size:11px;">
+              <span style="color:var(--muted);">modèle <span style="color:var(--purple); font-weight:600;">mistral-7b</span></span>
+              <div style="display:flex; align-items:center; gap:7px;">
+                <span style="color:var(--muted);">confiance</span>
+                <div style="width:56px; height:5px; border-radius:3px; background:var(--track); overflow:hidden;"><div style="width:87%; height:100%; background:var(--purple);"></div></div>
+                <span style="color:var(--text); font-weight:600;">0.87</span>
+              </div>
+            </div>
+          </section>
+
+          <section style="background:var(--panel); border:1px solid var(--border); border-radius:12px; flex:1 1 auto; min-height:150px; display:flex; flex-direction:column; overflow:hidden;">
+            <div style="padding:12px 14px; border-bottom:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--muted);">Logs actions LLM</div>
+            <div style="flex:1; overflow:auto; padding:8px 4px;">
+              <sc-for list="{{ llmLogs }}" as="l" hint-placeholder-count="5">
+                <div style="display:flex; gap:10px; padding:6px 12px; font-family:'IBM Plex Mono',monospace; font-size:11.5px; align-items:baseline;">
+                  <span style="color:var(--cyan); flex:0 0 auto;">{{ l.time }}</span>
+                  <span style="color:var(--muted);">→</span>
+                  <span style="color:var(--text);">{{ l.text }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ============ COMBAT / RL ============ -->
+      <sc-if value="{{ isCombat }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex; flex-direction:column; gap:16px; height:100%; min-height:520px;">
+
+        <section style="background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 16px; flex:0 0 auto;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+            <div style="display:flex; align-items:center; gap:8px; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--blue);">
+              <span style="width:8px; height:8px; border-radius:50%; background:var(--blue); box-shadow:0 0 8px var(--blue);"></span>
+              Run actuel — combat RL (PPO)
+            </div>
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--muted);">206 épisodes · training_log_v4.json</span>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:14px;">
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px;">
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);">Étoile moyenne</div>
+              <div style="display:flex; align-items:baseline; gap:4px; margin:8px 0;"><span style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:700; color:var(--blue); font-variant-numeric:tabular-nums;">1.63</span><span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted);">/ 3</span></div>
+              <div style="height:4px; border-radius:2px; background:var(--track); overflow:hidden;"><div style="width:54%; height:100%; background:var(--blue);"></div></div>
+            </div>
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px;">
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);">% de 2★ et +</div>
+              <div style="display:flex; align-items:baseline; gap:4px; margin:8px 0;"><span style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:700; color:var(--blue); font-variant-numeric:tabular-nums;">53</span><span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:var(--muted);">%</span></div>
+              <div style="height:4px; border-radius:2px; background:var(--track); overflow:hidden;"><div style="width:53%; height:100%; background:var(--blue);"></div></div>
+            </div>
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px;">
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);">% de 3★</div>
+              <div style="display:flex; align-items:baseline; gap:4px; margin:8px 0;"><span style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:700; color:var(--blue); font-variant-numeric:tabular-nums;">12</span><span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:var(--muted);">%</span></div>
+              <div style="height:4px; border-radius:2px; background:var(--track); overflow:hidden;"><div style="width:12%; height:100%; background:var(--blue);"></div></div>
+            </div>
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px;">
+              <div style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);">Destruction moyenne</div>
+              <div style="display:flex; align-items:baseline; gap:4px; margin:8px 0;"><span style="font-family:'IBM Plex Mono',monospace; font-size:30px; font-weight:700; color:var(--blue); font-variant-numeric:tabular-nums;">70</span><span style="font-family:'IBM Plex Mono',monospace; font-size:14px; color:var(--muted);">%</span></div>
+              <div style="height:4px; border-radius:2px; background:var(--track); overflow:hidden;"><div style="width:70%; height:100%; background:var(--blue);"></div></div>
+            </div>
+          </div>
+        </section>
+
+        <div style="display:grid; grid-template-columns:1.7fr 1fr; gap:16px; flex:1; min-height:200px;">
+          <section style="background:var(--panel); border:1px solid var(--border); border-radius:12px; display:flex; flex-direction:column; overflow:hidden;">
+            <div style="padding:12px 14px; border-bottom:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--muted);">Derniers résultats d'attaque</div>
+            <div style="display:flex; padding:8px 16px; border-bottom:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);">
+              <span style="width:64px;">Run</span><span style="width:74px;">Étoiles</span><span style="width:90px;">Destruction</span><span style="flex:1; text-align:right;">Résultat</span>
+            </div>
+            <div style="flex:1; overflow:auto;">
+              <sc-for list="{{ attacks }}" as="a" hint-placeholder-count="8">
+                <div style="{{ a.rowStyle }}">
+                  <span style="width:64px; color:var(--muted);">{{ a.run }}</span>
+                  <span style="{{ a.starStyle }}">{{ a.stars }}</span>
+                  <span style="width:90px; color:var(--text); font-variant-numeric:tabular-nums;">{{ a.pct }}</span>
+                  <span style="{{ a.resStyle }}">{{ a.res }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+
+          <section style="background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 16px; display:flex; flex-direction:column;">
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--muted);">Reward moyen — PPO</div>
+            <div style="display:flex; align-items:baseline; gap:10px; margin:12px 0 4px;">
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:32px; font-weight:700; color:var(--blue); font-variant-numeric:tabular-nums;">0.72</span>
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; color:var(--green);">▲ +0.06</span>
+            </div>
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--muted); margin-bottom:14px;">sur les 30 derniers épisodes</div>
+            <div style="flex:1; display:flex; align-items:flex-end;">
+              <svg viewBox="0 0 300 90" preserveAspectRatio="none" style="width:100%; height:100%; min-height:90px;">
+                <polyline points="0,72 15,68 30,74 45,60 60,63 75,52 90,56 105,44 120,48 135,38 150,41 165,32 180,36 195,26 210,29 225,20 240,24 255,15 270,18 285,10 300,7" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline>
+                <circle cx="300" cy="7" r="4" fill="var(--blue)"></circle>
+              </svg>
+            </div>
+          </section>
+        </div>
+
+        <section style="background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 16px; flex:0 0 auto;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--muted);">Ancien run (run −1) — comparatif</span>
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--muted);">compare_baseline.py</span>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:14px;">
+            <sc-for list="{{ prevTiles }}" as="p" hint-placeholder-count="4">
+              <div style="background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px;">
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted);">{{ p.label }}</div>
+                <div style="display:flex; align-items:baseline; justify-content:space-between; margin-top:8px;">
+                  <span style="font-family:'IBM Plex Mono',monospace; font-size:22px; font-weight:700; color:var(--muted); font-variant-numeric:tabular-nums;">{{ p.value }}</span>
+                  <span style="{{ p.deltaStyle }}">{{ p.delta }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+      </div>
+      </sc-if>
+
+      <!-- ============ AGENT ============ -->
+      <sc-if value="{{ isAgent }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex; flex-direction:column; gap:16px;">
+
+        <section style="background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden;">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--border);">
+            <div style="display:flex; align-items:center; gap:8px; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--cyan);">
+              <span style="width:8px; height:8px; border-radius:50%; background:var(--cyan); box-shadow:0 0 8px var(--cyan);"></span>
+              État des CNN — perception en direct
+            </div>
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--muted);">cycle <span style="color:var(--text);">53 ms</span> / frame</span>
+          </div>
+          <div style="display:flex; padding:8px 16px; border-bottom:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);">
+            <span style="width:118px;">Statut</span><span style="flex:1;">Modèle</span><span style="width:200px;">Santé</span><span style="width:80px; text-align:right;">Inférence</span>
+          </div>
+          <sc-for list="{{ cnnModels }}" as="m" hint-placeholder-count="6">
+            <div style="{{ m.rowStyle }}">
+              <div style="width:118px; display:flex; align-items:center; gap:8px;">
+                <span style="{{ m.dotStyle }}"></span>
+                <span style="{{ m.statusTextStyle }}">{{ m.status }}</span>
+              </div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-weight:600; font-size:13px;">{{ m.name }}</div>
+                <div style="color:var(--muted); font-size:11px;">{{ m.role }}</div>
+              </div>
+              <div style="width:200px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted);">{{ m.health }}</div>
+              <div style="width:80px; text-align:right; font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; color:var(--text); font-variant-numeric:tabular-nums;">{{ m.ms }}</div>
+            </div>
+          </sc-for>
+        </section>
+
+        <section style="background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden;">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--border);">
+            <div style="display:flex; align-items:center; gap:8px; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--blue);">
+              <span style="width:8px; height:8px; border-radius:50%; background:var(--blue); box-shadow:0 0 8px var(--blue);"></span>
+              Scheduling des agents
+            </div>
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--muted);">4 / 6 actifs · AgentScheduler</span>
+          </div>
+          <div style="display:flex; padding:8px 16px; border-bottom:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);">
+            <span style="width:150px;">État</span><span style="flex:1;">Agent</span><span style="width:120px;">Priorité</span><span style="width:150px; text-align:right;">Dernière exécution</span>
+          </div>
+          <sc-for list="{{ agents }}" as="g" hint-placeholder-count="6">
+            <div style="{{ g.rowStyle }}">
+              <div style="width:150px;"><span style="{{ g.pillStyle }}">{{ g.state }}</span></div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-weight:600; font-size:13px;">{{ g.name }}</div>
+                <div style="color:var(--muted); font-size:11px;">{{ g.desc }}</div>
+              </div>
+              <div style="width:120px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--muted);">{{ g.prio }}</div>
+              <div style="width:150px; text-align:right; font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--text);">{{ g.last }}</div>
+            </div>
+          </sc-for>
+        </section>
+      </div>
+      </sc-if>
+
+      <!-- ============ JOURNAL ============ -->
+      <sc-if value="{{ isJournal }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex; flex-direction:column; gap:16px; height:100%; min-height:520px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; flex:0 0 auto;">
+          <section style="background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden;">
+            <div style="display:flex; align-items:center; gap:8px; padding:12px 14px; border-bottom:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--red);">
+              <span style="width:8px; height:8px; border-radius:50%; background:var(--red); box-shadow:0 0 8px var(--red);"></span>
+              Erreurs rencontrées
+            </div>
+            <div style="max-height:220px; overflow:auto; padding:6px 0;">
+              <sc-for list="{{ errors }}" as="e" hint-placeholder-count="3">
+                <div style="display:flex; gap:10px; padding:8px 14px; font-family:'IBM Plex Mono',monospace; font-size:11.5px; align-items:baseline; border-left:2px solid var(--red);">
+                  <span style="color:var(--red); flex:0 0 auto;">{{ e.time }}</span>
+                  <span style="color:var(--text);">{{ e.text }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+          <section style="background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden;">
+            <div style="display:flex; align-items:center; gap:8px; padding:12px 14px; border-bottom:1px solid var(--border); font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--amber);">
+              <span style="width:8px; height:8px; border-radius:50%; background:var(--amber); box-shadow:0 0 8px var(--amber);"></span>
+              Warnings rencontrés
+            </div>
+            <div style="max-height:220px; overflow:auto; padding:6px 0;">
+              <sc-for list="{{ warnings }}" as="w" hint-placeholder-count="4">
+                <div style="display:flex; gap:10px; padding:8px 14px; font-family:'IBM Plex Mono',monospace; font-size:11.5px; align-items:baseline; border-left:2px solid var(--amber);">
+                  <span style="color:var(--amber); flex:0 0 auto;">{{ w.time }}</span>
+                  <span style="color:var(--text);">{{ w.text }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </section>
+        </div>
+
+        <section style="background:var(--panel); border:1px solid var(--border); border-radius:12px; flex:1; min-height:180px; display:flex; flex-direction:column; overflow:hidden;">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--border);">
+            <div style="display:flex; align-items:center; gap:8px; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--purple);">
+              <span style="width:8px; height:8px; border-radius:50%; background:var(--purple); box-shadow:0 0 8px var(--purple);"></span>
+              Décisions du cerveau LLM — timeline
+            </div>
+            <span style="font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--muted);">session en cours · scrollable</span>
+          </div>
+          <div style="flex:1; overflow:auto; padding:6px 0;">
+            <sc-for list="{{ journalDecisions }}" as="d" hint-placeholder-count="10">
+              <div style="display:flex; gap:14px; padding:8px 16px; font-family:'IBM Plex Mono',monospace; font-size:12px; align-items:baseline;">
+                <span style="width:8px; height:8px; border-radius:50%; flex:0 0 auto; align-self:center; background:{{ d.color }};"></span>
+                <span style="color:var(--amber); flex:0 0 auto; font-variant-numeric:tabular-nums;">{{ d.time }}</span>
+                <span style="color:var(--text);">{{ d.text }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+      </div>
+      </sc-if>
+
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:&quot;100%&quot;},&quot;defaultTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;dark&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Affichage&quot;},&quot;startPage&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;overview&quot;,&quot;options&quot;:[&quot;overview&quot;,&quot;combat&quot;,&quot;agent&quot;,&quot;journal&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Affichage&quot;},&quot;showScanline&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Affichage&quot;}}">
+class Component extends DCLogic {
+  rootRef = React.createRef();
+  state = {
+    page: (this.props && this.props.startPage) || 'overview',
+    theme: (this.props && this.props.defaultTheme) || 'dark',
+  };
+
+  themeVars = {
+    dark: {
+      '--bg':'#0a0f14','--panel':'#111827','--surface':'#1a2234','--text':'#ffffff',
+      '--muted':'#8b96ad','--border':'rgba(255,255,255,0.08)','--border-strong':'rgba(255,255,255,0.16)',
+      '--green':'#00f5a0','--cyan':'#00d9ff','--blue':'#3a86ff','--purple':'#8338ec',
+      '--amber':'#ffb020','--red':'#ff4d6d','--track':'#1a2234',
+    },
+    light: {
+      '--bg':'#e8ecf3','--panel':'#ffffff','--surface':'#f2f5fb','--text':'#0a0f14',
+      '--muted':'#5a6478','--border':'rgba(10,15,20,0.10)','--border-strong':'rgba(10,15,20,0.20)',
+      '--green':'#00a86b','--cyan':'#0091b5','--blue':'#2563eb','--purple':'#6d28d9',
+      '--amber':'#b8791a','--red':'#e11d48','--track':'#d7deea',
+    },
+  };
+
+  componentDidMount() { this.applyTheme(this.state.theme); }
+
+  applyTheme(theme) {
+    const el = this.rootRef.current;
+    if (!el) return;
+    const vars = this.themeVars[theme];
+    Object.keys(vars).forEach(k => el.style.setProperty(k, vars[k]));
+  }
+
+  toggleTheme = () => {
+    const next = this.state.theme === 'dark' ? 'light' : 'dark';
+    this.setState({ theme: next });
+    this.applyTheme(next);
+  };
+
+  go = (id) => () => this.setState({ page: id });
+
+  navStyle(active) {
+    return {
+      display:'flex', alignItems:'center', gap:'11px', padding:'10px 11px',
+      borderRadius:'8px', cursor:'pointer', fontSize:'13.5px', fontWeight:500,
+      color: active ? 'var(--green)' : 'var(--muted)',
+      background: active ? 'color-mix(in srgb, var(--green) 12%, transparent)' : 'transparent',
+      borderLeft: active ? '2px solid var(--green)' : '2px solid transparent',
+      transition: 'background .15s, color .15s',
+    };
+  }
+
+  pill(color) {
+    return {
+      display:'inline-flex', alignItems:'center', gap:'6px', padding:'3px 10px',
+      borderRadius:'999px', fontFamily:"'IBM Plex Mono',monospace", fontSize:'11px',
+      fontWeight:600, letterSpacing:'.03em', color: color,
+      background:`color-mix(in srgb, ${color} 13%, transparent)`,
+      border:`1px solid color-mix(in srgb, ${color} 35%, transparent)`,
+    };
+  }
+
+  renderVals() {
+    const t = this.state.theme, p = this.state.page;
+
+    const nav = [
+      { id:'overview', label:"Vue d'ensemble", glyph:'◉' },
+      { id:'combat',   label:'Combat / RL',    glyph:'◈' },
+      { id:'agent',    label:'Agent',          glyph:'◆' },
+      { id:'journal',  label:'Journal',        glyph:'≡' },
+    ].map(n => {
+      const active = p === n.id;
+      return {
+        ...n,
+        onClick: this.go(n.id),
+        style: this.navStyle(active),
+        glyphStyle: { fontSize:'13px', width:'16px', textAlign:'center', color: active ? 'var(--green)' : 'var(--muted)' },
+      };
+    });
+
+    const rowBase = { display:'flex', alignItems:'center', gap:'12px', padding:'11px 16px', borderBottom:'1px solid var(--border)' };
+
+    const cnn = [
+      { name:"Classificateur d'écran", role:"détecte l'écran courant (village / attaque…)", health:'phase_attaque · 96%', ms:'8 ms',  color:'var(--green)', status:'ACTIF' },
+      { name:'YOLO bâtiments',         role:'bâtiments du village adverse',                 health:'77 objets',           ms:'12 ms', color:'var(--green)', status:'ACTIF' },
+      { name:'YOLO barre de troupes',  role:'icônes troupes / sorts / héros',               health:'9 classes',           ms:'6 ms',  color:'var(--green)', status:'ACTIF' },
+      { name:'YOLO troupes terrain',   role:'mes troupes déployées sur le champ',           health:'0 détection · sous-entraîné', ms:'14 ms', color:'var(--amber)', status:'ALERTE', warn:true },
+      { name:'YOLO murs',              role:'murs → zone de déploiement',                   health:'42 segments',         ms:'9 ms',  color:'var(--green)', status:'ACTIF' },
+      { name:'Digit CNN',              role:'compteurs de la barre (« ×12 »)',              health:'conf. 0.91',          ms:'4 ms',  color:'var(--green)', status:'ACTIF' },
+    ].map(m => ({
+      ...m,
+      rowStyle: { ...rowBase, background: m.warn ? 'color-mix(in srgb, var(--amber) 8%, transparent)' : 'transparent' },
+      dotStyle: { width:'9px', height:'9px', borderRadius:'50%', background:m.color, boxShadow:`0 0 8px ${m.color}`, flex:'0 0 auto', animation:'pulseDot 1.8s ease-in-out infinite' },
+      statusTextStyle: { fontFamily:"'IBM Plex Mono',monospace", fontSize:'10.5px', fontWeight:600, letterSpacing:'.03em', color:m.color },
+    }));
+
+    const agents = [
+      { name:'Combat / RL',      desc:'PPO — exécution des attaques',   state:'EN COURS',       color:'var(--green)', prio:'HAUTE',   last:'2★ / 70%' },
+      { name:'Château de clan',  desc:'demande de renfort de troupes',  state:'COOLDOWN 14:31', color:'var(--amber)', prio:'MOYENNE', last:'demande envoyée' },
+      { name:'Guerre de clan',   desc:'attaques de guerre',             state:'INACTIF',        color:'var(--muted)', prio:'—',       last:'—' },
+      { name:'Chat de clan',     desc:'pilotage en langage naturel',    state:'À VENIR',        color:'var(--muted)', prio:'V5.4',    last:'—' },
+      { name:'Village',          desc:'gestion des ressources',         state:'À VENIR',        color:'var(--muted)', prio:'V5.2',    last:'—' },
+      { name:'Jeux de clan',     desc:'défis de clan',                  state:'À VENIR',        color:'var(--muted)', prio:'V6',      last:'—' },
+    ].map(g => ({ ...g, rowStyle: rowBase, pillStyle: this.pill(g.color) }));
+
+    const attacksRaw = [
+      { run:'#206', s:2, pct:'70%',  res:'Victoire', c:'var(--green)', now:true },
+      { run:'#205', s:3, pct:'100%', res:'Parfait',  c:'var(--cyan)' },
+      { run:'#204', s:1, pct:'52%',  res:'Partiel',  c:'var(--amber)' },
+      { run:'#203', s:2, pct:'74%',  res:'Victoire', c:'var(--green)' },
+      { run:'#202', s:2, pct:'68%',  res:'Victoire', c:'var(--green)' },
+      { run:'#201', s:0, pct:'31%',  res:'Échec',    c:'var(--red)' },
+      { run:'#200', s:3, pct:'96%',  res:'Parfait',  c:'var(--cyan)' },
+      { run:'#199', s:2, pct:'61%',  res:'Victoire', c:'var(--green)' },
+    ];
+    const attacks = attacksRaw.map(a => ({
+      run:a.run, pct:a.pct, res:a.res,
+      stars: '★'.repeat(a.s) + '☆'.repeat(3 - a.s),
+      rowStyle: { display:'flex', alignItems:'center', padding:'10px 16px', borderBottom:'1px solid var(--border)',
+        fontFamily:"'IBM Plex Mono',monospace", fontSize:'12.5px',
+        background: a.now ? 'color-mix(in srgb, var(--blue) 8%, transparent)' : 'transparent' },
+      starStyle: { width:'74px', color:'var(--amber)', letterSpacing:'1px' },
+      resStyle: { flex:1, textAlign:'right', color:a.c, fontWeight:600 },
+    }));
+
+    const prevTiles = [
+      { label:'Étoile moyenne', value:'1.48', d:'+0.15', up:true },
+      { label:'% de 2★ et +',   value:'47%',  d:'+6',    up:true },
+      { label:'% de 3★',        value:'9%',   d:'+3',    up:true },
+      { label:'Destruction',    value:'66%',  d:'+4',    up:true },
+    ].map(x => ({
+      label:x.label, value:x.value, delta:(x.up?'▲ ':'▼ ')+x.d,
+      deltaStyle:{ fontFamily:"'IBM Plex Mono',monospace", fontSize:'11px', fontWeight:600, color: x.up ? 'var(--green)' : 'var(--red)' },
+    }));
+
+    const dtype = { info:'var(--cyan)', decision:'var(--purple)', ok:'var(--green)', warn:'var(--amber)' };
+    const journalDecisions = [
+      { time:'14:45:55', text:'observation du village',                       type:'info' },
+      { time:'14:46:02', text:'appel agent — château de clan',                type:'decision' },
+      { time:'14:47:23', text:'check ressources village — or 812k / élixir 640k', type:'info' },
+      { time:'14:48:10', text:'décision : lancer attaque farm (camp Nord)',   type:'decision' },
+      { time:'14:49:02', text:'sélection troupes : golem×2 + dragon×14',      type:'decision' },
+      { time:'14:50:31', text:'attaque terminée — 2★ / 70%',                  type:'ok' },
+      { time:'14:51:12', text:'récolte estimée : +1 240 (or, pierre, élixir)', type:'ok' },
+      { time:'14:52:40', text:'retour village — attente de cooldown',         type:'info' },
+      { time:'14:53:18', text:'scan barre de troupes — 9 classes détectées',  type:'info' },
+      { time:'14:54:02', text:'réflexion : ressources suffisantes, éviter perte dragons', type:'decision' },
+      { time:'14:55:20', text:'confiance Digit CNN faible sur 1 compteur',    type:'warn' },
+    ].map(d => ({ time:d.time, text:d.text, color: dtype[d.type] }));
+
+    return {
+      rootRef: this.rootRef,
+      noop: () => {},
+      toggleTheme: this.toggleTheme,
+      toggleKnobStyle: {
+        position:'absolute', top:'1px', left: t==='dark' ? '1px' : '21px',
+        width:'21px', height:'21px', borderRadius:'50%',
+        background: t==='dark' ? 'var(--green)' : 'var(--amber)',
+        transition:'left .2s ease, background .2s', boxShadow:'0 1px 4px rgba(0,0,0,.4)',
+      },
+      scanStyle: (this.props && this.props.showScanline === false) ? { display:'none' } : {
+        position:'absolute', left:0, right:0, top:0, height:'3px',
+        background:'linear-gradient(90deg, transparent, color-mix(in srgb, var(--cyan) 55%, transparent), transparent)',
+        animation:'scanMove 5s linear infinite',
+      },
+      isOverview: p==='overview', isCombat: p==='combat', isAgent: p==='agent', isJournal: p==='journal',
+      navItems: nav,
+      troops: [
+        {name:'golem',n:2},{name:'sorcier',n:8},{name:'sorcière',n:13},{name:'archère',n:2},
+        {name:'pekka',n:2},{name:'lance-bûche',n:1},{name:'rage',n:4},{name:'gel',n:2},{name:'soin',n:2},
+      ],
+      llmLogs: [
+        {time:'14:04:34', text:'déplacement — camp Nord'},
+        {time:'14:03:58', text:'récolte bois ×40'},
+        {time:'14:02:10', text:'scan du village adverse'},
+        {time:'14:01:22', text:'sélection troupes offensive'},
+        {time:'14:00:47', text:'ordre reçu du chat de clan'},
+      ],
+      cnnModels: cnn,
+      agents,
+      attacks,
+      prevTiles,
+      errors: [
+        {time:'14:02:11', text:'ADB timeout sur capture frame — retry OK'},
+        {time:'13:47:03', text:'YOLO troupes terrain : 0 détection (sous-entraîné)'},
+        {time:'13:12:54', text:'perte connexion émulateur — reconnecté'},
+      ],
+      warnings: [
+        {time:'14:03:58', text:'cooldown château non expiré'},
+        {time:'13:58:22', text:'confiance Digit CNN < 0.70 sur compteur'},
+        {time:'13:51:40', text:'latence frame > 60 ms'},
+        {time:'13:40:05', text:'zone de déploiement réduite (murs partiels)'},
+      ],
+      journalDecisions,
+    };
+  }
+}
+</script>
+</body>
+</html>

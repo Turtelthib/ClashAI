@@ -11,8 +11,14 @@ Historique chronologique des features livrées, du plus récent au plus ancien.
 
 ## V5.2 — Outillage & audit (en cours)
 
-> Préparatifs du cycle V5.2. La feature V5.2 elle-même (CNN UI + agents village/jeux de clan) reste à faire → [ROADMAP](ROADMAP.md).
+> Le **CNN UI est livré et branché** ; restent les **agents village / jeux de clan** → [ROADMAP](ROADMAP.md).
 
+- ✅ **CNN UI universel livré + branché** — le YOLO « boutons / éléments d'interface » (**124 classes**, mAP50 **0.957** / mAP50-95 **0.822**, imgsz 1280) reconnaît les boutons par leur apparence + leur **texte**. Matrice de confusion à **diagonale propre : aucune confusion bouton↔bouton** (les rares ratés partent en `background` = classes à 1-2 exemples). Seuil de conf optimal ~0.48 (courbe F1 = 0.83).
+  - `perception/ui_detector.py` : `UIDetector` à deux niveaux — `detect_raw()` → `{classe_cnn: [Detection]}` (brut, noms **français**, primitive des futurs agents village/GdC) et `detect()` → `{clé: (x,y,conf)}` (contrat `set_detector`). Noms lus **depuis le modèle** (`model.names`), jamais une liste en dur.
+  - **Désambiguïsation des boutons génériques par position** : `fermer`/`confirmer` apparaissent à plusieurs endroits ; pour une clé de calibration on prend l'instance **la plus proche** de sa position calibrée (`close_profil` haut-droite vs `close_popup` centre se démêlent sans classe dédiée).
+  - **Branché au démarrage** (`brain/core._load_modules`) : `set_detector(UIDetector())` si `weights/yolo_ui*.pt` présent, sinon **calibration seule** (aucune régression). Le YOLO se charge en **lazy** au 1er `detect()`. Le `find_button()` existant l'utilise sans qu'aucun appelant ne change — la bascule promise en un seul appel a tenu.
+  - Mapping clé↔classe (16 sûrs) : `find_match→trouver_partie_rapide`, `gdc_attack_target→attaquer_guerre`, `gdc_enemy_map→voir_enemis`, `gdc_ally_map→voir_allie`, `gdc_village_next/prev→village_suivant/precedent`… Clés ambiguës laissées au fallback (pas de tap au hasard).
+- ✅ **Abandon *state-dependent* (CNN)** — `env._surrender()` lit l'écran : troupes vivantes → `capituler` + `confirmer` (popup) ; aucune troupe → `terminer_bataille` (direct, sans popup). Remplace le double-tap en dur `ff_button`/`confirm_ff` ; la calibration reste le **filet** si détecteur absent / sous le seuil de confiance. 152 tests toujours verts.
 - ✅ **Prep CNN UI : point d'accès unique `find_button()`** — dérisque V5.2 **avant** d'entraîner le YOLO. Aucun changement de comportement (mêmes positions rendues), **~400 lignes de duplication supprimées**.
   - `perception/ui_buttons.py` : `find_button(name, screenshot=None)` essaie le détecteur (installé par `set_detector()`) puis retombe sur la position calibrée. Fallback couvrant **les quatre** cas d'échec : détecteur absent, bouton non détecté, confiance < 0.60, détecteur qui lève. Une inférence ratée ne doit jamais arrêter une navigation. Coordonnées converties en `int` (YOLO rend des flottants, ADB veut des entiers).
   - **La bascule V5.2 sera un seul `set_detector()` au démarrage**, zéro appelant à modifier — c'était tout l'objectif.

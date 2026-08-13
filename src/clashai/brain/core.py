@@ -72,6 +72,21 @@ class BrainCoreMixin:
         from clashai.navigation import game_loop
         self._models = game_loop.load_models()
 
+        # V5.2: branche le CNN UI universel. find_button() l'essaie d'abord et
+        # retombe sur la position calibrée si rien / confiance < seuil. Absent →
+        # calibration seule (aucune régression). Le modèle YOLO se charge en lazy
+        # au premier detect(), pas ici.
+        from clashai.perception import ui_buttons
+        from clashai.perception.ui_detector import (
+            _UI_WEIGHTS_CANDIDATES,
+            UIDetector,
+        )
+        if any(os.path.exists(p) for p in _UI_WEIGHTS_CANDIDATES):
+            ui_buttons.set_detector(UIDetector(verbose=self.verbose))
+            print(" CNN UI branché (find_button → détection, filet calibration)")
+        else:
+            print(" CNN UI absent (weights/yolo_ui.pt) → calibration seule")
+
         # Agent V4
         from clashai.combat.agent_v4 import PPOAgentV4
         self._agent = PPOAgentV4()
