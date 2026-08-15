@@ -10,5 +10,6 @@
 # ClanCastleAgent : le wrapper gère l'ordonnancement, ce package fait le travail.
 
 from clashai.village.collector import VillageCollector
+from clashai.village.upgrader import UpgradeResult, VillageUpgrader
 
-__all__ = ['VillageCollector']
+__all__ = ['VillageCollector', 'VillageUpgrader', 'UpgradeResult']

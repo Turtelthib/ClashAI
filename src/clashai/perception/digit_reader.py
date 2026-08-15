@@ -168,17 +168,20 @@ def _glyph_to_tensor(glyph_gray):
     return torch.from_numpy((g.astype(np.float32) / 255.0)).unsqueeze(0)  # (1,32,32)
 
 
-def read_count(crop_pil, min_conf=0.6):
-    """Read a troop-count badge crop into (int|None, confidence).
+def read_number(crop_pil, drop_leading_x=False, min_conf=0.6):
+    """Read pure digits from a crop into (int|None, confidence).
 
-    Segments the badge into digit glyphs, classifies each 0-9, reads left→right.
+    Segments the crop into digit glyphs, classifies each 0-9, reads left→right.
+    `drop_leading_x=True` for troop badges ("xNN"); False for plain numbers
+    (ressources, compteur d'ouvriers, prix d'upgrade — pas de 'x' de tête).
+
     Returns (None, conf) if the model is unavailable, nothing was segmented, or
-    the weakest glyph is below min_conf → the caller should fall back to EasyOCR.
+    the weakest glyph is below min_conf.
     """
     model = _load_model()
     if not model:
         return None, 0.0
-    glyphs = segment_glyphs(crop_pil)
+    glyphs = segment_glyphs(crop_pil, drop_leading_x=drop_leading_x)
     if not glyphs:
         return None, 0.0
     xs = torch.stack([_glyph_to_tensor(g) for g in glyphs]).to(_DEVICE)
@@ -193,6 +196,14 @@ def read_count(crop_pil, min_conf=0.6):
         return int(''.join(digits)), weakest
     except ValueError:
         return None, weakest
+
+
+def read_count(crop_pil, min_conf=0.6):
+    """Read a troop-count badge crop ("xNN") into (int|None, confidence).
+
+    Thin wrapper over read_number that drops the leading 'x' multiplier glyph.
+    """
+    return read_number(crop_pil, drop_leading_x=True, min_conf=min_conf)
 
 
 def crop_count_badge(img_pil, bbox, position='combat'):
