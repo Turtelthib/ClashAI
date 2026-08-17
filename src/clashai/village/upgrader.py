@@ -117,7 +117,10 @@ class VillageUpgrader:
         resources = reader.read_resources(img) if img is not None else {}
         price = reader.read_widget_number(img, PRICE_CLASS) if img is not None else None
 
-        # 4. décision d'affordabilité
+        # 4. décision d'affordabilité — la ressource qui paie est lue à l'écran
+        # (couleur de l'icône du prix) si l'appelant ne l'impose pas.
+        if resource_type is None and img is not None:
+            resource_type = reader.read_price_resource(img)
         decision = self._decide(price, resources, resource_type, confirm_decider)
         if decision is True:
             conf = self._find(detector, img, CONFIRM_CLASS)

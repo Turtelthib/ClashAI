@@ -94,6 +94,43 @@ def test_read_builders_none_when_unreadable(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Ressource d'un prix, par COULEUR de l'icone (pas de classe CNN dediee)
+# ---------------------------------------------------------------------------
+
+def _patch(rgb, size=(30, 30), bg=None):
+    """Carre de couleur `rgb`, optionnellement sur un fond `bg` (moitie droite)."""
+    im = Image.new('RGB', size, bg or rgb)
+    if bg is not None:
+        im.paste(Image.new('RGB', (size[0] // 2, size[1]), rgb), (0, 0))
+    return im
+
+
+def test_classify_resource_color_recognises_each_resource():
+    clf = widget_reader.WidgetReader.classify_resource_color
+    assert clf(_patch((245, 190, 45))) == 'or'
+    assert clf(_patch((225, 70, 195))) == 'elixir'
+    assert clf(_patch((70, 40, 85))) == 'elixir_noire'
+
+
+def test_classify_resource_color_ignores_green_button_background():
+    """L'icone rose sur le bouton vert de confirmation -> 'elixir'."""
+    clf = widget_reader.WidgetReader.classify_resource_color
+    assert clf(_patch((225, 70, 195), bg=(120, 200, 60))) == 'elixir'
+
+
+def test_classify_resource_color_none_on_unrelated_colors():
+    """Aucune ressource -> None (la decision est deferee, jamais devinee)."""
+    clf = widget_reader.WidgetReader.classify_resource_color
+    assert clf(_patch((120, 200, 60))) is None      # vert du bouton
+    assert clf(_patch((255, 255, 255))) is None     # blanc
+
+
+def test_read_price_resource_none_when_price_widget_absent():
+    reader = widget_reader.WidgetReader(detector=_FakeDetector({}))
+    assert reader.read_price_resource(_img()) is None
+
+
+# ---------------------------------------------------------------------------
 # Scaling ADB -> pixels image (le détecteur rend des coords ADB 1920x1080)
 # ---------------------------------------------------------------------------
 

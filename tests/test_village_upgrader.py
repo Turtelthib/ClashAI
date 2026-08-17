@@ -30,10 +30,12 @@ class _FakeDetector:
 
 
 class _FakeReader:
-    def __init__(self, builders=None, resources=None, price=None):
+    def __init__(self, builders=None, resources=None, price=None,
+                 price_resource=None):
         self._b = builders
         self._r = resources or {}
         self._p = price
+        self._pr = price_resource
 
     def read_builders(self, img):
         return self._b
@@ -43,6 +45,9 @@ class _FakeReader:
 
     def read_widget_number(self, img, cls):
         return self._p
+
+    def read_price_resource(self, img):
+        return self._pr
 
 
 def _run(detector, reader, taps, **kw):
@@ -121,6 +126,33 @@ def test_ok_when_confirm_decider_says_yes():
     r = _run(det, reader, taps, confirm_decider=lambda price, res: True)
     assert r.status == 'ok'
     assert (700, 950) in taps
+
+
+def test_price_resource_read_from_screen_makes_affordability_autonomous():
+    """Sans resource_type impose, la ressource est lue a l'ecran (couleur de
+    l'icone) -> l'upgrade se decide tout seul."""
+    taps = []
+    det = _FakeDetector({'ameliorer': (500, 900, 0.9),
+                         'confirmer_upgrade': (700, 950, 0.9)})
+    reader = _FakeReader(builders=(1, 6), price=1380000,
+                         resources={'elixir': 7646344},
+                         price_resource='elixir')
+    r = _run(det, reader, taps)                 # aucun resource_type fourni
+    assert r.status == 'ok'
+    assert (700, 950) in taps
+
+
+def test_price_resource_read_from_screen_can_refuse():
+    taps = []
+    det = _FakeDetector({'ameliorer': (500, 900, 0.9),
+                         'confirmer_upgrade': (700, 950, 0.9),
+                         'annuler': (300, 950, 0.9)})
+    reader = _FakeReader(builders=(1, 6), price=1380000,
+                         resources={'elixir': 100},
+                         price_resource='elixir')
+    r = _run(det, reader, taps)
+    assert r.status == 'cant_afford'
+    assert (700, 950) not in taps
 
 
 def test_builders_unreadable_does_not_block_the_flow():
