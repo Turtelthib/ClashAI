@@ -160,30 +160,19 @@ class ClashEnvV3:
         self._adb_tap = gl.adb_tap
         self._buttons = gl.BUTTONS
 
-        # Load calibrated UI positions (once)
-        try:
-            from clashai.navigation.calibrate_ui import get_position
-            self._ui = {
-                'chat_open': get_position('chat_open'),
-                'chat_close': get_position('chat_close_tap'),
-                'close_profil': get_position('close_profil'),
-                'close_menu': get_position('close_menu'),
-                'close_popup': get_position('close_popup'),
-                'gdc_return': get_position('gdc_return_home'),
-                'ff_button': get_position('ff_button'),
-                'confirm_ff': get_position('confirm_ff'),
-            }
-        except ImportError:
-            self._ui = {
-                'chat_open': (47, 400),
-                'chat_close': (1400, 400),
-                'close_profil': (1270, 90),
-                'close_menu': (1340, 95),
-                'close_popup': (1300, 100),
-                'gdc_return': (80, 780),
-                'ff_button': (1850, 550),
-                'confirm_ff': (700, 550),
-            }
+        # Positions d'UI figées à l'init.
+        # Le CNN UI n'aide pas ici (l'écran n'existe pas encore au moment de
+        # construire le dict) ; `find_button` sert de point d'accès unique et
+        # porte déjà les valeurs par défaut — plus de table de secours dupliquée.
+        from clashai.perception.ui_buttons import find_button
+        self._ui = {
+            'chat_close': find_button('chat_close_tap'),
+            'close_profil': find_button('close_profil'),
+            'close_menu': find_button('close_menu'),
+            'close_popup': find_button('close_popup'),
+            'gdc_return': find_button('gdc_return_home'),
+            'ff_button': find_button('ff_button'),
+        }
 
         # Episode state
         self._grid = None

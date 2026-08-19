@@ -48,15 +48,9 @@ class ClanChatMonitor:
         Sends a message in the clan chat via ADB.
         The chat MUST be open before calling this method.
         """
-        import subprocess
+        from clashai.perception.ui_buttons import find_button
 
-        try:
-            from clashai.navigation.calibrate_ui import get_position
-            chat_input_pos = get_position('chat_input')
-        except (ImportError, Exception):
-            chat_input_pos = (300, 1010)
-
-        _adb_tap(chat_input_pos[0], chat_input_pos[1])
+        _adb_tap(*find_button('chat_input'))
         time.sleep(0.5)
 
         # ADB input text: spaces become %s
@@ -74,13 +68,7 @@ class ClanChatMonitor:
                 print(f" WARNING: Text input error: {e}")
             return
 
-        try:
-            from clashai.navigation.calibrate_ui import get_position
-            send_pos = get_position('chat_send')
-        except (ImportError, Exception):
-            send_pos = (490, 1010)
-
-        _adb_tap(send_pos[0], send_pos[1])
+        _adb_tap(*find_button('chat_send'))
         time.sleep(0.5)
 
         if self.verbose:
@@ -238,12 +226,8 @@ class ClanChatMonitor:
 
     def close_chat(self):
         """Closes the chat by tapping outside."""
-        try:
-            from clashai.navigation.calibrate_ui import get_position
-            pos = get_position('chat_close_tap')
-        except ImportError:
-            pos = (1400, 400)
-        _adb_tap(pos[0], pos[1])
+        from clashai.perception.ui_buttons import find_button
+        _adb_tap(*find_button('chat_close_tap'))
         time.sleep(0.5)
         _adb_tap(960, 400)
         time.sleep(0.5)

@@ -5,6 +5,7 @@ import random
 import time
 
 from clashai.config import IDLE_BETWEEN_ATTACKS, IDLE_BETWEEN_ATTACKS_MAX
+from clashai.perception.ui_buttons import find_button
 
 
 class BrainNavigationMixin:
@@ -28,51 +29,35 @@ class BrainNavigationMixin:
             if state == 'village_home':
                 return True
 
-            # Contextual navigation
+            # Contextual navigation.
+            # Tout passe par find_button(key, screenshot=img) : le CNN UI cherche
+            # le bouton RÉELLEMENT à l'écran et, s'il ne trouve rien d'assez sûr,
+            # find_button retombe sur la position calibrée. Plus de try/except
+            # ImportError ni de coordonnées de secours en dur : find_button rend
+            # toujours une position.
             if state == 'resultats_attaque':
-                # Look for the green "Return" button
-                _img_cv = __import__('cv2').cvtColor(
-                    __import__('numpy').array(img),
-                    __import__('cv2').COLOR_RGB2BGR
-                )
-                for btn_y in [800, 760, 840, 720]:
-                    self._adb_tap(960, btn_y)
-                    time.sleep(0.3)
+                # Le bouton "Rentrer" est une classe du CNN. Avant, on tapait 4
+                # hauteurs à l'aveugle en espérant tomber dessus.
+                self._adb_tap(*find_button('return_home', screenshot=img))
                 time.sleep(1.5)
             elif state == 'chat_clan':
-                self._adb_tap(1400, 400)
+                self._adb_tap(*find_button('chat_close_tap', screenshot=img))
                 time.sleep(0.5)
                 self._adb_tap(960, 400)
                 time.sleep(1.5)
             elif state in ('gdc_ally', 'gdc_enemy', 'gdc_ended'):
-                try:
-                    from clashai.navigation.calibrate_ui import get_position
-                    self._adb_tap(*get_position('gdc_return_home'))
-                except ImportError:
-                    self._adb_tap(80, 780)
+                self._adb_tap(*find_button('gdc_return_home', screenshot=img))
                 time.sleep(1.5)
             elif state == 'profil':
-                try:
-                    from clashai.navigation.calibrate_ui import get_position
-                    self._adb_tap(*get_position('close_profil'))
-                except ImportError:
-                    self._adb_tap(1270, 90)
+                self._adb_tap(*find_button('close_profil', screenshot=img))
                 time.sleep(0.5)
                 self._adb_tap(1800, 500)
                 time.sleep(1.5)
             elif state == 'menu_boutique':
-                try:
-                    from clashai.navigation.calibrate_ui import get_position
-                    self._adb_tap(*get_position('close_menu'))
-                except ImportError:
-                    self._adb_tap(1340, 95)
+                self._adb_tap(*find_button('close_menu', screenshot=img))
                 time.sleep(1.5)
             elif state == 'popup_offre':
-                try:
-                    from clashai.navigation.calibrate_ui import get_position
-                    self._adb_tap(*get_position('close_popup'))
-                except ImportError:
-                    self._adb_tap(1300, 100)
+                self._adb_tap(*find_button('close_popup', screenshot=img))
                 time.sleep(1.5)
             elif state == 'chargement':
                 time.sleep(3)

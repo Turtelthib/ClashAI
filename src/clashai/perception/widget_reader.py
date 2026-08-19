@@ -4,16 +4,15 @@
 # Pattern unifié : le CNN UI LOCALISE le widget, le digit CNN LIT le nombre dedans.
 #   - ressources  : compteur_or / compteur_elixir / compteur_elixir_noire
 #   - ouvriers    : nombre_ouvrier  ("1/6" = libres/total)
-#   - prix upgrade : lu dans un crop fourni (écran de confirmation)
+#   - prix upgrade : prix_upgrade (écran de confirmation)
 #
-# On réutilise digit_reader (segment_glyphs + DigitCNN) — offline, rapide, zéro
-# dépendance externe. Ces classes CNN UI (compteur_*, nombre_ouvrier) arrivent
-# avec le prochain re-train du modèle ; d'ici là read_* rend simplement None /
-# {} (widget non détecté) sans lever.
+# On réutilise digit_reader — offline, rapide, zéro dépendance externe — mais par
+# son chemin WIDGET (composantes connexes), PAS celui des badges de troupes :
+# voir le bloc « Widgets d'UI : chiffres faux » de TROUBLESHOOTING.md.
 #
-# ⚠️ À VALIDER sur de vrais crops une fois les classes ajoutées : la police des
-# ressources diffère des badges de troupes → si la segmentation cale, on ajoute
-# quelques samples et on re-train le digit CNN (même pipeline).
+# Validé en conditions réelles (18 août 2026) : or, élixir, élixir noir, ouvriers
+# et labo lus correctement. Un widget non détecté ou une lecture refusée par le
+# garde-fou rend None / {} — jamais un chiffre deviné.
 
 from clashai.config import ADB_HEIGHT, ADB_WIDTH
 from clashai.perception import digit_reader
@@ -133,20 +132,13 @@ class WidgetReader:
         return self._read_ratio(screenshot_pil, BUILDERS_CLASS)
 
     def read_labs(self, screenshot_pil):
-        """(N, M) depuis `place_labo` ("0/1" = labo libre, "1/1" = occupé).
+        """(N, M) depuis `place_labo`, où **N = places DISPONIBLES**.
 
-        Sémantique exacte (quel nombre = libre) à figer en incr. 3 (agent labo) ;
-        ici on rend le ratio brut.
+        Même convention que les ouvriers ("1/6" = 1 libre sur 6) : "1/1" = labo
+        libre, "0/1" = recherche en cours. `VillageLab.is_free()` s'appuie
+        dessus ; ici on rend le ratio brut.
         """
         return self._read_ratio(screenshot_pil, LAB_CLASS)
-
-    # ---- nombre générique (ex. prix d'upgrade) -----------------------------
-
-    def read_number_in_box(self, screenshot_pil, bbox):
-        """Lit un entier dans une bbox image (x1,y1,x2,y2). (int|None)."""
-        crop = screenshot_pil.crop(bbox)
-        n, _ = digit_reader.read_number(crop, drop_leading_x=False)
-        return n
 
     # ---- quelle ressource paie le prix ? (couleur de l'icône) --------------
 

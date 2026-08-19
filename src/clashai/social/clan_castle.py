@@ -65,7 +65,6 @@ FULL_TEXT_WHITE_THRESHOLD = 200
 
 # Fallback position for "Send" (if not calibrated)
 # Estimated from screenshot: green button center-right of the popup
-FALLBACK_CONFIRM_POS = (850, 575)
 
 
 # =============================================================================
@@ -144,11 +143,8 @@ def _get_confirm_position():
     Position of the "Send" button in the confirmation popup.
     Centered popup → stable position → calibrate_ui.
     """
-    try:
-        from clashai.navigation.calibrate_ui import get_position
-        return get_position('cdc_confirmation')
-    except (ImportError, KeyError, FileNotFoundError):
-        return FALLBACK_CONFIRM_POS
+    from clashai.perception.ui_buttons import find_button
+    return find_button('cdc_confirmation')
 
 
 # =============================================================================
@@ -428,6 +424,10 @@ if __name__ == "__main__":
         req = _load_template('request')
         print(f" request.png: {'' if req is not None else 'ERROR: missing'}")
         confirm = _get_confirm_position()
-        is_fallback = confirm == FALLBACK_CONFIRM_POS
-        tag = "WARNING: fallback" if is_fallback else "calibrated"
+        # Depuis la migration vers find_button, la position vient de la
+        # calibration OU des defauts partages : comparer a une constante locale
+        # ne dit plus rien. On interroge directement le fichier de calibration.
+        from clashai.navigation.calibrate_ui import load_positions
+        calibrated = 'cdc_confirmation' in load_positions()
+        tag = "calibrated" if calibrated else "WARNING: valeur par defaut"
         print(f" cdc_confirmation: {confirm} ({tag})")

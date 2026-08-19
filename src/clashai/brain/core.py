@@ -9,6 +9,30 @@ from clashai.config import DEFAULT_BOT_NAME
 from clashai.paths import RL_WEIGHTS_DIR
 
 
+def load_first_compatible_checkpoint(agent, paths, exists=os.path.exists):
+    """Charge le premier checkpoint COMPATIBLE. Renvoie True si l'un a pris.
+
+    ⚠️ `PPOAgentV4.load()` **ne lève pas** sur un mismatch de dimensions : il
+    log un WARNING et renvoie **False**, en laissant le réseau fraîchement
+    initialisé. Ignorer ce retour faisait passer le bot en « Mode RL » avec une
+    politique **aléatoire** — strictement pire que l'heuristique censée servir
+    de repli, et sans rien d'anormal dans les logs à part un WARNING noyé.
+
+    Les dimensions changent dès qu'un rôle ou un sort est ajouté (obs/actions
+    dérivées du registre), donc ce cas est FRÉQUENT, pas exceptionnel.
+    """
+    for path in paths:
+        if not exists(path):
+            continue
+        try:
+            if agent.load(path):
+                return True
+        except (RuntimeError, ValueError) as e:
+            print(f" WARNING: checkpoint illisible ({os.path.basename(path)}) : {e}")
+        print(f" Checkpoint incompatible ignoré : {os.path.basename(path)}")
+    return False
+
+
 class BrainCoreMixin:
     """Lifecycle + module loading for ClashBrain."""
 
@@ -95,17 +119,9 @@ class BrainCoreMixin:
         weights_dir = RL_WEIGHTS_DIR
         best_path = os.path.join(weights_dir, 'agent_v4_best.pth')
         checkpoint_path = os.path.join(weights_dir, 'agent_v4_checkpoint.pth')
-        self._use_heuristic = True
 
-        for ckpt_path in [best_path, checkpoint_path]:
-            if os.path.exists(ckpt_path):
-                try:
-                    self._agent.load(ckpt_path)
-                    self._use_heuristic = False
-                    break
-                except RuntimeError as e:
-                    print(f" WARNING: Checkpoint incompatible ({os.path.basename(ckpt_path)}) : {e}")
-                    print(" Fallback mode heuristique")
+        self._use_heuristic = not load_first_compatible_checkpoint(
+            self._agent, [best_path, checkpoint_path])
 
         if self._use_heuristic:
             print(" Mode heuristique (pas de checkpoint compatible)")

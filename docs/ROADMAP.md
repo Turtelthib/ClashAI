@@ -3,11 +3,11 @@
 > **OBJECTIF FINAL** : une IA autonome intelligente qui joue comme un humain — joue, gère, recrute, s'améliore seule, et qu'on **pilote en langage naturel via le chat clan** (cerveau LLM local orchestrant des sous-agents).
 
 **Statut** : `[ ]` à faire · `[~]` partiel · `[x]` fait (détail → [CHANGELOG](CHANGELOG.md)) · 🚫 bloqué · 🔧 bug documenté → [TROUBLESHOOTING](TROUBLESHOOTING.md)
-**Mise à jour** : 18 août 2026 — CNN UI v4 · agent village complet (récolte, upgrades, labo) validé en réel · dons livrés.
+**Mise à jour** : 19 août 2026 — **V5.2 close côté code** (CNN UI, récolte, upgrades, labo, dons validés en réel ; migration `find_button` terminée). Reste 2 validations en jeu + le renfort dataset.
 
 📂 **Ce doc** = ce qui reste à faire. · ✅ Fait → [CHANGELOG.md](CHANGELOG.md) · 🔧 Fix détaillés → [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
-**Chiffres actuels (vérifiés dans le code)** : **18 sorts** · obs **70 dims** / **57 actions** · 63 entrées `troops.json` · CNN UI **140 classes** (v4) · CNN barre **83 classes** (v2) · **230 tests**.
+**Chiffres actuels (vérifiés dans le code)** : **18 sorts** · obs **70 dims** / **57 actions** · 63 entrées `troops.json` · CNN UI **140 classes** (v4) · CNN barre **83 classes** (v2) · **236 tests**.
 
 ---
 
@@ -40,7 +40,7 @@
 | V5.0 | ✅ Ph.1-2 | Push pipeline WGC → PerceptionThread (Ph.3-4 optionnelles) |
 | Refacto | ✅ | src/ layout + 13 splits (0 fichier >500L hors legacy) |
 | V5.1 | 🔄 | Brain + scheduler + 4 agents ✅ ; 3 résiduels (ADB cache, sanity-rescan, chat_unread) |
-| **V5.2** | 🔄 **en cours** | CNN UI ✅ (140 cl., mAP50 0.972) · Agent village : récolte ✅, upgrades ✅ **validés en réel** (le LLM décidera du QUOI) · labo ✅ **validé en réel** · dons ✅ **validés en réel** · jeux de clan 🚫 |
+| **V5.2** | 🔄 **en cours** | CNN UI ✅ (140 cl., mAP50 0.972) · Agent village : récolte ✅, upgrades ✅ **validés en réel** (le LLM décidera du QUOI) · labo ✅ **validé en réel** · dons ✅ **validés en réel** · **code V5.2 terminé** · jeux de clan 🚫 |
 | V5.3 | 💡 | **Cerveau LLM v1** (orchestrateur) : `LocalLLMBrain` décide quel agent lancer |
 | V5.4 | 💡 | **Pilotage chat + RAG complet** : parler à l'IA via le chat clan |
 | V6 | 💡 | **Dashboard web** (maquette ✅, build réel à faire) |
@@ -60,9 +60,9 @@
 - [x] **Lecture des widgets — validée en run réel (17 août 2026)** : `Ouvriers libres : 5` + `{'or': 2742878, 'elixir': 2876593, 'elixir_noire': 49739}`. Segmentation par composantes connexes, **dataset inchangé** (🔧 [TROUBLESHOOTING](TROUBLESHOOTING.md)).
 - [x] **Flux upgrade — début validé en réel** : bâtiment tapé → `ameliorer` détecté → tapé → **annulation sûre** (zéro dépense, garde-fou anti-gemmes confirmé).
 - [x] **Flux upgrade validé DE BOUT EN BOUT en réel (18 août 2026)** : capteurs → `ameliorer` → `prix_upgrade`/`confirmer_upgrade` détectés → prix 1 900 000 lu → ressource (or) identifiée → décision `ok` → **`--confirm` a réellement lancé l'amélioration**. 🔧 un faux `cant_afford` (couleur en RGB) corrigé au passage → [TROUBLESHOOTING](TROUBLESHOOTING.md).
-- [ ] **Récolte en réel** : vérifier la boucle re-scan sur un village plein.
+- [x] **Récolte validée en réel (19 août 2026)** : `Village : récolte effectuée (3 tap(s))` — la boucle re-scan s'arrête bien quand il n'y a plus d'icône.
 - [ ] **Abandon state-dependent** : `capituler`+`confirmer` vs `terminer_bataille`.
-- [ ] **Lecture digit CNN sur les gros nombres** (ressources ~10M) : police différente des badges de troupes → si la segmentation cale, ajouter des samples + re-train (même pipeline).
+- [x] **Digit CNN sur les gros nombres — validé (19 août 2026)** : 7 chiffres lus correctement en run réel (4 540 057 · 3 919 089 · 2 742 878). La crainte d'une police différente des badges de troupes ne s'est pas matérialisée — le chemin widget (composantes connexes) la gère.
 
 ---
 
@@ -73,7 +73,7 @@
 > CNN UI **livré** (détecteur universel de boutons) + agents à base de règles. Détail du fait → [CHANGELOG](CHANGELOG.md).
 
 **CNN UI** — le socle est en place (`UIDetector` branché au démarrage, `find_button()` = point d'accès unique).
-- [ ] **Migrer les appelants restants vers `find_button()`** (17 appels directs à `get_position` + 18 taps en dur hors JSON) : retraite → dialogues confirmer/annuler → demander château → menus bâtiment. Sans urgence : ils marchent déjà via la calibration.
+- [x] **Migration vers `find_button()` terminée (19 août 2026)** : **plus aucun `get_position()` direct** hors de la calibration elle-même. Les `try/except ImportError` avec tables de coordonnées de secours dupliquées sont supprimés (`find_button` ne lève jamais et porte déjà les défauts). **`brain/navigation` passe au CNN** (`screenshot=img`) : le retour au village tape le vrai bouton détecté — notamment `rentrer` sur l'écran de résultats, où l'on tapait **4 hauteurs à l'aveugle**. Ailleurs, migration **neutre** (sans screenshot) : vérifié `find_button(k) == get_position(k)` sur les 11 clés.
 - [ ] **Renfort dataset** : classes rares (1-2 exemples) ratées, confondues avec `background` → ajouter des captures des cas ratés.
 
 **Agent village** (`village/`, `VillageAgent`, règles ; clique via `UIDetector`) — par incréments :
@@ -81,10 +81,10 @@
 - [x] **Incr. 2 — Upgrades (mécanisme complet, validé en réel)** : `widget_reader` (CNN localise → digit CNN lit) + `VillageUpgrader` (gating ouvriers → `ameliorer` → confirmation → affordabilité → `confirmer_upgrade`/`annuler`). Sûr par défaut (anti-gemmes). **Reste au LLM de décider QUOI améliorer** (V5.3) — les outils sont prêts.
 - [x] **Incr. 3 — Labo (validé en réel, 18 août 2026)** : `village/lab.py` (`VillageLab`) — labo localisé par le **CNN bâtiments** (aucune coordonnée en dur) · `rechercher` ouvre la grille · les cartes sont **nommées par le CNN barre de troupes** et triées couleur/gris par saturation · la confirmation est **déléguée à `VillageUpgrader.confirm_step`** (garde-fou anti-gemmes partagé). Run réel : 7 améliorables, sapeur cliqué, annulation sûre — puis **`--confirm --troupe gobelin` a réellement lancé la recherche**, prix et troupes corrects dans les logs. 🐛 prix **rouge** (solde insuffisant) illisible → masque étendu + garde-fou autoritatif `price_is_red`. Démo `tools/debug/village_lab_demo.py` (`--scan`). 16 tests.
   - [x] **CNN barre de troupes validé sur l'écran labo** : 6 vignettes reconnues (conf 0.81-0.94) — `geant`, `barbare`, `sapeur`, `guerrisseuse`, `gobelin`, `mineur`. **Aucun labeling nécessaire.**
-  - [ ] **Lecture du prix SUR LA CARTE imparfaite** (3/6 justes, 1 faux, 2 illisibles). Sans gravité : ce prix ne sert qu'à *choisir* — la décision d'achat lit le prix **autoritatif** de l'écran de confirmation. À affiner avec la capture annotée (`--scan`).
+  - [x] **Prix des cartes du labo : résolu (19 août 2026)**, confirmé en réel. Les 3 lectures ratées étaient les prix **non payables**, donc écrits en **rouge** → invisibles pour l'ancien masque « texte blanc ». Les correctifs faits depuis (**composantes connexes** + **masque rouge**) portent sur ce même chemin `read_widget_number` et l'ont réparé sans travail dédié. Rien à cadrer, rien à re-labelliser.
   - [x] **`rechercher` renforcé (CNN UI v4, 18 août 2026)** : mAP50 0.972, F1 **0.91** (pic à conf 0.635 — le seuil d'action 0.60 tombe pile dessus). 140 classes, les 28 utilisées par le code présentes. → **flux labo complet à re-tester**.
   - [x] **Re-train barre de troupes déployé (18 août 2026)** : **83 classes** (79 → 83). Le sort **`colere`**, jusque-là pré-enregistré mais absent du CNN (donc **inerte**), est désormais reconnu → il s'active tout seul : **18 sorts**, obs **69→70**, actions **56→57**. Le design « registre ∩ classes CNN » a fonctionné exactement comme prévu, sans une ligne de code. ⚠️ **Re-train RL requis** — mais aucune perte : tous les checkpoints existants étaient déjà en 68/51, donc périmés avant ce changement.
-- [~] **Incr. 4 — Dons (code livré, à valider en réel)** : `social/donations.py` (`DonationManager`) — `find_donate_buttons()` ne garde que les `donner` **actifs** (les demandes déjà satisfaites ont un bouton grisé → filtre par saturation, comme les sorts) · `list_donatable()` nomme les cartes du pop-up via le **CNN barre de troupes** · `donate_to_request()` exécute. Démo `tools/debug/donations_demo.py` (`--scan` = lecture seule). 10 tests.
+- [x] **Incr. 4 — Dons (validé en réel, 19 août 2026)** : `social/donations.py` (`DonationManager`) — boutons `donner` **actifs** seulement (les demandes satisfaites sont grisées) · cartes du pop-up nommées par le CNN barre de troupes · **géométrie du pop-up confirmée** (le filtre `min_x` sépare bien les cartes à donner des icônes de la demande) · dons **répartis** entre les troupes proposées. Run réel : chat ouvert, onglet gratuit sélectionné, 6 dons effectués. Démo `tools/debug/donations_demo.py` (`--scan`). 18 tests.
   - 🛡️ **Sécurité gemmes** : le pop-up a deux onglets, `dons_normaux` (gratuit) et `dons_gemme` (**coûte des gemmes**). On ne *devine* pas lequel est actif : on **tape explicitement `dons_normaux`** (gratuit, idempotent) et on **abandonne sans rien donner** s'il est introuvable. `dons_gemme` n'est jamais tapé — testé même quand il est détecté avec une confiance supérieure.
   - [x] **Validé en réel (18 août 2026)** : chat ouvert, 1 demande détectée, onglet gratuit sélectionné, **6 dons effectués**.
   - 📌 **Filtrage par icônes abandonné** : quand une demande verrouille des troupes, **le jeu l'impose déjà** (les autres cartes sont grisées) → filtrer par-dessus n'ajoute rien et peut retrancher à tort. `read_request()` reste un **capteur informatif** (utile au LLM) ; le vrai besoin est l'OCR du message (→ V5.4).

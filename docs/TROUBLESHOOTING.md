@@ -23,6 +23,42 @@ Si un de ces problèmes réapparaît, relire le bloc correspondant avant de re-d
 - [Widgets d'UI : chiffres faux (icônes lues comme des chiffres)](#-widgets-dui--chiffres-faux)
 - [Faux « pas les moyens » : ressource d'un prix mal identifiée (RGB vs HSV)](#-faux-pas-les-moyens--ressource-mal-identifiée)
 - [Kaggle « Kernel died » à l'entraînement (auto-batch)](#-kaggle--kernel-died--à-lentraînement)
+- [« Mode RL » avec une politique ALÉATOIRE (checkpoint périmé)](#-mode-rl-avec-une-politique-aléatoire)
+
+---
+
+## 🔧 « Mode RL » avec une politique aléatoire
+
+> Le bot annonce « Mode RL (checkpoint chargé) » alors que le checkpoint **n'a pas été chargé**. Il attaque avec un réseau **fraîchement initialisé** — c'est-à-dire au hasard — au lieu de l'heuristique prévue comme repli.
+
+**Symptômes** *(run réel, 19 août 2026)*
+Deux lignes contradictoires qui se suivent au démarrage :
+```
+WARNING: checkpoint incompatible avec l'archi actuelle (dims changees) -> entrainement a neuf.
+ Mode RL (checkpoint chargé)
+```
+Rien d'autre d'anormal. Les attaques partent, elles sont juste **mauvaises**, sans raison visible.
+
+**Cause**
+`PPOAgentV4.load()` **ne lève pas** sur un mismatch de dimensions : il attrape l'exception, log un WARNING et **renvoie `False`**, en laissant le réseau non entraîné. Or `brain/core` **ignorait la valeur de retour** et n'attrapait qu'une `RuntimeError` qui ne remonte jamais :
+
+```python
+self._agent.load(ckpt_path)   # renvoie False — ignoré
+self._use_heuristic = False   # passé en RL quand même
+```
+
+⚠️ **Ce cas est FRÉQUENT, pas exceptionnel** : l'obs et les actions sont **dérivées du registre**, donc ajouter un rôle (`clean` : 68/51 → 69/56) ou un sort (`colere` : 69/56 → 70/57) périme *tous* les checkpoints.
+
+**Fix**
+`brain/core.load_first_compatible_checkpoint(agent, paths)` — fonction **pure et testable** qui respecte la valeur de retour, essaie les checkpoints dans l'ordre, et renvoie `False` si aucun n'a pris. Le mode heuristique est alors correctement activé.
+
+**Pièges**
+- ⚠️ **Un `load()` qui renvoie un booléen au lieu de lever demande une vérification explicite.** Le `try/except` donnait une fausse impression de sécurité.
+- ⚠️ Une politique aléatoire **ne crashe pas** : elle dégrade. Sans lecture attentive des logs de démarrage, ça peut tourner longtemps.
+- ⚠️ Après tout changement de rôle/sort, **vérifier les dims** (`docs/baselines.md`) et refaire une baseline.
+
+**Tests**
+- `tests/test_checkpoint_selection.py` (6) : `load()` → False ne doit pas activer le RL (le bug), repli sur le checkpoint suivant, fichiers absents ignorés, `load()` qui lève attrapé.
 
 ---
 

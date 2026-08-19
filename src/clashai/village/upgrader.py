@@ -18,26 +18,25 @@
 # vient soit d'un `resource_type` + prix lisible, soit d'un `confirm_decider`
 # fourni par l'appelant (LLM / démo).
 #
-# Boutons `ameliorer` / `confirmer` / `annuler` : classes déjà dans le CNN UI
-# (124). Prix : classe `prix_upgrade` à AJOUTER au dataset (lue comme les
-# compteurs) ; d'ici là le prix est None → décision déférée (annulation sûre).
+# Toutes les classes nécessaires sont dans le CNN UI : `ameliorer`, `annuler`,
+# `confirmer_upgrade` (le bouton de confirmation avec prix) et `prix_upgrade`
+# (le chiffre, lu par le digit CNN). Flux validé de bout en bout en réel.
 
 import time
 from dataclasses import dataclass, field
 
-# Confiance minimale pour agir sur un bouton détecté.
+from clashai.config import ADB_HEIGHT, ADB_WIDTH
 from clashai.perception.ui_buttons import DETECTOR_MIN_CONFIDENCE as _MIN_CONF
 
-# Classes CNN de l'écran de confirmation (à ajouter au dataset) :
-#   - confirmer_upgrade : LE bouton de confirmation avec le prix (labo + bâtiment),
-#     distinct du `ameliorer` du menu et du `confirmer` générique. On le TAPE.
-#   - prix_upgrade      : box serrée sur le CHIFFRE du prix. On la LIT (digit CNN).
+# _MIN_CONF = confiance minimale pour agir sur un bouton détecté.
+
+# `confirmer_upgrade` = LE bouton de confirmation avec le prix (labo + bâtiment),
+# distinct du `ameliorer` du menu et du `confirmer` générique. On le TAPE ; le
+# prix, lui, est lu par WidgetReader.read_price_number (qui porte le garde-fou
+# anti-confusion avec les compteurs du HUD).
 CONFIRM_CLASS = 'confirmer_upgrade'
-# (le prix lui-même est lu par WidgetReader.read_price_number, qui possède le
-#  garde-fou anti-confusion avec les compteurs du HUD)
 
 # Tap neutre pour fermer un menu de bâtiment (ciel en haut, sans bouton).
-from clashai.config import ADB_HEIGHT, ADB_WIDTH  # noqa: E402
 _NEUTRAL_TAP = (ADB_WIDTH // 2, int(ADB_HEIGHT * 0.15))
 
 # Délais laissant l'UI s'ouvrir (menu bâtiment / écran de confirmation).
@@ -105,7 +104,7 @@ class VillageUpgrader:
         # `ressources={}` alors qu'ils étaient bien détectés). Le solde ne bouge
         # pas entre les deux écrans, donc la lecture du village fait foi.
         img = screenshot_fn()
-        self._dump(img, '1_village')
+        self._dump(img, 'upgrade_1_village')
         builders = reader.read_builders(img) if img is not None else None
         resources = reader.read_resources(img) if img is not None else {}
         if builders is not None and builders[0] <= 0:
@@ -116,7 +115,7 @@ class VillageUpgrader:
         tap_fn(*target_xy)
         time.sleep(_D_MENU)
         img = screenshot_fn()
-        self._dump(img, '2_menu_batiment')
+        self._dump(img, 'upgrade_2_menu_batiment')
         hit = self._find(detector, img, 'ameliorer')
         if hit is None:
             tap_fn(*_NEUTRAL_TAP)          # referme le menu bâtiment
@@ -145,7 +144,7 @@ class VillageUpgrader:
         resources = {} if resources is None else resources
 
         img = screenshot_fn()
-        self._dump(img, '3_confirmation')
+        self._dump(img, 'upgrade_3_confirmation')
         # read_price_number, pas read_widget_number : il écarte une détection de
         # prix qui recouvrirait un compteur du HUD (sinon on lirait le solde
         # comme prix → achat confirmé à tort).
@@ -195,9 +194,11 @@ class VillageUpgrader:
             return
         import os
         os.makedirs(self._debug_dir, exist_ok=True)
-        path = os.path.join(self._debug_dir, f'upgrade_{step}.png')
+        # `step` porte déjà son contexte (le labo passe 'lab_…') : pas de
+        # préfixe en dur, sinon on obtient des 'upgrade_lab_1_village.png'.
+        path = os.path.join(self._debug_dir, f'{step}.png')
         try:
-            img.save(os.path.join(self._debug_dir, f'upgrade_{step}_raw.png'))
+            img.save(os.path.join(self._debug_dir, f'{step}_raw.png'))
             self._det().annotate(img, path)
             if self.verbose:
                 from clashai.config.logging import pp

@@ -23,7 +23,7 @@ CHAT_ZONE_BOTTOM = 980
 def _get_chat_button_pos():
     """Chat-open button position — calibrated via calibrate_ui, with fallback."""
     try:
-        from clashai.navigation.calibrate_ui import get_position
-        return get_position('chat_open')
+        from clashai.perception.ui_buttons import find_button
+        return find_button('chat_open')
     except ImportError:
         return (47, 400)

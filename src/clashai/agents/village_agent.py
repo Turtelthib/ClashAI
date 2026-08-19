@@ -66,7 +66,6 @@ class VillageAgent(BaseAgent):
 
 if __name__ == "__main__":
     from clashai.agents.scheduler import AgentScheduler
-
     from clashai.perception.ui_detector import Detection
 
     class _FakeDetector:

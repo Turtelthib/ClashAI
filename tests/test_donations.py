@@ -7,7 +7,6 @@ doit JAMAIS etre tape, et rien n'est donne tant que l'onglet GRATUIT
 (`dons_normaux`) n'a pas ete trouve ET selectionne.
 """
 
-import numpy as np
 import pytest
 from PIL import Image
 

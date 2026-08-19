@@ -233,7 +233,8 @@ class DonationManager:
             if not cards:
                 break                      # pop-up vide ou refermé = demande servie
 
-            pick = (choose or self._least_donated)(cards, donated)                 if choose is None else choose(cards)
+            pick = (choose(cards) if choose is not None
+                    else self._least_donated(cards, donated))
             if pick is None:
                 break
             name, px, py = pick
