@@ -105,7 +105,7 @@ def main():
     models = game_loop.load_models()
     bar = models.get('troop_bar_detector')
     if bar is None:
-        print("ERROR: TroopBarDetector not loaded. Check weights/yolo_troupes_barre/troop_bar.pt")
+        print("ERROR: TroopBarDetector not loaded. Check weights/yolo_troop_bar/yolo_troop_bar.pt")
         sys.exit(1)
     print(f" → loaded ({len(bar.model.names)} classes)")
 

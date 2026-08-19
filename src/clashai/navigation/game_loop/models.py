@@ -87,13 +87,13 @@ def load_models():
         pp(f"WARNING: yolo_walls not found at {walls_path} — deploy zone will use building hull fallback", tag='warning')
 
     # --- 5) YOLO Troop Bar Detector ---
-    troop_bar_path = os.path.join(WEIGHTS_DIR, 'yolo_troupes_barre', 'troop_bar.pt')
+    troop_bar_path = os.path.join(WEIGHTS_DIR, 'yolo_troop_bar', 'yolo_troop_bar.pt')
     if os.path.exists(troop_bar_path):
         from clashai.perception.troop_bar_detector import TroopBarDetector
         models['troop_bar_detector'] = TroopBarDetector(troop_bar_path)
     else:
         models['troop_bar_detector'] = None
-        print("WARNING: troop_bar.pt not found — using template matching fallback")
+        print("WARNING: yolo_troop_bar.pt not found — using template matching fallback")
 
     # --- 6) Async perception thread ---
     from clashai.perception.perception_thread import PerceptionThread

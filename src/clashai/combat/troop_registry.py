@@ -132,7 +132,7 @@ def cnn_class_names():
         return _CNN_CLASSES
     try:
         from clashai.paths import WEIGHTS_DIR
-        p = os.path.join(WEIGHTS_DIR, 'yolo_troupes_barre', 'model_artifacts.json')
+        p = os.path.join(WEIGHTS_DIR, 'yolo_troop_bar', 'model_artifacts.json')
         with open(p, encoding='utf-8') as f:
             _CNN_CLASSES = set(json.load(f).get('names', []))
     except Exception:

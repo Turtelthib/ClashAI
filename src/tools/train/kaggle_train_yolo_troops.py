@@ -40,11 +40,37 @@ def _find(base, candidates):
     return None
 
 
+
+def _check_gpu():
+    """Refuse de demarrer sans GPU. Sans accelerateur, Kaggle bascule sur CPU :
+    l'entrainement devient inutilisable ET la RAM sature -> le kernel meurt
+    ~50 s apres << Starting training >>, sans aucune trace Python. Vecu en vrai,
+    et le message d'erreur ne dit rien d'utile -> on verifie explicitement."""
+    try:
+        import torch
+    except ImportError:
+        print("ATTENTION: torch indisponible, impossible de verifier le GPU.")
+        return True
+    if torch.cuda.is_available():
+        print(f"GPU OK : {torch.cuda.get_device_name(0)}")
+        return True
+    print("=" * 70)
+    print("ARRET : AUCUN GPU DETECTE.")
+    print("  Kaggle -> panneau de droite -> Session options -> Accelerator")
+    print("  -> choisir 'GPU T4 x2' (ou P100), puis relancer.")
+    print("  Sans GPU : entrainement inutilisable + kernel tue faute de RAM.")
+    print("=" * 70)
+    return False
+
+
 def main():
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-U", "ultralytics"],
                    check=False)
     import yaml
     from ultralytics import YOLO
+
+    if not _check_gpu():
+        return
 
     if not os.path.isdir(DATASET_DIR):
         print(f"ERREUR: DATASET_DIR introuvable : {DATASET_DIR}")

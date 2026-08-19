@@ -33,7 +33,8 @@ from clashai.perception.ui_buttons import DETECTOR_MIN_CONFIDENCE as _MIN_CONF
 #     distinct du `ameliorer` du menu et du `confirmer` générique. On le TAPE.
 #   - prix_upgrade      : box serrée sur le CHIFFRE du prix. On la LIT (digit CNN).
 CONFIRM_CLASS = 'confirmer_upgrade'
-PRICE_CLASS = 'prix_upgrade'
+# (le prix lui-même est lu par WidgetReader.read_price_number, qui possède le
+#  garde-fou anti-confusion avec les compteurs du HUD)
 
 # Tap neutre pour fermer un menu de bâtiment (ciel en haut, sans bouton).
 from clashai.config import ADB_HEIGHT, ADB_WIDTH  # noqa: E402
@@ -58,10 +59,13 @@ class UpgradeResult:
 class VillageUpgrader:
     """Ouvre un bâtiment et lance son amélioration si les conditions sont là."""
 
-    def __init__(self, detector=None, reader=None, verbose=True):
+    def __init__(self, detector=None, reader=None, verbose=True, debug_dir=None):
         self._detector = detector
         self._reader = reader
         self.verbose = verbose
+        # Si renseigné, chaque étape y dépose une capture ANNOTÉE (boîtes + classes)
+        # → on voit exactement l'écran que le bot regarde quand un bouton manque.
+        self._debug_dir = debug_dir
 
     def _det(self):
         if self._detector is None:
@@ -96,47 +100,110 @@ class VillageUpgrader:
         detector, reader = self._det(), self._rdr()
 
         # 1. constructeur libre ? (gating proactif fiable)
+        # On lit AUSSI les ressources ICI : l'écran de confirmation assombrit le
+        # village, ce qui rend les compteurs illisibles (constaté en run réel —
+        # `ressources={}` alors qu'ils étaient bien détectés). Le solde ne bouge
+        # pas entre les deux écrans, donc la lecture du village fait foi.
         img = screenshot_fn()
+        self._dump(img, '1_village')
         builders = reader.read_builders(img) if img is not None else None
+        resources = reader.read_resources(img) if img is not None else {}
         if builders is not None and builders[0] <= 0:
-            return self._log(UpgradeResult('no_builder', builders=builders))
+            return self._log(UpgradeResult('no_builder', builders=builders,
+                                           resources=resources))
 
         # 2. ouvrir le bâtiment → chercher le bouton `ameliorer`
         tap_fn(*target_xy)
         time.sleep(_D_MENU)
         img = screenshot_fn()
+        self._dump(img, '2_menu_batiment')
         hit = self._find(detector, img, 'ameliorer')
         if hit is None:
             tap_fn(*_NEUTRAL_TAP)          # referme le menu bâtiment
-            return self._log(UpgradeResult('not_upgradeable', builders=builders))
+            return self._log(UpgradeResult('not_upgradeable', builders=builders,
+                                           resources=resources))
         tap_fn(int(hit[0]), int(hit[1]))
         time.sleep(_D_CONFIRM)
 
-        # 3. écran de confirmation : prix + ressources
-        img = screenshot_fn()
-        resources = reader.read_resources(img) if img is not None else {}
-        price = reader.read_widget_number(img, PRICE_CLASS) if img is not None else None
+        # 3-4. écran de confirmation : prix + décision (étape partagée avec le labo)
+        return self._log(self.confirm_step(
+            screenshot_fn, tap_fn, resources=resources, builders=builders,
+            resource_type=resource_type, confirm_decider=confirm_decider))
 
-        # 4. décision d'affordabilité — la ressource qui paie est lue à l'écran
-        # (couleur de l'icône du prix) si l'appelant ne l'impose pas.
+    def confirm_step(self, screenshot_fn, tap_fn, resources=None, builders=None,
+                     resource_type=None, confirm_decider=None) -> UpgradeResult:
+        """Écran de confirmation → décision → `confirmer_upgrade` ou `annuler`.
+
+        Partagé par l'upgrade de bâtiment ET la recherche au labo : les deux
+        aboutissent au MÊME écran (`prix_upgrade` + `confirmer_upgrade`), donc
+        le garde-fou anti-gemmes n'existe qu'à un seul endroit.
+
+        `resources` doit être lu AVANT l'ouverture du pop-up (il assombrit le
+        village et rend les compteurs illisibles).
+        """
+        detector, reader = self._det(), self._rdr()
+        resources = {} if resources is None else resources
+
+        img = screenshot_fn()
+        self._dump(img, '3_confirmation')
+        # read_price_number, pas read_widget_number : il écarte une détection de
+        # prix qui recouvrirait un compteur du HUD (sinon on lirait le solde
+        # comme prix → achat confirmé à tort).
+        price = reader.read_price_number(img) if img is not None else None
+
+        # ⚠️ PRIORITAIRE : un prix écrit en ROUGE = le JEU signale un solde
+        # insuffisant. Signal autoritatif, indépendant de la lecture des chiffres
+        # (elle peut perdre un digit et sous-estimer le prix). Il prime même sur
+        # un `confirm_decider` qui dirait oui : taper `confirmer` ici ouvrirait le
+        # pop-up « acheter des gemmes ».
+        if img is not None and reader.price_is_red(img) is True:
+            self._cancel(detector, img, tap_fn)
+            return UpgradeResult('cant_afford', price=price, resources=resources,
+                                 builders=builders)
+
+        # la ressource qui paie est lue à l'écran (couleur de l'icône du prix)
+        # si l'appelant ne l'impose pas.
         if resource_type is None and img is not None:
             resource_type = reader.read_price_resource(img)
         decision = self._decide(price, resources, resource_type, confirm_decider)
+
         if decision is True:
             conf = self._find(detector, img, CONFIRM_CLASS)
             if conf is not None:
                 tap_fn(int(conf[0]), int(conf[1]))
                 time.sleep(_D_TAP)
-            return self._log(UpgradeResult('ok', price=price, resources=resources,
-                                           builders=builders))
+            return UpgradeResult('ok', price=price, resources=resources,
+                                 builders=builders)
 
         # sinon on annule (sûr) : décision False (pas les moyens) ou None (inconnu)
         self._cancel(detector, img, tap_fn)
         status = 'cant_afford' if decision is False else 'need_decision'
-        return self._log(UpgradeResult(status, price=price, resources=resources,
-                                       builders=builders))
+        return UpgradeResult(status, price=price, resources=resources,
+                             builders=builders)
 
     # ---- helpers -----------------------------------------------------------
+
+    def _dump(self, img, step):
+        """Dépose la capture de l'étape : ANNOTÉE + BRUTE (debug_dir seulement).
+
+        La brute compte autant que l'annotée : les boîtes et étiquettes dessinées
+        par `annotate` **recouvrent les pixels** (un cadre magenta sur le prix a
+        déjà faussé une mesure de couleur et fait perdre un chiffre au moment de
+        diagnostiquer). Toute mesure de pixels doit se faire sur `*_raw.png`.
+        """
+        if not self._debug_dir or img is None:
+            return
+        import os
+        os.makedirs(self._debug_dir, exist_ok=True)
+        path = os.path.join(self._debug_dir, f'upgrade_{step}.png')
+        try:
+            img.save(os.path.join(self._debug_dir, f'upgrade_{step}_raw.png'))
+            self._det().annotate(img, path)
+            if self.verbose:
+                from clashai.config.logging import pp
+                pp(f"   capture annotée -> {path}", tag='ok')
+        except Exception as e:
+            print(f"WARNING: dump '{step}' impossible ({e})")
 
     @staticmethod
     def _find(detector, img, name):

@@ -26,6 +26,10 @@ def main():
     ap.add_argument('--y', type=int, required=True, help="Y ADB du bâtiment")
     ap.add_argument('--confirm', action='store_true',
                     help="Confirme réellement l'upgrade (DÉPENSE). Sinon annule.")
+    ap.add_argument('--debug-dir', default='debug_upgrade',
+                    help="Dossier où déposer les captures ANNOTÉES de chaque "
+                         "étape (village / menu bâtiment / confirmation). "
+                         "Vide pour désactiver.")
     args = ap.parse_args()
 
     from clashai.navigation import game_loop as gl
@@ -36,7 +40,7 @@ def main():
     # réutilisent via get_detector().
     install(verbose=True)
 
-    up = VillageUpgrader(verbose=True)
+    up = VillageUpgrader(verbose=True, debug_dir=args.debug_dir or None)
 
     # Capteurs (contexte que le LLM lira) ------------------------------------
     img = gl.adb_screenshot()
@@ -47,8 +51,8 @@ def main():
     resources = up.resources(img)
     print(f"\nOuvriers libres : {builders}")
     print(f"Ressources      : {resources}")
-    print("(None / {} = classes compteur_*/nombre_ouvrier pas encore dans le "
-          "CNN UI — re-train nécessaire)\n")
+    print("(None / {} = widget non détecté ou lecture refusée par le garde-fou "
+          "— jamais un chiffre deviné)\n")
 
     # Décideur : --confirm force la confirmation, sinon on laisse la sécurité
     # annuler (pas de resource_type ni de décideur → statut need_decision).
@@ -61,6 +65,12 @@ def main():
     print(f"\nRésultat : {result.status}"
           f" | prix={result.price} | ressources={result.resources}"
           f" | ouvriers={result.builders}")
+    if args.debug_dir:
+        print(f"\nCaptures annotées de chaque étape dans : {args.debug_dir}/")
+        print("  upgrade_1_village.png / upgrade_2_menu_batiment.png / "
+              "upgrade_3_confirmation.png")
+        print("  -> regarde la 3e : elle montre l'écran où le bot cherche "
+              "`prix_upgrade` et `confirmer_upgrade`.")
 
 
 if __name__ == "__main__":

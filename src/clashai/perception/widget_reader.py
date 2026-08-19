@@ -34,16 +34,24 @@ _CROP_PAD = 4
 # ── Quelle ressource paie un prix ? (par COULEUR, pas par classe CNN) ────────
 # L'icône (goutte/pièce) à droite du prix apparaît partout dans le jeu : en faire
 # une classe CNN obligerait à la labéliser sur TOUS les écrans (même visuel = même
-# classe) pour un gain nul. Les 3 ressources ont des couleurs très distinctes →
-# on compte les pixels proches de chaque référence, le plus représenté gagne. Le
-# fond (bouton vert, ciel…) ne matche aucune référence et s'ignore tout seul.
-_RESOURCE_REFS = {
-    'or': (245, 190, 45),            # doré
-    'elixir': (225, 70, 195),        # rose/magenta
-    'elixir_noire': (70, 40, 85),    # violet très sombre
+# classe) pour un gain nul.
+#
+# ⚠️ En RGB ça ne marche pas : le gris sombre de l'UI (63,58,56) tombe à distance
+# 54 de l'élixir noir (43,34,46) → un panneau gris était pris pour de l'élixir
+# noir, d'où un faux « pas les moyens ». On classe donc en **HSV**, où les trois
+# ressources occupent des zones franches et où gris/blanc/vert sont exclus par
+# construction (saturation trop basse, ou teinte hors plage).
+#
+# Mesuré sur capture réelle (OpenCV : H 0-179, S 0-255, V 0-255) :
+#   pièce d'or      H 27  S 171  V 255      goutte élixir   H 150  S 193  V 128
+#   élixir noir     H 143 S  60  V  46      bouton vert     H  39  S  47  V 248
+#   ombre jaunâtre  H 10  S 161  V 140      panneau gris    H   9  S  28  V  63
+_RESOURCE_HSV = {
+    #            H_min H_max  S_min  V_min  V_max
+    'or':          (15,  33,   110,   110,   255),
+    'elixir':      (130, 168,  110,    96,   255),
+    'elixir_noire':(120, 170,   35,     0,    95),
 }
-# Distance L1 (somme |dR|+|dG|+|dB|) sous laquelle un pixel "compte" pour une réf.
-_COLOR_TOL = 110
 # Minimum de pixels matchés pour conclure (sinon None → décision déférée).
 _MIN_COLOR_PIXELS = 20
 
@@ -88,7 +96,7 @@ class WidgetReader:
         crop = self._widget_crop(screenshot_pil, dets[0])
         if crop is None:
             return None
-        n, _ = digit_reader.read_number(crop, drop_leading_x=False)
+        n, _ = digit_reader.read_widget_number(crop)
         return n
 
     # ---- ressources --------------------------------------------------------
@@ -107,8 +115,9 @@ class WidgetReader:
     def _read_ratio(self, screenshot_pil, class_name):
         """Lit un widget "N/M" → (N, M), ou None si absent/illisible.
 
-        On coupe le crop en deux au milieu (le '/' est centré) et on lit chaque
-        moitié — évite que le digit CNN bute sur le '/'.
+        Délègue à `digit_reader.read_widget_ratio` : glyphes cohérents (les
+        icônes blanches du crop — épée, visage d'ouvrier — sont écartées), puis
+        premier et dernier glyphe (le '/' n'est pas une classe du CNN).
         """
         dets = self._get_detector().detect_raw(screenshot_pil).get(class_name)
         if not dets:
@@ -116,12 +125,8 @@ class WidgetReader:
         crop = self._widget_crop(screenshot_pil, dets[0])
         if crop is None:
             return None
-        w, h = crop.size
-        a, _ = digit_reader.read_number(crop.crop((0, 0, w // 2, h)))
-        b, _ = digit_reader.read_number(crop.crop((w // 2, 0, w, h)))
-        if a is None or b is None:
-            return None
-        return (a, b)
+        ratio, _ = digit_reader.read_widget_ratio(crop)
+        return ratio
 
     def read_builders(self, screenshot_pil):
         """(libres, total) depuis `nombre_ouvrier` ("1/6"), ou None si illisible."""
@@ -149,22 +154,103 @@ class WidgetReader:
     def classify_resource_color(crop_pil):
         """'or' | 'elixir' | 'elixir_noire' | None depuis un crop d'icône.
 
-        Compte les pixels proches de chaque couleur de référence ; la référence
-        la plus représentée gagne. Robuste au fond (bouton vert) qui ne matche
-        aucune référence.
+        Compte les pixels tombant dans la zone HSV de chaque ressource ; la plus
+        représentée gagne. Le fond (bouton vert, panneau gris, blanc, ombres) ne
+        tombe dans aucune zone → None, et la décision d'achat est déférée.
         """
+        import cv2
         import numpy as np
 
-        arr = np.asarray(crop_pil.convert('RGB'), dtype=np.int16).reshape(-1, 3)
-        if arr.size == 0:
+        rgb = np.asarray(crop_pil.convert('RGB'), dtype=np.uint8)
+        if rgb.size == 0:
             return None
+        hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV).reshape(-1, 3)
+        h, sat, val = hsv[:, 0], hsv[:, 1], hsv[:, 2]
+
         best, best_count = None, 0
-        for name, ref in _RESOURCE_REFS.items():
-            dist = np.abs(arr - np.asarray(ref, dtype=np.int16)).sum(axis=1)
-            count = int((dist < _COLOR_TOL).sum())
+        for name, (h0, h1, s0, v0, v1) in _RESOURCE_HSV.items():
+            m = (h >= h0) & (h <= h1) & (sat >= s0) & (val >= v0) & (val <= v1)
+            count = int(m.sum())
             if count > best_count:
                 best, best_count = name, count
         return best if best_count >= _MIN_COLOR_PIXELS else None
+
+    # ---- prix d'upgrade (avec garde-fou anti-confusion) --------------------
+
+    @staticmethod
+    def _overlaps(a, b):
+        """True si deux détections se recouvrent (boîtes centrées x/y, w/h)."""
+        ax1, ax2 = a.x - a.w / 2, a.x + a.w / 2
+        ay1, ay2 = a.y - a.h / 2, a.y + a.h / 2
+        bx1, bx2 = b.x - b.w / 2, b.x + b.w / 2
+        by1, by2 = b.y - b.h / 2, b.y + b.h / 2
+        iw = max(0.0, min(ax2, bx2) - max(ax1, bx1))
+        ih = max(0.0, min(ay2, by2) - max(ay1, by1))
+        inter = iw * ih
+        if inter <= 0:
+            return False
+        smaller = min(max(1.0, a.w * a.h), max(1.0, b.w * b.h))
+        return inter / smaller > 0.5      # l'un est majoritairement dans l'autre
+
+    def _price_det(self, screenshot_pil):
+        """Détection `prix_upgrade` VALIDÉE, ou None.
+
+        ⚠️ `prix_upgrade` et `compteur_*` sont tous « des chiffres blancs ». Si le
+        CNN prenait un compteur du HUD pour le prix, on lirait le SOLDE comme
+        prix → `solde >= prix` trivialement vrai → achat confirmé à tort. On
+        rejette donc toute détection de prix qui recouvre un compteur de
+        ressource (les deux sont visibles en même temps sur l'écran de
+        confirmation). Sans preuve, pas de décision : l'upgrader annule.
+        """
+        raw = self._get_detector().detect_raw(screenshot_pil)
+        prices = raw.get(PRICE_CLASS) or []
+        counters = [d for cls in RESOURCE_CLASSES.values() for d in raw.get(cls, [])]
+        for p in prices:                       # déjà triées par confiance ↓
+            if not any(self._overlaps(p, c) for c in counters):
+                return p
+        return None
+
+    def read_price_number(self, screenshot_pil):
+        """Montant du prix d'upgrade (int) ou None — garde-fou compris."""
+        det = self._price_det(screenshot_pil)
+        if det is None:
+            return None
+        crop = self._widget_crop(screenshot_pil, det)
+        if crop is None:
+            return None
+        n, _ = digit_reader.read_widget_number(crop)
+        return n
+
+    def price_is_red(self, screenshot_pil):
+        """True si le prix est écrit en ROUGE, None si indéterminable.
+
+        Dans CoC, un prix rouge = **le jeu lui-même signale un solde
+        insuffisant**. C'est un signal AUTORITATIF, indépendant de toute lecture
+        de chiffre : il reste juste même si la segmentation perd un digit. On
+        s'en sert pour refuser l'achat sans dépendre du montant lu — taper
+        `confirmer` dans ce cas ouvrirait le pop-up « acheter des gemmes ».
+        """
+        import cv2
+        import numpy as np
+
+        from clashai.perception import digit_reader as dr
+
+        det = self._price_det(screenshot_pil)
+        if det is None:
+            return None
+        crop = self._widget_crop(screenshot_pil, det)
+        if crop is None:
+            return None
+        bgr = cv2.cvtColor(np.asarray(crop.convert('RGB')), cv2.COLOR_RGB2BGR)
+        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+        h, sat, val = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+        red = ((val > dr.RED_V_MIN) & (sat > dr.RED_S_MIN)
+               & ((h >= dr.RED_H_HIGH) | (h <= dr.RED_H_LOW)))
+        white = (val > dr.V_MIN) & (sat < dr.S_MAX)
+        n_red, n_white = int(red.sum()), int(white.sum())
+        if n_red + n_white < _MIN_COLOR_PIXELS:
+            return None
+        return n_red > n_white
 
     def read_price_resource(self, screenshot_pil):
         """Ressource dans laquelle est libellé `prix_upgrade`, ou None.
@@ -172,7 +258,7 @@ class WidgetReader:
         L'icône est collée à DROITE du nombre → on échantillonne cette bande.
         Repli sur la box du prix elle-même si le label la contient déjà.
         """
-        det = self._first(screenshot_pil, PRICE_CLASS)
+        det = self._price_det(screenshot_pil)
         if det is None:
             return None
 
@@ -182,9 +268,12 @@ class WidgetReader:
         y1 = max(0, int(cy - h / 2))
         y2 = min(img_h, int(cy + h / 2))
 
-        # 1. bande à droite du nombre (largeur ~ hauteur du texte = taille icône)
+        # 1. bande à droite du nombre. Largeur 2.5x la hauteur du texte : l'icône
+        # est décalée d'un petit espace et la couvrir ENTIÈREMENT compte (une
+        # bande trop courte n'attrapait qu'un liseré de la pièce, et c'est le
+        # gris du fond qui l'emportait).
         rx1 = min(img_w, int(cx + w / 2))
-        rx2 = min(img_w, rx1 + max(8, int(h)))
+        rx2 = min(img_w, rx1 + max(12, int(h * 2.5)))
         if rx2 - rx1 >= 4 and y2 - y1 >= 4:
             hit = self.classify_resource_color(
                 screenshot_pil.crop((rx1, y1, rx2, y2)))

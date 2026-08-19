@@ -65,6 +65,140 @@ def _column_spans(mask):
     return spans
 
 
+# ── Lecture des nombres dans les WIDGETS d'UI (compteurs, ouvriers, prix) ────
+# Différent des badges de troupes : le nombre est centré verticalement (pas de
+# bande haute) et le crop contient des ICÔNES BLANCHES (épée, visage d'ouvrier,
+# reflet d'une goutte) qui passent le masque "texte blanc" et se font segmenter
+# comme des chiffres — c'est ce qui faisait lire "222" au lieu de "1/1".
+# Parade : ne garder que le plus grand groupe de glyphes GÉOMÉTRIQUEMENT
+# COHÉRENT (même hauteur, même ligne de base) = le nombre ; une icône a une
+# autre hauteur et/ou un autre centre vertical, donc elle tombe hors du groupe.
+# La boîte du CNN doit RESTER LARGE : c'est l'icône (visage d'ouvrier vs épée)
+# qui distingue `nombre_ouvrier` de `place_labo` — deux "N/M" seuls seraient
+# visuellement identiques et YOLO ne pourrait plus les séparer. C'est donc ICI
+# qu'on isole le nombre, par COMPOSANTES CONNEXES : chaque chiffre est un blob
+# compact, alors que le contour du cadre est un grand rectangle quasi vide et
+# les icônes/reflets ont des proportions aberrantes.
+# Seuils mesurés sur crops réels (village_principal.png) :
+#   chiffres        -> remplissage 0.59-0.85, ratio h/w 1.0-2.6
+#   contour cadre   -> remplissage 0.08-0.09  (130x60 px pour 666 px allumés)
+#   épée / bandeau  -> ratio h/w 0.29-0.64    (large et plat)
+#   traits, reflets -> ratio h/w 4.4-13.0     (fin et haut)
+WIDGET_MIN_GLYPH_H = 10     # px : ignore le bruit
+WIDGET_MIN_FILL = 0.25      # un chiffre remplit sa boîte, un contour non
+WIDGET_ASPECT_MIN = 0.80    # écarte les éléments larges et plats
+WIDGET_ASPECT_MAX = 5.0     # écarte les traits fins verticaux
+
+WIDGET_GLYPH_H_TOL = 0.15   # écart de hauteur toléré dans un même nombre
+WIDGET_GLYPH_C_TOL = 0.25   # écart de centre vertical toléré (× hauteur)
+
+# ⚠️ GARDE-FOU : mieux vaut ne RIEN lire qu'un chiffre faux — un montant erroné
+# fausse la décision d'achat. Un nombre correctement segmenté a des glyphes de
+# hauteur quasi identique ; dès que ça part en vrille (contour du cadre, icône,
+# fond de village capté dans une boîte trop large), on refuse la lecture.
+# Observé sur crops réels : boîte serrée -> 7 glyphes tous à h=24 (lecture sûre) ;
+# boîte large -> hauteurs 30..92 (à rejeter).
+WIDGET_H_CONSISTENCY = 0.15   # tous les glyphes à ±15 % de la hauteur médiane
+WIDGET_MIN_CONF = 0.75        # plus strict que les badges de troupes (0.60)
+
+
+def _glyphs_consistent(glyphs):
+    """True si les glyphes ont une hauteur homogène (= un vrai nombre)."""
+    if len(glyphs) < 1:
+        return False
+    hs = sorted(g.shape[0] for g in glyphs)
+    med = hs[len(hs) // 2]
+    if med <= 0:
+        return False
+    return all(abs(h - med) <= WIDGET_H_CONSISTENCY * med for h in hs)
+
+
+# Le texte d'un widget n'est pas toujours BLANC : sur l'écran de confirmation, le
+# prix passe en ROUGE quand on n'a pas les moyens (c'est ainsi que le jeu le
+# signale). Le masque "texte blanc" (V>165, S<80) est alors aveugle — mesuré sur
+# capture réelle : 16 pixels allumés seulement → lecture impossible, statut
+# `need_decision` alors que le prix était parfaitement lisible à l'œil.
+# Couleur MESURÉE du prix "rouge" sur capture réelle : RGB (240,120,120) →
+# HSV **H0 S128 V240** (un saumon, pas un rouge pur), variantes H6-H8.
+# ⚠️ Ne pas re-mesurer sur une capture ANNOTÉE : le cadre magenta que dessine
+# `UIDetector.annotate` (H≈169, S≈228) se superpose aux chiffres et fausse la
+# calibration — piège rencontré en vrai.
+# On accepte donc le texte rouge/saumon (teinte aux deux bouts de la roue, bien
+# saturé et lumineux). La goutte d'élixir voisine (H≈150) reste dehors, et les
+# formes aberrantes sont de toute façon filtrées ensuite.
+RED_H_HIGH = 165      # teinte >= : rouge/cramoisi (la roue se referme à 179)
+RED_H_LOW = 10        # teinte <= : rouge franc
+RED_S_MIN = 120
+RED_V_MIN = 150
+
+
+def _widget_text_mask(bgr):
+    """Masque du texte d'un widget : blanc/clair OU rouge (prix non payable)."""
+    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+    h, s, v = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+    white = (v > V_MIN) & (s < S_MAX)
+    red = (v > RED_V_MIN) & (s > RED_S_MIN) & ((h >= RED_H_HIGH) | (h <= RED_H_LOW))
+    return (white | red).astype(np.uint8)
+
+
+def _coherent_spans(spans):
+    """Plus grand sous-ensemble de spans partageant hauteur + centre vertical."""
+    best = []
+    for ref in spans:
+        rh = max(1, ref[3] - ref[2])
+        rc = (ref[2] + ref[3]) / 2
+        grp = [s for s in spans
+               if abs((s[3] - s[2]) - rh) <= WIDGET_GLYPH_H_TOL * rh
+               and abs(((s[2] + s[3]) / 2) - rc) <= WIDGET_GLYPH_C_TOL * rh]
+        if len(grp) > len(best):
+            best = grp
+    return best
+
+
+def _widget_spans(crop_pil):
+    """(spans du nombre, image BGR) — composantes connexes filtrées + cohérence.
+
+    La projection de colonnes (utilisée pour les badges) fusionne tout ce qui
+    partage une colonne : dans un widget elle colle le contour du cadre aux
+    chiffres. Les composantes connexes isolent chaque glyphe indépendamment.
+    """
+    rgb = np.array(crop_pil.convert('RGB'))
+    bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    # pleine hauteur (pas de TEXT_BAND_FRAC) + texte blanc OU rouge
+    mask = _widget_text_mask(bgr)
+
+    n, _labels, stats, _cent = cv2.connectedComponentsWithStats(mask, 8)
+    spans = []
+    for i in range(1, n):
+        x, y, w, h, area = (int(v) for v in stats[i][:5])
+        if h < WIDGET_MIN_GLYPH_H or w < 2:
+            continue
+        if area / float(w * h) < WIDGET_MIN_FILL:      # contour de cadre
+            continue
+        aspect = h / float(w)
+        if not (WIDGET_ASPECT_MIN <= aspect <= WIDGET_ASPECT_MAX):
+            continue                                    # icône plate / trait fin
+        spans.append((x, x + w, y, y + h))
+
+    spans.sort(key=lambda s: s[0])                      # gauche -> droite
+    return _coherent_spans(spans), bgr
+
+
+def segment_widget_glyphs(crop_pil):
+    """Glyphes du nombre d'un widget (icônes exclues), de gauche à droite."""
+    spans, bgr = _widget_spans(crop_pil)
+    if not spans:
+        return []
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    h, w = gray.shape[:2]
+    out = []
+    for x0, x1, y0, y1 in spans:
+        gx0, gx1 = max(0, x0 - GLYPH_PAD), min(w, x1 + GLYPH_PAD)
+        gy0, gy1 = max(0, y0 - GLYPH_PAD), min(h, y1 + GLYPH_PAD)
+        out.append(gray[gy0:gy1, gx0:gx1])
+    return out
+
+
 def segment_glyphs(crop_pil, drop_leading_x=True, return_mask=False):
     """Split a badge crop into individual digit glyph images (left -> right).
 
@@ -204,6 +338,60 @@ def read_count(crop_pil, min_conf=0.6):
     Thin wrapper over read_number that drops the leading 'x' multiplier glyph.
     """
     return read_number(crop_pil, drop_leading_x=True, min_conf=min_conf)
+
+
+def classify_glyphs(glyphs, min_conf=0.6):
+    """Classe une liste de glyphes 0-9 → (list[str] | None, confiance la + faible).
+
+    None si le modèle est indisponible, la liste vide, ou un glyphe sous min_conf.
+    """
+    model = _load_model()
+    if not model or not glyphs:
+        return None, 0.0
+    xs = torch.stack([_glyph_to_tensor(g) for g in glyphs]).to(_DEVICE)
+    with torch.no_grad():
+        probs = torch.softmax(model(xs), dim=1)
+        conf, idx = probs.max(dim=1)
+    weakest = float(conf.min().item())
+    if weakest < min_conf:
+        return None, weakest
+    return [_CLASSES[i] for i in idx.tolist()], weakest
+
+
+def read_widget_number(crop_pil, min_conf=WIDGET_MIN_CONF):
+    """Lit l'entier d'un widget d'UI (compteur, prix) → (int|None, confiance).
+
+    Refuse (None) si la segmentation n'est pas homogène — voir WIDGET_H_CONSISTENCY.
+    """
+    glyphs = segment_widget_glyphs(crop_pil)
+    if not _glyphs_consistent(glyphs):
+        return None, 0.0
+    digits, conf = classify_glyphs(glyphs, min_conf)
+    if digits is None:
+        return None, conf
+    try:
+        return int(''.join(digits)), conf
+    except ValueError:
+        return None, conf
+
+
+def read_widget_ratio(crop_pil, min_conf=WIDGET_MIN_CONF):
+    """Lit un widget "N/M" → ((N, M) | None, confiance).
+
+    Le '/' n'est pas une classe du CNN : on lit le **premier** et le **dernier**
+    glyphe du groupe. Valide dans CoC où N et M sont des chiffres uniques
+    (max 6 ouvriers, 1 labo) — "5/5", "1/6", "0/1". Même garde-fou d'homogénéité.
+    """
+    glyphs = segment_widget_glyphs(crop_pil)
+    if len(glyphs) < 2 or not _glyphs_consistent(glyphs):
+        return None, 0.0
+    digits, conf = classify_glyphs([glyphs[0], glyphs[-1]], min_conf)
+    if digits is None:
+        return None, conf
+    try:
+        return (int(digits[0]), int(digits[1])), conf
+    except ValueError:
+        return None, conf
 
 
 def crop_count_badge(img_pil, bbox, position='combat'):

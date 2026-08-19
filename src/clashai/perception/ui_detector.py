@@ -1,8 +1,8 @@
 # clashai/perception/ui_detector.py
 # Détecteur universel de boutons / éléments d'interface (CNN UI, V5.2).
 #
-# Le modèle YOLO "UI" (124 classes, mAP50 0.957, mAP50-95 0.822) reconnaît les
-# boutons par leur apparence + leur TEXTE (entraîné à imgsz 1280). Ce module
+# Le modèle YOLO "UI" (140 classes, mAP50 0.972 en v4) reconnaît les boutons par
+# leur apparence + leur TEXTE (entraîné à imgsz 1280). Ce module
 # l'enveloppe et expose deux niveaux :
 #
 #   detect_raw(screenshot) -> {classe_cnn: [Detection, ...]}   (français, brut)
@@ -32,19 +32,29 @@ from clashai.paths import WEIGHTS_DIR
 # CONFIGURATION
 # =============================================================================
 
-# Le modèle est cherché à l'emplacement canonique puis là où l'entraînement
-# Kaggle le dépose (weights/yolo_ui_cnn/yolo_ui_best.pt). Renomme-le en
-# weights/yolo_ui.pt pour t'aligner sur yolo_troops.pt si tu veux.
+# Emplacement canonique : weights/yolo_ui.pt (aligné sur yolo_troops.pt). Les
+# suivants sont les chemins bruts de sortie Kaggle, tolérés en repli si le
+# modèle n'a pas encore été renommé.
 _UI_WEIGHTS_CANDIDATES = [
     os.path.join(WEIGHTS_DIR, 'yolo_ui.pt'),
     os.path.join(WEIGHTS_DIR, 'yolo_ui_cnn', 'yolo_ui_best.pt'),
     os.path.join(WEIGHTS_DIR, 'yolo_ui_cnn', 'best.pt'),
 ]
 
-# Seuil de confiance à l'inférence. La courbe F1 pique à ~0.48 (F1 0.83) ; on
-# descend à 0.40 pour aussi nourrir detect_raw (les agents gatent eux-mêmes).
-# find_button re-filtre à 0.60 (DETECTOR_MIN_CONFIDENCE) avant de faire confiance
-# au modèle plutôt qu'à la calibration.
+# Seuil de confiance à l'inférence : volontairement BAS (0.40).
+#
+# Deux seuils distincts, et c'est voulu :
+#   - ICI (0.40) = ce qui EXISTE dans `detect_raw` → sert aux lecteurs (compteurs,
+#     ouvriers, prix) et aux agents, qui gatent eux-mêmes ; on privilégie le
+#     rappel, et les faux positifs faibles sont écartés en aval (garde-fou
+#     d'homogénéité des chiffres, tri par confiance décroissante).
+#   - `ui_buttons.DETECTOR_MIN_CONFIDENCE` (0.60) = ce sur quoi on AGIT (taper un
+#     bouton plutôt que suivre la calibration).
+#
+# Le modèle v4 (140 classes, mAP50 0.972) a son pic F1 à **conf 0.635** (F1 0.91) —
+# il était à ~0.43 en v2/v3. Le seuil d'ACTION (0.60) tombe donc pile sur
+# l'optimum : rien à changer, c'est mieux aligné qu'avant. Ne pas remonter ce
+# seuil-ci sur la foi du pic F1 : il ne gouverne pas les actions.
 DEFAULT_CONF = 0.40
 
 # Le modèle UI est entraîné à imgsz 1280 (texte des boutons). Le fixer ici : un
@@ -108,7 +118,7 @@ class Detection:
 # =============================================================================
 
 class UIDetector:
-    """Détecteur de boutons d'interface basé sur le CNN UI (YOLO 124 classes).
+    """Détecteur de boutons d'interface basé sur le CNN UI (YOLO 140 classes).
 
     Deux API :
       - detect_raw(img) -> {classe: [Detection]}  (brut, noms CNN français)

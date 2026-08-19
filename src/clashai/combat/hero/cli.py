@@ -23,7 +23,7 @@ from clashai.paths import WEIGHTS_DIR
 
 def _load_detector():
     """Loads the troop bar YOLO detector, or None if the weights are missing."""
-    path = os.path.join(WEIGHTS_DIR, 'yolo_troupes_barre', 'troop_bar.pt')
+    path = os.path.join(WEIGHTS_DIR, 'yolo_troop_bar', 'yolo_troop_bar.pt')
     if not os.path.exists(path):
         print(f"ERROR: troop bar model not found: {path}")
         return None

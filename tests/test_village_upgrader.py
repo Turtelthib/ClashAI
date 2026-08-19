@@ -31,11 +31,12 @@ class _FakeDetector:
 
 class _FakeReader:
     def __init__(self, builders=None, resources=None, price=None,
-                 price_resource=None):
+                 price_resource=None, price_red=None):
         self._b = builders
         self._r = resources or {}
         self._p = price
         self._pr = price_resource
+        self._red = price_red
 
     def read_builders(self, img):
         return self._b
@@ -43,11 +44,14 @@ class _FakeReader:
     def read_resources(self, img):
         return dict(self._r)
 
-    def read_widget_number(self, img, cls):
+    def read_price_number(self, img):
         return self._p
 
     def read_price_resource(self, img):
         return self._pr
+
+    def price_is_red(self, img):
+        return self._red
 
 
 def _run(detector, reader, taps, **kw):
@@ -163,3 +167,51 @@ def test_builders_unreadable_does_not_block_the_flow():
     reader = _FakeReader(builders=None, price=None)
     r = _run(det, reader, taps, confirm_decider=lambda p, res: True)
     assert r.status == 'ok'              # pas de faux 'no_builder'
+
+
+# ---------------------------------------------------------------------------
+# Garde-fou AUTORITATIF : un prix ROUGE = le jeu dit qu'on ne peut pas payer
+#
+# Signal independant de la lecture des chiffres (qui peut perdre un digit et
+# SOUS-estimer le prix). Taper `confirmer` dans ce cas ouvrirait le pop-up
+# "acheter des gemmes" -> il prime sur tout le reste.
+# ---------------------------------------------------------------------------
+
+def test_red_price_forces_cant_afford_even_if_digits_look_affordable():
+    """Prix lu 380 000 (un zero perdu) alors que le vrai prix est 3 800 000 :
+    le rouge sauve la mise."""
+    taps = []
+    det = _FakeDetector({'ameliorer': (500, 900, 0.9),
+                         'confirmer_upgrade': (700, 950, 0.9),
+                         'annuler': (300, 950, 0.9)})
+    reader = _FakeReader(builders=(1, 6), price=380_000,
+                         resources={'elixir': 3_394_748},
+                         price_resource='elixir', price_red=True)
+    r = _run(det, reader, taps, resource_type='elixir')
+    assert r.status == 'cant_afford'
+    assert (700, 950) not in taps        # confirmer JAMAIS tape
+    assert (300, 950) in taps
+
+
+def test_red_price_overrides_an_explicit_confirm_decider():
+    """Meme un decideur qui dit OUI ne doit pas passer outre le rouge."""
+    taps = []
+    det = _FakeDetector({'ameliorer': (500, 900, 0.9),
+                         'confirmer_upgrade': (700, 950, 0.9),
+                         'annuler': (300, 950, 0.9)})
+    reader = _FakeReader(builders=(1, 6), price=1000, price_red=True)
+    r = _run(det, reader, taps, confirm_decider=lambda p, res: True)
+    assert r.status == 'cant_afford'
+    assert (700, 950) not in taps
+
+
+def test_non_red_price_does_not_block():
+    """Prix blanc (payable) : le garde-fou rouge ne se declenche pas."""
+    taps = []
+    det = _FakeDetector({'ameliorer': (500, 900, 0.9),
+                         'confirmer_upgrade': (700, 950, 0.9)})
+    reader = _FakeReader(builders=(1, 6), price=5000,
+                         resources={'elixir': 999_999}, price_red=False)
+    r = _run(det, reader, taps, resource_type='elixir')
+    assert r.status == 'ok'
+    assert (700, 950) in taps

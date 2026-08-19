@@ -20,6 +20,125 @@ Si un de ces problèmes réapparaît, relire le bloc correspondant avant de re-d
 - [Sorts : sous-cast + rage mal placé](#-sorts--sous-cast--rage-mal-placé)
 - [Troop bar : doublons château écrasés + flèche de mode siège/gardien](#-troop-bar--doublons-château--flèche-de-mode)
 - [`ruff --fix` casse le code : ré-exports F401 + import local shadowing](#-ruff---fix-casse-le-code)
+- [Widgets d'UI : chiffres faux (icônes lues comme des chiffres)](#-widgets-dui--chiffres-faux)
+- [Faux « pas les moyens » : ressource d'un prix mal identifiée (RGB vs HSV)](#-faux-pas-les-moyens--ressource-mal-identifiée)
+- [Kaggle « Kernel died » à l'entraînement (auto-batch)](#-kaggle--kernel-died--à-lentraînement)
+
+---
+
+## 🔧 Kaggle « Kernel died » à l'entraînement
+
+> Le notebook meurt **sans trace Python** juste après « Starting training ». Ce n'est pas une erreur de code : le processus est **tué**.
+
+**Symptômes**
+- Log Kaggle : `Starting training for 120 epochs...` puis, ~50 s plus tard, `Kernel died while waiting for execute reply` → `DeadKernelError`.
+- La pile d'appels ne montre que du `nbclient`/`papermill` : **aucune ligne du script**. Signature d'un process tué de l'extérieur, pas d'une exception.
+
+**Cause n°1, de loin : l'accélérateur GPU n'est pas activé** *(cas réel, 18 août 2026)*
+Sans GPU, ultralytics bascule silencieusement sur **CPU**. À `imgsz 1088` avec un yolo26m, la RAM sature et le kernel se fait tuer. Rien dans le message d'erreur ne mentionne ni le GPU ni la mémoire — d'où le temps perdu à chercher ailleurs.
+→ Kaggle, panneau de droite : **Session options → Accelerator → GPU T4 x2**.
+
+*Cause secondaire (GPU actif mais kernel qui meurt quand même)* : mémoire insuffisante — lot trop grand, ou RAM des workers du dataloader (8 par défaut sur Kaggle, c'est trop).
+
+**Fix**
+- **`_check_gpu()` dans les 3 scripts Kaggle** (`troop_bar`, `ui`, `troops`) : ils **refusent de démarrer** sans CUDA et affichent où activer l'accélérateur. Un run perdu de ce type ne peut plus passer inaperçu.
+- `BATCH` explicite (8) plutôt que `-1`, `workers=2`, `cache=False` : marge de sécurité mémoire à cette résolution.
+- Échelle de repli si le GPU est actif et que ça meurt encore, **dans cet ordre** : `BATCH 8→4→2`, puis `WORKERS 2→0`, puis `MODEL yolo26m→yolo26s`.
+
+**Pièges**
+- ⚠️ **« Kernel died » ne veut pas dire « bug dans le script »** — vérifier **le GPU d'abord**, la mémoire ensuite, le code en dernier.
+- ⚠️ **Ne PAS baisser `IMG_SIZE`** pour économiser de la mémoire : il doit rester égal à `troop_bar_detector.YOLO_IMGSZ` (1088). Un écart entraînement↔inférence a déjà fait chuter la détection à 1 icône sur 9.
+- 📌 *Diagnostic initial erroné* : l'auto-batch (`BATCH = -1`) avait été accusé le premier. Plausible, mais faux — c'était l'absence de GPU. D'où la vérification explicite : ne plus avoir à deviner.
+
+---
+
+## 🔧 Faux « pas les moyens » : ressource mal identifiée
+
+> L'upgrade est payable, l'agent répond `cant_afford` et annule. Perte silencieuse : le bot ne construit plus rien.
+
+**Symptômes** *(run réel, 18 août 2026)*
+- Tour à bombes niv. 5, prix **1 900 000** en **or**, solde **or 4 261 458** → statut **`cant_afford`**.
+- Tout le reste est bon : `prix_upgrade` et `confirmer_upgrade` détectés, prix lu correctement, ouvriers et 3 ressources lus.
+
+**Cause**
+La ressource qui paie est déduite de la **couleur de l'icône** à droite du prix, par distance **RGB** à trois références. Deux défauts :
+1. **Le gris sombre de l'UI est à distance 54 de l'élixir noir** — mesuré : panneau `(63,58,56)` vs référence `(43,34,46)`, tolérance 110. Un simple panneau gris « gagnait » donc comme *elixir_noire* → solde noir 16 078 < 1 900 000 → `cant_afford`.
+2. **La référence élixir était fausse** — `(225,70,195)` supposé vs `(128,31,128)` réel (distance 203 > tolérance) : l'élixir n'aurait **jamais** été reconnu.
+3. La bande échantillonnée (largeur = hauteur du texte) n'attrapait qu'un liseré de l'icône, laissant le fond dominer.
+
+**Fix** — classification en **HSV** au lieu du RGB, sur des zones mesurées en jeu :
+
+| Élément | H | S | V | |
+|---|---|---|---|---|
+| Pièce d'or | 27 | 171 | 255 | `or` : H 15-33, S≥110, V≥110 |
+| Goutte élixir | 150 | 193 | 128 | `elixir` : H 130-168, S≥110, V≥96 |
+| Élixir noir | 143 | 60 | 46 | `elixir_noire` : H 120-170, S≥35, V≤95 |
+| Bouton vert | 39 | 47 | 248 | rejeté (S trop basse) |
+| **Panneau gris** | 9 | 28 | 63 | **rejeté** (H hors plage, S trop basse) |
+
++ bande d'échantillonnage élargie à **2.5×** la hauteur du texte pour couvrir l'icône entière.
+
+**Pièges**
+- ⚠️ **Ne pas calibrer des couleurs « au jugé »** : les deux références fausses venaient de valeurs plausibles mais jamais mesurées. Échantillonner sur une vraie capture (`debug_upgrade/`).
+- ⚠️ Le RGB mélange teinte et luminosité : deux couleurs sombres y sont toujours proches. Pour trier des éléments d'UI colorés, **HSV** (teinte + saturation) est le bon espace.
+- ⚠️ Un faux `cant_afford` est **silencieux** — pas de crash, juste un bot qui n'améliore rien. À surveiller dans les logs.
+
+**Tests**
+- `tests/test_widget_reader.py` : les 3 ressources reconnues à leurs couleurs **réelles**, et les leurres rejetés — dont le **panneau gris** qui a causé ce bug (test de non-régression explicite).
+- Vérification manuelle : `uv run python -m tools.debug.village_upgrade_demo --x <X> --y <Y>` → statut attendu `ok` (payable) et non `cant_afford`.
+
+---
+
+## 🔧 Widgets d'UI : chiffres faux
+
+> Le digit CNN lit les **badges de troupes** ("x12") depuis toujours. Le réutiliser tel quel sur les **widgets d'UI** (compteurs de ressources, `nombre_ouvrier`, `place_labo`, `prix_upgrade`) produit des lectures **fausses**, pas seulement des échecs.
+
+**Symptômes** *(run réel, 17 août 2026)*
+- `Ouvriers libres : None` alors que `nombre_ouvrier` est **bien détecté** (conf 0.92).
+- `Ressources : {'or': 2644822}` — l'or passe, mais élixir et élixir noir sont absents bien que détectés (conf 0.90 / 0.92).
+- Pire : `place_labo` (valeur réelle `1/1`) lisait **`222`**. Un montant faux fausse silencieusement la décision d'achat.
+- Sur l'écran de confirmation d'upgrade : `ressources={}` alors que les compteurs sont détectés.
+
+**Cause** — trois causes distinctes empilées :
+
+1. **Bande haute (`TEXT_BAND_FRAC = 0.62`)**. `segment_glyphs` ne regarde que les 62 % supérieurs du crop : correct pour un badge (le "xNN" est au-dessus de l'illustration), faux pour un widget où le nombre est **centré verticalement** → chiffres rognés.
+2. **Icônes blanches dans le crop** *(cause principale)*. Le masque « texte blanc » (`V>165, S<80`) capte aussi l'**épée blanche** de `place_labo`, le **reflet spéculaire** de la goutte d'élixir, le contour clair du cadre et le fond de village lumineux. Ces blobs sont segmentés **comme des chiffres** puis classés en 0-9 → `1/1` devient `222`. Mesuré sur crops réels : boîte serrée (`compteur_or`) → 7 spans **tous à h=24** (lecture juste) ; boîtes larges → hauteurs **30 à 92** en vrac.
+3. **Le `/` n'est pas une classe du CNN** (entraîné sur 0-9) : couper le crop en deux moitiés géométriques échoue quand la boîte est plus large que le nombre (on coupe dans l'icône).
+4. **Fond assombri**. L'écran de confirmation d'upgrade **assombrit le village** → `V` chute sous le seuil du masque → les compteurs d'arrière-plan deviennent illisibles à cet instant précis.
+
+**⚠️ La fausse bonne idée : resserrer les boîtes du dataset**
+
+Premier réflexe : re-labéliser des boîtes serrées sur le seul nombre. **C'est une impasse** — `nombre_ouvrier` affiche `5/5` et `place_labo` affiche `1/1` : réduites au nombre, les deux classes deviennent **visuellement identiques** et YOLO ne peut plus les distinguer. **L'icône (visage d'ouvrier vs épée) EST le discriminant de la classe** : la boîte doit rester large. Le problème appartient donc au **lecteur**, pas au dataset.
+
+**Fix**
+- `digit_reader` : chemin **séparé** pour les widgets (`segment_widget_glyphs` / `read_widget_number` / `read_widget_ratio`), **sans toucher** au chemin des badges (validé à 100 % val acc — ne pas y régresser).
+- **Segmentation par COMPOSANTES CONNEXES** (au lieu de la projection de colonnes) : la projection fusionne tout ce qui partage une colonne, donc elle colle le contour du cadre aux chiffres. Les composantes isolent chaque glyphe, puis on filtre sur la forme — seuils mesurés sur crops réels :
+
+  | Élément | Remplissage | Ratio h/w | Verdict |
+  |---|---|---|---|
+  | Chiffre | 0.59-0.85 | 1.0-2.6 | gardé |
+  | Contour du cadre | **0.08-0.09** | 0.38-0.46 | rejeté (`MIN_FILL 0.25`) |
+  | Épée, bandeau | 0.43 | **0.29-0.64** | rejeté (`ASPECT_MIN 0.80`) |
+  | Trait, reflet | — | **4.4-13.0** | rejeté (`ASPECT_MAX 5.0`) |
+
+- `_coherent_spans()` garde ensuite le plus grand groupe partageant **hauteur + ligne de base** (±15 % / ±25 %) = le nombre.
+- **Garde-fou `_glyphs_consistent()`** : si les hauteurs retenues ne sont pas homogènes (±15 % de la médiane), on **refuse** (`None`) au lieu de rendre un nombre. Confiance relevée à **0.75** (vs 0.60 badges). *Mieux vaut ne rien lire qu'un chiffre faux* : un `None` défère la décision (annulation sûre), un faux montant achète à tort.
+- **Ratios** : le `/` est contourné en lisant le **premier** et le **dernier** glyphe du groupe (dans CoC, N et M sont des chiffres uniques : max 6 ouvriers, 1 labo).
+- **Ressources lues AVANT l'ouverture du pop-up** (`upgrader`), sur l'écran de village clair. Le solde ne bouge pas entre les deux écrans.
+
+**Résultat** (`village_principal.png`, boîtes du dataset **inchangées**) : or 2 644 822 ✅ · élixir 2 367 838 ✅ · élixir noir 48 330 ✅ · ouvriers (5,5) ✅ · labo (1,1) ✅.
+
+**Pièges**
+- ⚠️ **Ne pas resserrer les boîtes** de `nombre_ouvrier` / `place_labo` : ça casserait la distinction des classes (voir ci-dessus). Idem pour tout widget dont l'icône porte l'identité.
+- ⚠️ **Ne pas assouplir le garde-fou** pour « faire passer » une lecture : il existe pour transformer une erreur silencieuse en refus explicite.
+- ⚠️ Ne pas rebrancher `read_number` (chemin badge) sur les widgets : la bande 0.62 rogne les chiffres centrés.
+- ⚠️ Risque résiduel : deux chiffres **collés** formeraient une seule composante large (ratio < 0.80) qui serait filtrée → nombre silencieusement amputé. Pas observé sur les crops réels (police CoC bien espacée), à surveiller si un montant paraît trop petit.
+
+**Tests**
+- `tests/test_widget_reader.py` : composantes → garde les 3 glyphes de `5/5` et **écarte** le contour de cadre (fill 0.09), l'épée (ratio 0.64) et un trait fin (ratio 12.5), avec les géométries réelles mesurées.
+- Garde-fou : accepte 7×h=24 et le jitter d'antialiasing (24/25/26) ; **rejette** la série disparate observée (49…92) et le vide.
+- Lecture refusée → la ressource est **omise** de `read_resources`, jamais devinée.
+- Vérification manuelle : `uv run python -m tools.debug.village_upgrade_demo --x <X> --y <Y>` (sans `--confirm` = annule, zéro dépense).
 
 ---
 
