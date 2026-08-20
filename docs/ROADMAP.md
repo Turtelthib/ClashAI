@@ -7,7 +7,7 @@
 
 📂 **Ce doc** = ce qui reste à faire. · ✅ Fait → [CHANGELOG.md](CHANGELOG.md) · 🔧 Fix détaillés → [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
-**Chiffres actuels (vérifiés dans le code)** : **18 sorts** · obs **70 dims** / **57 actions** · 63 entrées `troops.json` · CNN UI **140 classes** (v4) · CNN barre **83 classes** (v2) · **287 tests**.
+**Chiffres actuels (vérifiés dans le code)** : **18 sorts** · obs **70 dims** / **57 actions** · 63 entrées `troops.json` · CNN UI **140 classes** (v4) · CNN barre **83 classes** (v2) · **334 tests**.
 
 ---
 
@@ -117,14 +117,14 @@
 
 | # | Incrément | Ce que ça livre |
 |---|---|---|
-| **5.3.0** | **Banc d'essai de prompts** | plusieurs formulations par intention + score attendu, en une commande |
+| ~~5.3.0~~ ✅ | ~~Banc d'essai de prompts~~ | plusieurs formulations par intention + score attendu, en une commande |
 | **5.3.1** | **Enrichir le `world`** | dons en attente, bâtiments améliorables + coûts, temps de recherche |
 | **5.3.2** | **Registre d'outils** (lecture seule) | schémas, validation, journal — testable sans le jeu |
 | **5.3.3** | **Console intégrée + outils qui agissent** | récolte, dons, upgrade, labo, attaque |
 | **5.3.4** | **Quantités dans le chat admin** | « 3 ballons et 2 yéti » → exactement ça |
 | **5.3.5** | **Boucle autonome avec mémoire** | le LLM voit le RÉSULTAT de ses actions |
 
-- [ ] **5.3.0 — Banc d'essai de prompts.** *Placé en premier après le bug du 19 août : un défaut de prompt est invisible aux tests unitaires (le code est juste, c'est le modèle qui interprète mal) et **intermittent selon la formulation** — un essai manuel avait conclu « ça marche » la veille.* Toute la V5.3 fait interpréter du langage naturel à un 7B : c'est le mode d'échec dominant, pas les bugs de code. Le banc évalue **dans les deux sens** (rappel *et* retenue) et devient le critère de recette des incréments suivants. Il répond aussi par un chiffre, et non par une opinion, à « Mistral 7B tient-il le tool-calling ? ».
+- [x] **5.3.0 — Banc d'essai de prompts (19 août 2026)** — `uv run python -m tools.eval.prompt_bench`. Référence **Mistral 7B : 52/56 (93 %)**, seuil 90 %. Deux défauts du modèle isolés et documentés (déterminant de la question recopié comme quantité ; formulation elliptique → nombre bouche-trou). *Placé en premier après le bug du 19 août : un défaut de prompt est invisible aux tests unitaires (le code est juste, c'est le modèle qui interprète mal) et **intermittent selon la formulation** — un essai manuel avait conclu « ça marche » la veille.* Toute la V5.3 fait interpréter du langage naturel à un 7B : c'est le mode d'échec dominant, pas les bugs de code. Le banc évalue **dans les deux sens** (rappel *et* retenue) et devient le critère de recette des incréments suivants. Il répond aussi par un chiffre, et non par une opinion, à « Mistral 7B tient-il le tool-calling ? ».
 - [ ] **5.3.1 — Enrichir le `world`** : demandes de dons en attente, bâtiments améliorables et leur coût, temps restant des recherches. C'est ce qui fait passer les conseils de génériques à concrets (« améliore ta tour X, tu as juste de quoi » au lieu de « améliore ton village »).
 - [ ] **5.3.2 — Registre d'outils** (`brain/tools.py`) : nom, description FR, schéma des paramètres, callable, niveau de risque. Outils **lecture seule** d'abord (`etat_du_village`, `lister_troupes_disponibles`) — testable sans le jeu et sans risque. ⚠️ La **règle anti-gemmes s'écrit ICI, une fois** : tout outil pouvant taper `confirmer` passe par le garde-fou d'affordabilité. Pas à re-vérifier dans chaque outil ajouté ensuite.
 - [ ] **5.3.3 — Console admin intégrée au bot** + outils qui agissent. **Décision d'archi** : la console devient un *thread* du bot (`--console`), plus un programme à côté. Aujourd'hui `llm_chat.py` démarre son **propre `PerceptionThread`** → bot + console = deux pipelines complets sur les mêmes 8 Go, deux `world` divergents (la console peut répondre « je suis en attaque » d'après *sa* photo, pas l'état réel), et aucun ordre entre leurs taps le jour où elle sait agir. Intégrée : **une** perception, **un** `world`, et la file d'instructions demandée *est* le scheduler — qui tourne déjà **un agent à la fois** par construction. Confirmation `o/n` sur les outils qui dépensent (attaque, upgrade, labo), désactivable par `--sans-confirmation`.
