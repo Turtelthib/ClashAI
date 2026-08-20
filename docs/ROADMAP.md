@@ -3,11 +3,11 @@
 > **OBJECTIF FINAL** : une IA autonome intelligente qui joue comme un humain — joue, gère, recrute, s'améliore seule, et qu'on **pilote en langage naturel via le chat clan** (cerveau LLM local orchestrant des sous-agents).
 
 **Statut** : `[ ]` à faire · `[~]` partiel · `[x]` fait (détail → [CHANGELOG](CHANGELOG.md)) · 🚫 bloqué · 🔧 bug documenté → [TROUBLESHOOTING](TROUBLESHOOTING.md)
-**Mise à jour** : 19 août 2026 — **V5.2 close côté code** (CNN UI, récolte, upgrades, labo, dons validés en réel ; migration `find_button` terminée). Reste 2 validations en jeu + le renfort dataset.
+**Mise à jour** : 19 août 2026 — **V5.3 démarrée** : cerveau LLM + CNN UI continu livrés. **V5.2 close côté code** (CNN UI, récolte, upgrades, labo, dons validés en réel ; migration `find_button` terminée). Reste 2 validations en jeu + le renfort dataset.
 
 📂 **Ce doc** = ce qui reste à faire. · ✅ Fait → [CHANGELOG.md](CHANGELOG.md) · 🔧 Fix détaillés → [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
-**Chiffres actuels (vérifiés dans le code)** : **18 sorts** · obs **70 dims** / **57 actions** · 63 entrées `troops.json` · CNN UI **140 classes** (v4) · CNN barre **83 classes** (v2) · **236 tests**.
+**Chiffres actuels (vérifiés dans le code)** : **18 sorts** · obs **70 dims** / **57 actions** · 63 entrées `troops.json` · CNN UI **140 classes** (v4) · CNN barre **83 classes** (v2) · **287 tests**.
 
 ---
 
@@ -19,9 +19,9 @@
   - [V5.2 — CNN UI + agents village](#v52--cnn-ui--agents-village)
   - [V4.4 — Polish perception](#v44--polish-perception)
   - [V5.1 — Résiduels multi-agents](#v51--résiduels-multi-agents)
+  - [V5.3 — Cerveau LLM v1 (orchestrateur)](#v53--cerveau-llm-v1-orchestrateur)
   - [V5.0 — Mode live (phases optionnelles)](#v50--mode-live-phases-optionnelles)
 - [📅 À venir](#-à-venir)
-  - [V5.3 — Cerveau LLM v1 (orchestrateur)](#v53--cerveau-llm-v1-orchestrateur)
   - [V5.4 — Pilotage chat + RAG complet](#v54--pilotage-chat--rag-complet)
 - [🔮 Vision long terme](#-vision-long-terme)
   - [V6 — Dashboard web complet](#v6--dashboard-web-complet)
@@ -41,7 +41,7 @@
 | Refacto | ✅ | src/ layout + 13 splits (0 fichier >500L hors legacy) |
 | V5.1 | 🔄 | Brain + scheduler + 4 agents ✅ ; 3 résiduels (ADB cache, sanity-rescan, chat_unread) |
 | **V5.2** | 🔄 **en cours** | CNN UI ✅ (140 cl., mAP50 0.972) · Agent village : récolte ✅, upgrades ✅ **validés en réel** (le LLM décidera du QUOI) · labo ✅ **validé en réel** · dons ✅ **validés en réel** · **code V5.2 terminé** · jeux de clan 🚫 |
-| V5.3 | 💡 | **Cerveau LLM v1** (orchestrateur) : `LocalLLMBrain` décide quel agent lancer |
+| V5.3 | 🔄 **en cours** | Cerveau LLM **actif en réel** (Mistral 7B, décisions 0,4-2,5 s) + console de discussion + CNN UI continu ; reste à enrichir le `world` |
 | V5.4 | 💡 | **Pilotage chat + RAG complet** : parler à l'IA via le chat clan |
 | V6 | 💡 | **Dashboard web** (maquette ✅, build réel à faire) |
 | V7+ | 💡 | Combat réactif, village intelligent, amélioration continue, multi-compte |
@@ -103,6 +103,43 @@
 - [ ] Stop le sanity-rescan dans `environment_v4._all_resources_exhausted()` (redondant avec `_sync_remaining_from_perception()`).
 - [ ] **Flag perception `chat_unread`** (badge `!` près du bouton chat) → `ChatAgent.can_run` ne check qu'en présence du signal, au lieu d'ouvrir périodiquement.
 
+### V5.3 — Cerveau LLM v1 (orchestrateur)
+
+> `LocalLLMBrain(Brain)` remplace `HeuristicBrain` : décide QUEL agent lancer selon le `world`. Détail du fait → [CHANGELOG](CHANGELOG.md).
+
+- [x] **CNN UI continu, cadence réduite (19 août 2026)** : le `PerceptionThread` détecte les boutons **1 cycle sur 5** (~4 Hz au lieu de 20 — les boutons bougent lentement, le combat a besoin des ms), résultat **conservé** entre deux passages. Exposé dans le `world` : `buttons` + `buttons_age_s`.
+- [x] **`LocalLLMBrain` livré (19 août 2026)** : même contrat `decide(world)`, choisit **parmi les agents éligibles** (il ne contourne ni cooldowns ni `can_run`). **Repli heuristique systématique** : Ollama absent, timeout, JSON cassé, agent halluciné. **Actif par défaut** (`--no-llm` pour forcer l'heuristique). 19 tests, client Ollama injecté (aucun serveur requis).
+- [x] **Stack Ollama opérationnelle (19 août 2026)** : client `ollama` + serveur (lancé automatiquement par l'installeur Windows — `ollama serve` dit « adresse déjà utilisée », c'est normal) + `mistral:latest`. Validé de bout en bout : préchauffage OK, décisions en 0,4-2,5 s, discussion qui décrit correctement l'état du jeu.
+- [x] **`world` enrichi (19 août 2026)** : ressources, ouvriers et labo lus **dans le même cycle** que la détection UI (une seule inférence, cache de détections) et exposés sous `readings`. Les valeurs non lisibles sont annoncées « NON LUE » au modèle — corrige une hallucination observée en réel (« tu as 15568 or »).
+- [x] **Console de discussion opérateur (19 août 2026)** : `tools/debug/llm_chat.py` — on parle au cerveau dans un terminal, il voit l'état réel du jeu et répond. Commandes `/etat`, `/oubli`, `/quit` ; `--sans-jeu` pour discuter sans charger la perception. *Sera intégrée au bot en 5.3.3.*
+
+**Objectif de fin de V5.3** : le LLM pilote les agents, en autonomie **et** sur instruction admin en langage naturel (« donne-moi 3 ballons et 2 yéti »). Six incréments, un commit et une validation en jeu chacun.
+
+| # | Incrément | Ce que ça livre |
+|---|---|---|
+| **5.3.0** | **Banc d'essai de prompts** | plusieurs formulations par intention + score attendu, en une commande |
+| **5.3.1** | **Enrichir le `world`** | dons en attente, bâtiments améliorables + coûts, temps de recherche |
+| **5.3.2** | **Registre d'outils** (lecture seule) | schémas, validation, journal — testable sans le jeu |
+| **5.3.3** | **Console intégrée + outils qui agissent** | récolte, dons, upgrade, labo, attaque |
+| **5.3.4** | **Quantités dans le chat admin** | « 3 ballons et 2 yéti » → exactement ça |
+| **5.3.5** | **Boucle autonome avec mémoire** | le LLM voit le RÉSULTAT de ses actions |
+
+- [ ] **5.3.0 — Banc d'essai de prompts.** *Placé en premier après le bug du 19 août : un défaut de prompt est invisible aux tests unitaires (le code est juste, c'est le modèle qui interprète mal) et **intermittent selon la formulation** — un essai manuel avait conclu « ça marche » la veille.* Toute la V5.3 fait interpréter du langage naturel à un 7B : c'est le mode d'échec dominant, pas les bugs de code. Le banc évalue **dans les deux sens** (rappel *et* retenue) et devient le critère de recette des incréments suivants. Il répond aussi par un chiffre, et non par une opinion, à « Mistral 7B tient-il le tool-calling ? ».
+- [ ] **5.3.1 — Enrichir le `world`** : demandes de dons en attente, bâtiments améliorables et leur coût, temps restant des recherches. C'est ce qui fait passer les conseils de génériques à concrets (« améliore ta tour X, tu as juste de quoi » au lieu de « améliore ton village »).
+- [ ] **5.3.2 — Registre d'outils** (`brain/tools.py`) : nom, description FR, schéma des paramètres, callable, niveau de risque. Outils **lecture seule** d'abord (`etat_du_village`, `lister_troupes_disponibles`) — testable sans le jeu et sans risque. ⚠️ La **règle anti-gemmes s'écrit ICI, une fois** : tout outil pouvant taper `confirmer` passe par le garde-fou d'affordabilité. Pas à re-vérifier dans chaque outil ajouté ensuite.
+- [ ] **5.3.3 — Console admin intégrée au bot** + outils qui agissent. **Décision d'archi** : la console devient un *thread* du bot (`--console`), plus un programme à côté. Aujourd'hui `llm_chat.py` démarre son **propre `PerceptionThread`** → bot + console = deux pipelines complets sur les mêmes 8 Go, deux `world` divergents (la console peut répondre « je suis en attaque » d'après *sa* photo, pas l'état réel), et aucun ordre entre leurs taps le jour où elle sait agir. Intégrée : **une** perception, **un** `world`, et la file d'instructions demandée *est* le scheduler — qui tourne déjà **un agent à la fois** par construction. Confirmation `o/n` sur les outils qui dépensent (attaque, upgrade, labo), désactivable par `--sans-confirmation`.
+- [ ] **5.3.4 — Quantités dans le chat admin** : « donne-moi 3 ballons et 2 yéti » → exactement ça. `donate_to_request(wanted=…)` existe déjà et refuse proprement (`no_match`) plutôt que de donner n'importe quoi ; il lui manque le **compte** (passer d'un ensemble à un quota `{ballon: 3, yeti: 2}`). Tout nom de troupe est **validé contre `troops.json`** : un nom inconnu = refus, jamais d'approximation. Pré-parseur déterministe **seulement si** le banc 5.3.0 montre que le 7B décroche — pas de béquille avant la preuve.
+- [ ] **5.3.5 — Boucle autonome avec mémoire des résultats** : aujourd'hui `AgentResult` se perd, donc le LLM re-décide à l'identique après un échec. Mémoire courte des N dernières actions **et de leur issue**. Le plus risqué, donc en dernier.
+
+**🛡️ Autorité : deux entrées, deux pouvoirs.** La file d'instructions porte **qui parle**.
+- **`admin`** (toi, terminal) → peut déclencher les outils qui agissent, et **passe devant** le chat de clan si les deux attendent.
+- **`clan`** (membres) → **conversation uniquement**. Un « @mini_pekka lance une attaque » écrit par un membre est du *texte*, pas une instruction.
+
+⚠️ La sécurité tient à l'**architecture, pas au prompt** : aucun outil n'est branché sur la source `clan`, donc il ne *peut pas* agir — on ne compte pas sur le modèle pour reconnaître un ordre et le refuser (une consigne à un 7B s'applique de travers, cf. le bug du 19 août). Le prompt sert seulement à ce qu'il l'explique poliment **et ne mente pas** (jamais « ok j'attaque ! » sans rien faire). Pire cas d'une injection de prompt dans le chat clan : il dit une bêtise. Jamais : il joue.
+
+- [ ] **Exposer les agents comme vrais tool-calls** Ollama (aujourd'hui : prompt + JSON, ce qui marche déjà et reste plus portable entre modèles). À trancher avec le banc 5.3.0.
+- [ ] **Mode coach** : après chaque attaque, contexte → analyse NL → log ou chat clan.
+
 ### V5.0 — Mode live (phases optionnelles)
 
 - [ ] **Phase 3** : decision tick event-driven (thread réagissant aux events `PerceptionEventBus`). Mode prod only (le RL reste sur steps discrets).
@@ -113,14 +150,6 @@
 
 ## 📅 À venir
 
-### V5.3 — Cerveau LLM v1 (orchestrateur)
-
-> `LocalLLMBrain(Brain)` remplace `HeuristicBrain` : décide QUEL agent lancer selon le `world`. Le seam `Brain` existe déjà (V5.1).
-
-- [ ] `LocalLLMBrain.decide(world)` → prompt (world JSON + agents-tools + RAG minimal) → Ollama **tool-call** → agent choisi.
-- [ ] **Outils village déjà prêts** : `free_builders()`, `resources()`, `upgrade_building()` (retour structuré `UpgradeResult`) → à exposer comme tools + dans le `world`.
-- [ ] Stack : Ollama + **Mistral 7B** + `ollama-python` (détail → *Cerveau LLM local*).
-
 ### V5.4 — Pilotage chat + RAG complet
 
 - [ ] `ChatAgent` (déjà là) → `LocalLLMBrain` (avec RAG) → répond / exécute / rapporte.
@@ -128,6 +157,7 @@
   - **Débloque aussi les dons intelligents** : une demande écrite en toutes lettres (« il me faut des sapeurs et des ballons ») sans verrouillage laisse le jeu tout accepter → seul le texte dit quoi envoyer. `DonationManager.donate_to_request(wanted=…)` attend déjà cette liste.
 - [ ] RAG : **Chroma** + `nomic-embed-text` (jargon/méca CoC + contexte clan + préférences).
 - [ ] **Dons intelligents sur demande ÉCRITE** : quand le membre écrit « 3 sorcières + 2 ballons + 1 soin + 1 zap » **sans que le jeu verrouille** ces troupes, seul l'OCR du message dit quoi envoyer — et **en quelle quantité**. Le LLM doit fournir exactement ça, ni plus ni moins. `DonationManager.donate_to_request(wanted=…)` attend déjà la liste ; reste à lire le texte (dépend de l'OCR-par-message ci-dessus) et à **respecter les quantités** (aujourd'hui on répartit à l'aveugle jusqu'à ce que le jeu refuse).
+- [ ] **Relayer les demandes des membres à l'admin** : un « @mini_pekka lance une attaque » écrit dans le chat de clan ne se perd pas — il remonte dans la console admin (« *un membre demande une attaque* ») et **tu** tranches. Le membre est entendu, l'autorité reste d'un seul côté. Dépend de l'OCR-par-message ci-dessus.
 - [ ] **Scroll horizontal** — grille du **labo** ET pop-up des **dons** : des troupes/sorts restent hors écran, donc jamais choisis. Même mécanisme pour les deux (swipe + déduplication entre pages).
 - [ ] ⚠️ Sécurité : chat = input **hostile** (injection) → whitelist des donneurs d'ordres + actions destructives (`exclure`, `promouvoir`, `retrograder`) derrière confirmation.
 

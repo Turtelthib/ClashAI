@@ -9,6 +9,54 @@ Historique chronologique des features livrées, du plus récent au plus ancien.
 
 ---
 
+## V5.3 — Cerveau LLM (en cours)
+
+> Le seam `Brain` posé en V5.1 se remplit enfin. Détail de ce qui reste → [ROADMAP](ROADMAP.md).
+
+- ✅🐛 **Le cerveau refusait une valeur qu'il avait sous les yeux** (19 août 2026) — 🔧 [TROUBLESHOOTING](TROUBLESHOOTING.md). « Combien d'élixir noir ? » → « je ne sais pas », alors que l'or exact tombait dans la même conversation. **Deux bugs empilés**, aucun dans la perception.
+  - 🔍 **Écarté par la mesure** : `tools/debug/widgets_demo` (nouveau, lecture seule) montre **5/5 widgets lus**, conf CNN 0.80-0.93, confiance de lecture **1.00**. La chaîne CNN → chiffre est saine ; le défaut était **en aval**.
+  - 🐛 **Cause 1 — des clés d'API dans un prompt en langage naturel** : la ligne `ressources : elixir = …, elixir_noire = …, or = …` fait fusionner les deux premières entrées par le modèle (`elixir_noire` **contient** `elixir`, et `or` est aussi un mot français). Fix : **une ressource par ligne**, libellés français, **ordre du HUD** (le tri alphabétique collait justement les deux élixirs).
+  - 🐛 **Cause 2 — ma propre sur-correction anti-hallucination** : à force de marteler « n'invente JAMAIS », le refus est devenu le réflexe par défaut, jusqu'à **halluciner le marqueur d'ignorance** sur une valeur présente (« le montant d'élixir noir est "NON LUE" »). Fix : l'état fait **AUTORITÉ**, et le refus n'est autorisé que sur le marqueur **littéral**.
+  - ✅ **Évalué dans les DEUX SENS** sur 6 formulations — rappel **6/6** (valeur présente → il la donne) et retenue **6/6** (valeur absente → il refuse sans inventer). Corriger un sens en cassant l'autre n'aurait pas été un correctif.
+  - 🧰 **`tools/debug/widgets_demo`** : diagnostic qui tranche entre « le CNN ne voit pas le widget » (→ dataset) et « le nombre est refusé » (→ segmentation), avec les crops sauvés. C'est lui qui a innocenté la perception en une commande.
+  - **8 tests** déterministes (sans LLM). **287 tests.**
+- ✅🐛 **Le cerveau lit les vraies valeurs — et dit ce qu'il ignore** (19 août 2026) — corrige une **hallucination observée en réel**.
+  - 🐛 **Le symptôme** : « Combien j'ai d'or ? » → « Tu as **15568** or ». Chiffre **inventé**. Le `world` ne contenait pas les ressources : le modèle voyait seulement le *nom* du bouton `compteur_or` et a comblé le trou. Un 7B fait ça, et c'est ce qui détruit la confiance dans l'outil.
+  - **Fix 1 — lui donner les vraies valeurs** : le `PerceptionThread` lit désormais ressources / ouvriers / labo **dans le même cycle** que la détection UI, via un cache de détections (`_Cached`) — **une seule inférence UI**, les lecteurs réutilisent ses résultats et n'ajoutent qu'un peu de digit CNN sur des crops. Exposé dans le `world` sous `readings`.
+  - **Fix 2 — nommer l'ignorance** : une valeur non lue est annoncée « **NON LUE (ne pas inventer)** » plutôt qu'omise. Une donnée absente du prompt est une invitation à broder ; une donnée explicitement marquée inconnue ne l'est pas. Le prompt précise aussi que les boutons sont des **noms techniques**, pas des valeurs (`compteur_or` ≠ un montant).
+  - ✅ **Vérifié avec le vrai modèle** : sans lecture → « **Je ne sais pas**, le compteur Or n'est pas disponible » ; avec lecture → « Je dispose de **4261458** or ». 
+  - Au passage, les boutons envoyés au LLM sont les **classes CNN** seules (avant, `attack_button` *et* `attaquer` apparaissaient — deux noms pour le même bouton).
+  - **9 tests**, dont l'invariant anti-invention et « une clé absente ne devient jamais une valeur ». **279 tests.**
+- ✅🐛 **Préchauffage du modèle (`warmup`) + `keep_alive`** (19 août 2026) — **premier LLM réellement branché en conditions réelles**. Mesures sur Mistral 7B / Ollama :
+
+  | | Latence |
+  |---|---|
+  | 1er appel (chargement GPU) | **~21 s** |
+  | Appels suivants | **0,1 – 0,6 s** |
+  | Décision complète (prompt réel) | **0,4 – 2,5 s** |
+
+  - 🐛 Le premier appel dépassait le timeout de décision (20 s) → la première décision partait à l'heuristique **pour rien**. Fix : `warmup()` paie ce coût **une fois au démarrage**, avec un timeout dédié généreux, et `keep_alive='30m'` empêche Ollama de décharger le modèle entre deux décisions (défaut : 5 min).
+  - 🐛 **Bug attrapé par les tests** : `warmup()` fabriquait un vrai client Ollama même quand un client avait été **injecté** → les tests parlaient au serveur réel et passaient pour de mauvaises raisons. Un `_injected` explicite règle ça.
+  - ✅ **Validé en réel** : `warmup True` → décisions `village` en 2,5 s puis 0,4 s, `{'llm': 2, 'fallback': 0, 'errors': 0}`. Et en discussion, le modèle décrit correctement l'écran, les boutons, les ressources et le labo — **il voit l'état réel du jeu**, il ne brode pas.
+  - 📌 **Diagnostic sur Windows** : `ollama serve` répond « Une seule utilisation de chaque adresse de socket » quand Ollama **tourne déjà** (l'installeur le lance en service). Ce n'est pas une erreur : il n'y a rien à lancer. **276 tests.**
+- ✅ **Le LLM devient le mode PAR DÉFAUT** (19 août 2026) : c'est le but du projet — lancer ClashAI, c'est lancer le cerveau. Le flag devient `--no-llm` (forcer l'heuristique). Rendre ça défaut est sans risque **parce que** le repli est solide : Ollama absent → heuristique, avec back-off, donc sans coût.
+- ✅ **Console de discussion opérateur ↔ cerveau** (19 août 2026) — `LocalLLMBrain.chat()` + `tools/debug/llm_chat.py`. Conversation **privée dans un terminal**, distincte du chat de clan (V5.4) : on parle au cerveau, il voit l'**état réel du jeu** (écran, boutons visibles, troupes prêtes) et répond en français.
+  - Prompt **séparé** de celui de la décision : ici on veut du texte pour un humain, pas un JSON à parser.
+  - **Mémoire courte volontaire** (8 tours) : un 7B local a une fenêtre de contexte modeste, mieux vaut une mémoire fiable qu'un historique qui déborde et fait dérailler les réponses.
+  - Commandes `/etat` (ce qu'il voit), `/oubli` (vider la mémoire), `/quit`. `--sans-jeu` pour discuter sans charger la perception (démarrage instantané, mais il ne voit rien).
+  - Le LLM indisponible est **dit clairement** (« Ollama ne répond pas » + quoi vérifier) au lieu d'une console muette.
+  - **6 tests**, dont l'invariant qui compte : l'état du jeu est bien **transmis** au modèle — sinon il ne peut que broder. **270 tests.**
+- ✅ **CNN UI continu, à cadence réduite** (19 août 2026) : le `PerceptionThread` détecte les boutons **1 cycle sur 5** (~4 Hz au lieu de 20). Choix délibéré — les boutons d'interface apparaissent avec un écran, pas entre deux frames, alors qu'en combat chaque milliseconde sert au RL. La détection est **conservée entre deux passages** pour que les boutons ne clignotent pas. Exposée dans le `world` (`buttons`, `buttons_age_s`) : c'est ce que lira le cerveau — « voilà l'écran, voilà les boutons », sans déclencher une détection à chaque décision. 5 tests, dont la tolérance à un `PerceptionThread` plus ancien.
+- ✅ **`LocalLLMBrain`** (19 août 2026) — même contrat `decide(world)` que `HeuristicBrain`, donc **aucun agent ne sait qu'un LLM existe**.
+  - 🛡️ **Invariant : le LLM ne peut pas bloquer le bot.** Ollama pas lancé, modèle absent, timeout, JSON cassé, agent halluciné → repli **silencieux** sur l'heuristique. Un cerveau indisponible dégrade l'intelligence, jamais la disponibilité — c'est ce qui permet de le brancher avant qu'il soit bon.
+  - 🛡️ **Le LLM choisit PARMI les agents éligibles** : il ne contourne ni les cooldowns ni les `can_run`. Une mauvaise décision reste donc toujours une décision *valide*.
+  - **Économe** : aucun appel si rien n'est éligible ou s'il n'y a qu'un candidat (rien à arbitrer), et au plus un appel toutes les 30 s — le scheduler boucle bien trop vite pour interroger un LLM à chaque tick.
+  - Tolère le bavardage : un modèle local qui entoure son JSON de texte est quand même compris.
+  - **Opt-in** (`--llm`, `--llm-model`) : sans le flag, le bot se comporte exactement comme avant.
+  - ⏱️ **Back-off exponentiel** : mesuré en réel, un Ollama **non lancé** coûte **~6 s bloquées** par tentative — répété toutes les 30 s, le bot y passerait ~20 % de son temps pour retomber sur l'heuristique de toute façon. L'attente double à chaque échec consécutif (30 s → 60 → 120 → … plafonnée à 10 min) et **le premier succès remet tout à zéro** (le serveur a été lancé entre-temps).
+  - **23 tests** avec un client Ollama **injecté** (aucun serveur, aucun modèle, aucun GPU) : décision suivie, priorité outrepassée par le LLM, et surtout tous les chemins de repli — y compris 6 réponses dégénérées (`None`, `42`, `{}`, `[]`, agent numérique…) et le back-off. **264 tests.**
+  - `AgentScheduler.agents` exposé en lecture seule (copie) — utile aussi au dashboard V6.
+
 ## V5.2 — CNN UI + agents village (en cours)
 
 > **CNN UI livré et branché** · **Agent village** : récolte livrée, upgrades livrés (attendent le re-train des classes + le LLM pour décider). Restent : labo, dons, et l'agent jeux de clan (🚫 jeux inactifs) → [ROADMAP](ROADMAP.md). *Cette section couvre aussi l'outillage & l'audit qui ont ouvert le cycle.*

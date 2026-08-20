@@ -36,10 +36,17 @@ def load_first_compatible_checkpoint(agent, paths, exists=os.path.exists):
 class BrainCoreMixin:
     """Lifecycle + module loading for ClashBrain."""
 
-    def __init__(self, mode='auto', bot_name=DEFAULT_BOT_NAME, verbose=True):
+    def __init__(self, mode='auto', bot_name=DEFAULT_BOT_NAME, verbose=True,
+                 use_llm=True, llm_model=None):
         self.mode = mode
         self.bot_name = bot_name
         self.verbose = verbose
+        # V5.3 : le cerveau LLM est le mode PAR DÉFAUT — c'est le but du
+        # projet. Le rendre par défaut est sans risque parce qu'il retombe
+        # tout seul sur l'heuristique quand Ollama n'est pas là (avec back-off,
+        # donc sans coût). `--no-llm` force l'heuristique.
+        self.use_llm = use_llm
+        self.llm_model = llm_model
         self._running = False
 
         # Stats
@@ -204,7 +211,24 @@ class BrainCoreMixin:
                 verbose=self.verbose,
             ))
 
-        self._brain = HeuristicBrain(self._scheduler)
+        # V5.3 : LocalLLMBrain si demandé, sinon l'heuristique. Le LLM retombe
+        # lui-même sur l'heuristique en cas de souci — il ne peut pas bloquer.
+        if self.use_llm:
+            from clashai.brain.llm_brain import DEFAULT_MODEL, LocalLLMBrain
+            model = self.llm_model or DEFAULT_MODEL
+            self._brain = LocalLLMBrain(self._scheduler, model=model,
+                                        verbose=self.verbose)
+            # Le tout premier appel charge le modèle sur le GPU (~21 s mesurées),
+            # au-dessus du timeout de décision : on paie ce coût ICI, une fois,
+            # plutôt que de rater la première décision pour rien.
+            print(f" Cerveau LLM : préchauffage de « {model} »…")
+            if self._brain.warmup():
+                print(" Cerveau LLM actif — repli heuristique automatique")
+            else:
+                print(" Cerveau LLM injoignable → heuristique "
+                      "(il reprendra la main dès qu'Ollama répondra)")
+        else:
+            self._brain = HeuristicBrain(self._scheduler)
 
         print("Tous les modules chargés\n")
 

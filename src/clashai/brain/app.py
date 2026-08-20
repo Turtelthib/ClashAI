@@ -51,6 +51,16 @@ def main():
         '--quiet', action='store_true',
         help="Moins de logs"
     )
+    parser.add_argument(
+        '--no-llm', action='store_true',
+        help="Désactive le cerveau LLM et force l'heuristique. Par défaut le "
+             "LLM est actif (c'est le but du projet) ; il retombe de toute "
+             "façon sur l'heuristique si Ollama n'est pas là."
+    )
+    parser.add_argument(
+        '--llm-model', type=str, default=None,
+        help="Modèle Ollama (défaut: mistral)"
+    )
 
     args = parser.parse_args()
 
@@ -58,6 +68,8 @@ def main():
         mode=args.mode,
         bot_name=args.bot_name,
         verbose=not args.quiet,
+        use_llm=not args.no_llm,
+        llm_model=args.llm_model,
     )
     brain.start(max_episodes=args.episodes)
 

@@ -24,6 +24,53 @@ Si un de ces problèmes réapparaît, relire le bloc correspondant avant de re-d
 - [Faux « pas les moyens » : ressource d'un prix mal identifiée (RGB vs HSV)](#-faux-pas-les-moyens--ressource-mal-identifiée)
 - [Kaggle « Kernel died » à l'entraînement (auto-batch)](#-kaggle--kernel-died--à-lentraînement)
 - [« Mode RL » avec une politique ALÉATOIRE (checkpoint périmé)](#-mode-rl-avec-une-politique-aléatoire)
+- [Le LLM refuse une valeur qu'il a sous les yeux](#-le-llm-refuse-une-valeur-quil-a-sous-les-yeux)
+
+---
+
+## 🔧 Le LLM refuse une valeur qu'il a sous les yeux
+
+> Le cerveau répond « je ne sais pas » pour l'élixir noir, alors que la valeur est **présente dans le prompt** — et donne l'or exact dans la même conversation. Deux bugs distincts empilés : un **nommage** et une **sur-correction**.
+
+**Symptômes** *(19 août 2026)*
+```
+toi > combien j'ai d'or ?                → Vous avez 2235125 d'or.        ✅
+toi > combien j'ai d'elixir noire ?      → Vous avez 18549 Elixir noir.   ✅
+toi > combien d'elixir noir exactement ? → « Les seules ressources indiquées
+                                              sont l'élixir et l'or. »    ❌
+```
+Intermittent, **dépendant de la formulation** — donc facile à prendre pour un caprice du modèle.
+
+**Ce que ce n'était PAS** (écarté par la mesure, pas par l'intuition)
+- ❌ La perception : `tools/debug/widgets_demo` donne **5/5 widgets**, conf CNN 0.80-0.93, confiance de lecture **1.00**, élixir noir compris.
+- ❌ Le `world` : `build_world()` transmet bien `readings` (l'or exact le prouve).
+- ❌ La liste des boutons : testé avec et sans `compteur_elixir_noire` dedans → **aucune différence**.
+
+**Cause 1 — des clés d'API dans un prompt en langage naturel**
+La description tenait sur une ligne, en clés techniques triées alphabétiquement :
+```
+- ressources : elixir = 2399904, elixir_noire = 18549, or = 2235125
+```
+`elixir_noire` **contient** `elixir`, et `or` est aussi un mot français. Le modèle fusionne les deux premières entrées et n'en compte plus que deux — il le dit lui-même. Le tri alphabétique aggravait le problème en collant les deux élixirs.
+
+**Cause 2 — la sur-correction anti-hallucination**
+Le prompt martelait « n'invente JAMAIS », « dis je ne sais pas ». Le refus est devenu le réflexe par défaut : le modèle a fini par **halluciner le marqueur d'ignorance** sur une valeur présente —
+> *« Le montant d'élixir noir est **"NON LUE"** »*
+
+Une consigne de prudence sans **déclencheur objectif** ne produit pas de la prudence, elle produit du refus.
+
+**Fix**
+1. `RESOURCE_LABELS` : une ressource **par ligne**, en français lisible (`- élixir noir : 18549`), dans l'**ordre du HUD** et non alphabétique. Aucune clé technique n'atteint le modèle.
+2. `CHAT_SYSTEM_PROMPT` rééquilibré : l'état fait **AUTORITÉ** (affirmation positive, qui manquait), le refus est restreint au marqueur **littéral** « NON LUE », et les boutons sont déclarés **sans incidence** sur les chiffres.
+
+**Pièges**
+- ⚠️ **Corriger un sens casse facilement l'autre.** Le correctif doit être évalué dans les **deux directions** : rappel (valeur présente → il la donne) *et* retenue (valeur absente → il refuse). Mesuré après fix : **6/6 et 6/6** sur 6 formulations.
+- ⚠️ Ne pas conclure « c'est le modèle qui est faible » sur une question qui échoue : **reformuler** la même question suffisait à obtenir la bonne réponse. Le signal utile est le *taux* sur plusieurs formulations, jamais un essai unique.
+- ⚠️ Le prompt est une **interface pour un modèle**, pas un dump de `dict`. Deux noms qui se ressemblent (`elixir` / `elixir_noire`) se fusionnent ; un nom qui est aussi un mot courant (`or`) se perd.
+
+**Tests** — `tests/test_llm_brain.py` (8, déterministes, sans LLM) : une ligne par ressource, aucune clé technique dans le prompt, ordre HUD respecté, ressource inconnue quand même remontée, ressources partielles non complétées, et les 3 invariants du prompt (autorité, refus conditionné, découplage boutons).
+
+**Reproduire** : `uv run python -m tools.debug.widgets_demo` (isole la perception) puis poser la même question sous 3 formulations différentes dans `llm_chat`.
 
 ---
 

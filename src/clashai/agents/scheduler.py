@@ -62,6 +62,16 @@ class AgentScheduler:
             agent.on_unregister()
             self._agents.remove(agent)
 
+    @property
+    def agents(self) -> List[BaseAgent]:
+        """Agents enregistrés, par priorité décroissante (copie).
+
+        Lecture seule : `LocalLLMBrain` s'en sert pour proposer au LLM les
+        agents ÉLIGIBLES, et le dashboard (V6) pour les afficher. Copie, pour
+        qu'un appelant ne puisse pas casser l'ordre de priorité.
+        """
+        return list(self._agents)
+
     def get(self, name: str) -> Optional[BaseAgent]:
         for a in self._agents:
             if a.name == name:

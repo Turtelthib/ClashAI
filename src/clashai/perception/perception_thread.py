@@ -52,9 +52,23 @@ class PerceptionThread:
     # Minimum interval between inference runs (don't hammer GPU unnecessarily)
     INFERENCE_MIN_INTERVAL = 0.05  # 50ms → max 20fps inference
 
+    # Le CNN UI (140 classes, imgsz 1280) tourne 1 cycle sur N, pas à chaque
+    # frame : les boutons d'interface bougent LENTEMENT (ils apparaissent avec un
+    # écran, pas entre deux frames), alors qu'en combat chaque milliseconde
+    # compte pour le RL. ~4 Hz suffit largement, et le résultat est CONSERVÉ
+    # entre deux passages pour que les boutons ne clignotent pas.
+    UI_EVERY_N_CYCLES = 5
+
     def __init__(self, models, verbose=False, event_bus=None):
         self.models = models
         self.verbose = verbose
+
+        # Détection UI : conservée entre deux cycles (cf. UI_EVERY_N_CYCLES).
+        self._ui_cycle = 0
+        self._ui_buttons = {}
+        self._ui_ts = 0.0
+        # Lectures chiffrées du même cycle (ressources, ouvriers, labo).
+        self._ui_readings = {}
 
         # Frame queue: FrameCapture → InferenceWorker
         # maxsize=1: InferenceWorker always processes the LATEST frame
@@ -295,6 +309,29 @@ class PerceptionThread:
                 if self.verbose:
                     traceback.print_exc()
 
+            #  3b. CNN UI — cadence réduite (voir UI_EVERY_N_CYCLES).
+            # Le détecteur est celui installé au démarrage (`ui_buttons`), donc
+            # aucun second chargement du modèle. Absent → on saute, sans erreur.
+            self._ui_cycle += 1
+            if self._ui_cycle % self.UI_EVERY_N_CYCLES == 0:
+                try:
+                    from clashai.perception.ui_buttons import get_detector
+                    ui_det = get_detector()
+                    if ui_det is not None:
+                        # UNE seule inférence UI par cycle : on en tire à la fois
+                        # les boutons ET les valeurs chiffrées (les lecteurs
+                        # réutilisent ces détections via un cache, cf. _Cached).
+                        raw = ui_det.detect_raw(frame)
+                        self._ui_buttons = {
+                            cls: (d[0].x, d[0].y, d[0].conf)
+                            for cls, d in raw.items() if d
+                        }
+                        self._ui_readings = self._read_widgets(frame, raw)
+                        self._ui_ts = time.time()
+                except Exception:
+                    if self.verbose:
+                        traceback.print_exc()
+
             #  4. Screen classifier
             try:
                 screen_state, screen_conf = classify_screen(frame, self.models)
@@ -314,6 +351,11 @@ class PerceptionThread:
                 'screen_conf': screen_conf,
                 'troop_bar': troop_bar,         # raw detections with is_grayed
                 'troop_positions': troop_positions,  # {name: (x,y,conf)} active only
+                'buttons': dict(self._ui_buttons),   # {classe CNN: (x,y,conf)}
+                'buttons_ts': self._ui_ts,           # 0.0 = jamais détecté
+                # Valeurs LUES (ressources, ouvriers, labo) — absentes de ce dict
+                # quand elles n'ont pas pu être lues : on ne devine jamais.
+                'readings': dict(self._ui_readings),
                 'timestamp': last_inference,
                 'inference_ms': elapsed_ms,
             }
@@ -329,6 +371,44 @@ class PerceptionThread:
             # Subscribers run synchronously on this inference thread —
             # keep callbacks fast.
             self._emit_events(new_state)
+
+    class _Cached:
+        """Détecteur factice qui rejoue des détections déjà calculées.
+
+        Évite une SECONDE inférence UI : les lecteurs de widgets appellent
+        `detect_raw()`, on leur sert simplement le résultat du cycle courant.
+        """
+
+        def __init__(self, raw):
+            self._raw = raw
+
+        def detect_raw(self, _img):
+            return self._raw
+
+    def _read_widgets(self, frame, raw):
+        """Ressources / ouvriers / labo, lus depuis les détections du cycle.
+
+        Une clé ABSENTE signifie « pas lisible sur cet écran » — jamais une
+        valeur devinée. C'est ce qui permet au cerveau de dire « je ne sais
+        pas » au lieu d'inventer un montant.
+        """
+        out = {}
+        try:
+            from clashai.perception.widget_reader import WidgetReader
+            reader = WidgetReader(detector=self._Cached(raw))
+            resources = reader.read_resources(frame)
+            if resources:
+                out['resources'] = resources
+            builders = reader.read_builders(frame)
+            if builders is not None:
+                out['builders'] = {'libres': builders[0], 'total': builders[1]}
+            labs = reader.read_labs(frame)
+            if labs is not None:
+                out['lab_libre'] = labs[0] >= 1
+        except Exception:
+            if self.verbose:
+                traceback.print_exc()
+        return out
 
     def _emit_events(self, state):
         """Fire push events derived from the latest inference cycle."""

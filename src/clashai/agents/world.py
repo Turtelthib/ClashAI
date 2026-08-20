@@ -12,6 +12,12 @@
 #   buildings         : list | None — YOLO building detections
 #   troop_bar         : list | None — troop bar CNN detections
 #   troop_positions   : dict | None — {name: (x,y,conf)} active only
+#   buttons           : dict         — {classe CNN | clé calibration: (x,y,conf)}
+#                                      boutons visibles à l'écran (CNN UI)
+#   buttons_age_s     : float | None — âge de cette détection (None = jamais)
+#   readings          : dict         — valeurs LUES à l'écran : resources,
+#                                      builders, lab_libre. Une clé ABSENTE =
+#                                      non lisible ici (jamais devinée)
 #   fresh             : bool         — True if the perception cache was fresh
 #   timestamp         : float
 # Derived convenience flags:
@@ -23,7 +29,8 @@ import time
 # Documented surface of the snapshot (raw perception keys).
 WORLD_KEYS = (
     'screen_state', 'screen_conf', 'buildings',
-    'troop_bar', 'troop_positions', 'fresh', 'timestamp',
+    'troop_bar', 'troop_positions', 'buttons', 'buttons_age_s', 'readings',
+    'fresh', 'timestamp',
 )
 
 
@@ -47,6 +54,12 @@ def build_world(models=None, max_age_s=2.0, **flags):
         'buildings': None,
         'troop_bar': None,
         'troop_positions': None,
+        # Boutons visibles (CNN UI). Détectés à cadence réduite et CONSERVÉS
+        # entre deux passages : `buttons_age_s` dit depuis quand, à charge de
+        # l'appelant d'en tenir compte s'il veut du frais.
+        'buttons': {},
+        'buttons_age_s': None,
+        'readings': {},
         'fresh': False,
         'timestamp': 0.0,
     }
@@ -56,12 +69,16 @@ def build_world(models=None, max_age_s=2.0, **flags):
         try:
             if pt.is_fresh(max_age_s=max_age_s):
                 state = pt.get_latest()
+                bts = state.get('buttons_ts') or 0.0
                 world.update(
                     screen_state=state.get('screen_state'),
                     screen_conf=state.get('screen_conf', 0.0),
                     buildings=state.get('buildings'),
                     troop_bar=state.get('troop_bar'),
                     troop_positions=state.get('troop_positions'),
+                    buttons=state.get('buttons') or {},
+                    buttons_age_s=(time.time() - bts) if bts else None,
+                    readings=state.get('readings') or {},
                     fresh=True,
                     timestamp=state.get('timestamp', time.time()),
                 )
