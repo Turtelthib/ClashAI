@@ -34,20 +34,40 @@
 # world) -> str|None`. Tout est donc testable avec un faux modèle, et le banc
 # peut servir plus tard à comparer deux modèles ou deux prompts.
 #
-# ÉTAT DE RÉFÉRENCE — Mistral 7B, 19 août 2026 : **52/56 (93 %)** à --repeat 2.
-# Deux défauts connus, reproduits, NON corrigés à ce jour :
+# ÉTAT DE RÉFÉRENCE — Mistral 7B, 19 août 2026 : **98/102 (96 %)** à --repeat 3,
+# après l'incrément 5.3.1.
 #
-#   1. `ouvriers.question_fermee` — « est-ce que j'ai UN ouvrier de dispo ? »
-#      → « Oui, tu as 1 ouvrier ». Il recopie le déterminant de la QUESTION comme
-#      quantité, au lieu de lire l'état (qui en annonce 4).
-#   2. `ressources.or/retenue` — « mon stock d'or stp », rien de lu
-#      → « Or : 12345 ». Un nombre bouche-trou, sorti de nulle part. Noter que la
-#      formulation ELLIPTIQUE échoue là où la question directe (« combien j'ai
-#      d'or ? ») tient : moins la phrase est explicite, plus il comble.
+# ⚠️ LEÇON PRINCIPALE : sur 3 « défauts du modèle » identifiés, 2 étaient des
+# défauts de MON PROMPT. Avant d'accuser le 7B, relire la ligne qu'on lui donne.
 #
-# ⚠️ Tentative de correction ratée, à ne pas refaire à l'identique : ajouter au
-# prompt « tout chiffre que tu cites vient de l'état, jamais de la question » ne
-# corrige PAS le cas 1 et n'améliore pas le cas 2. Le levier est ailleurs.
+#   ✅ CORRIGÉ — « est-ce que j'ai UN ouvrier ? » → « Oui, tu as 1 ouvrier ».
+#      J'avais noté « il recopie le déterminant de la question ». FAUX : la ligne
+#      « ouvriers : 4 libres sur 5 » portait DEUX nombres, et il attrapait le
+#      mauvais. Séparée en « ouvriers libres : 4 » + « ouvriers au total : 5 » :
+#      0/3 → 6/6.
+#   ✅ CORRIGÉ — « combien de collecteurs d'or ? » → « Six » (le compte de
+#      l'élixir). La liste à virgules « 5 or, 6 élixir, 3 élixir noir » refaisait
+#      le bug d'origine. Une ligne par ressource : 5/6 → 6/6.
+#   ⏳ OUVERT — `dons_en_attente`, formulation INDIRECTE. « il y a combien de
+#      demandes de dons ? » → 3/3 parfait. « combien de membres attendent des
+#      troupes ? » → 0/3, avec trois réponses différentes (« Quatre », « Aucun »,
+#      « 3 ») : il devine. Le modèle ne fait pas le pont entre la paraphrase et
+#      la ligne. Un libellé plus explicite a déjà fait passer ce cas de 4/6 à
+#      9/10 en isolé, mais l'effet ne tient pas quand le prompt s'allonge.
+#   ⏳ OUVERT — `ressources.or/retenue`, formulation ELLIPTIQUE. « mon stock d'or
+#      stp » sur un world vide → « Or : 12345 », un nombre bouche-trou (1/9).
+#      La question directe (« combien j'ai d'or ? ») tient parfaitement.
+#
+# ⚠️ NE PAS AJUSTER LE PROMPT JUSQU'À CE QU'UNE FORMULATION PRÉCISE PASSE : un
+# banc qu'on optimise ne mesure plus rien. On corrige une CAUSE (format ambigu,
+# liste à virgules, clé technique), jamais un cas.
+#
+# ⚠️ Tentative ratée, à ne pas refaire : ajouter « tout chiffre que tu cites
+# vient de l'état, jamais de la question » ne corrige rien et n'améliore rien.
+#
+# ⚠️ TENSION MESURÉE : plus le prompt s'allonge, plus les formulations courtes ou
+# indirectes se dégradent. Chaque champ ajouté au `world` a donc un coût — à
+# surveiller au banc quand on en ajoutera d'autres (coûts d'upgrade, etc.).
 
 import re
 from dataclasses import dataclass, field
@@ -62,6 +82,27 @@ from typing import Callable, List, Optional
 _BIG_NUMBER = re.compile(r'\d[\d\s.,  ]{2,}')
 
 
+# Petits nombres écrits en toutes lettres. Mesuré : le modèle répond « Six
+# collecteurs d'or sont prêts » — sans conversion, le banc raterait une réponse
+# JUSTE écrite en français.
+#
+# ⚠️ Sont volontairement ABSENTS :
+#   - « un »/« une » : des articles avant d'être des nombres (« un ouvrier »,
+#     « d'une part »). Les convertir créerait des succès fantômes partout où le
+#     chiffre attendu est 1.
+#   - « aucun »/« aucune » : « je n'ai AUCUNE information » est un refus tout à
+#     fait correct, pas une affirmation de zéro. Les compter comme un chiffre
+#     ferait échouer les meilleurs refus. On tolère donc « aucun collecteur »,
+#     qui sur-affirme un peu — un faux positif coûte plus cher au banc qu'une
+#     indulgence.
+_WORD_NUMBERS = {
+    'zero': 0, 'zéro': 0,
+    'deux': 2, 'trois': 3, 'quatre': 4, 'cinq': 5, 'six': 6, 'sept': 7,
+    'huit': 8, 'neuf': 9, 'dix': 10, 'onze': 11, 'douze': 12,
+}
+_WORD_RE = re.compile(r'\b(' + '|'.join(_WORD_NUMBERS) + r')\b', re.IGNORECASE)
+
+
 def digits_of(text):
     """Tous les chiffres du texte, concaténés.
 
@@ -69,8 +110,13 @@ def digits_of(text):
     (« 1 8549 » pour 18549). En comparant sur la suite des chiffres, une valeur
     correctement rapportée mais mal formatée compte comme un succès — ce qui est
     le bon jugement : la donnée est juste, seule la typographie déraille.
+
+    Les petits nombres écrits en toutes lettres sont convertis d'abord (voir
+    `_WORD_NUMBERS`) : « six collecteurs » doit compter comme « 6 collecteurs ».
     """
-    return re.sub(r'\D', '', text or '')
+    text = _WORD_RE.sub(lambda m: str(_WORD_NUMBERS[m.group(1).lower()]),
+                        text or '')
+    return re.sub(r'\D', '', text)
 
 
 def says_number(expected):
@@ -108,6 +154,21 @@ def says_numbers(*expected):
     def check(answer):
         digits = digits_of(answer)
         return all(str(n) in digits for n in expected)
+
+    return check
+
+
+def says_no_digit():
+    """Vérificateur strict : AUCUN chiffre.
+
+    `says_no_number` tolère les petits nombres (seuil à 3 chiffres) pour ne pas
+    crier au loup sur « 4 ouvriers ». Mais quand la valeur attendue EST un petit
+    compte — collecteurs prêts, demandes de dons — inventer « 5 » passerait
+    inaperçu. Sur un `world` totalement vide, tout chiffre est une invention.
+    """
+
+    def check(answer):
+        return not digits_of(answer)
 
     return check
 
@@ -244,6 +305,9 @@ _READINGS = {
     'resources': {'or': 2235125, 'elixir': 2399904, 'elixir_noire': 18549},
     'builders': {'libres': 4, 'total': 5},
     'lab_libre': False,
+    # Comptes ajoutés en 5.3.1 — repris d'une capture réelle (19 août 2026).
+    'recoltes': {'or': 5, 'elixir': 6, 'elixir_noire': 3},
+    'dons_en_attente': 2,
 }
 
 # Boutons réellement détectés sur une capture de village (19 août 2026). On les
@@ -345,6 +409,28 @@ SUITE = [
             "alors que le world en annonçait 4.",
     ),
 
+    Case(
+        intent='recoltes/rappel',
+        world=WORLD_LU,
+        phrasings=[
+            "combien de collecteurs d'or sont prets ?",
+            "j'ai combien de collecteurs d'or a recolter ?",
+        ],
+        check=says_numbers(5),
+        why="Un COMPTE, pas un montant : `buttons` ne gardait qu'une detection "
+            "par classe et jetait le nombre, pourtant deja calcule.",
+    ),
+    Case(
+        intent='dons_en_attente/rappel',
+        world=WORLD_LU,
+        phrasings=[
+            "il y a combien de demandes de dons ?",
+            "combien de membres attendent des troupes ?",
+        ],
+        check=says_numbers(2),
+        why="Ce compte decidera si l'agent dons vaut la peine d'etre lance.",
+    ),
+
     # ---- RETENUE : rien n'est lu, il ne doit RIEN inventer ------------------
     Case(
         intent='ressources.or/retenue',
@@ -369,6 +455,17 @@ SUITE = [
         check=says_no_number(),
         why="Le pendant du cas de rappel : réparer le rappel ne doit pas "
             "rouvrir la porte à l'invention.",
+    ),
+    Case(
+        intent='comptes/retenue',
+        world=WORLD_NON_LU,
+        phrasings=[
+            "combien de collecteurs d'or sont prets ?",
+            "il y a combien de demandes de dons ?",
+        ],
+        check=says_no_digit(),
+        why="Un petit compte invente (« il y en a 5 ») passerait sous le seuil "
+            "de `says_no_number` : ici, sur un world vide, TOUT chiffre ment.",
     ),
     Case(
         intent='ouvriers/retenue',

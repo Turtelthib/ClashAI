@@ -344,7 +344,7 @@ def test_real_readings_are_shown_verbatim():
                      'builders': {'libres': 5, 'total': 5},
                      'lab_libre': True}})
     assert '4261458' in desc
-    assert '5 libres sur 5' in desc
+    assert '- ouvriers libres : 5' in desc
     assert 'libre' in desc
     assert 'NON LUES' not in desc
 
@@ -442,3 +442,69 @@ def test_chat_prompt_decouples_buttons_from_values():
     connais pas la valeur ». Les deux listes sont independantes."""
     from clashai.brain.llm_brain import CHAT_SYSTEM_PROMPT
     assert 'AUCUNE incidence' in CHAT_SYSTEM_PROMPT
+
+
+# ---------------------------------------------------------------------------
+# Comptes : recoltes disponibles et dons en attente (increment 5.3.1)
+#
+# `buttons` ne garde qu'UNE detection par classe ; le NOMBRE etait jete alors
+# qu'il est deja calcule. Une capture reelle : 5 recolter_or, 6 recolter_elixir,
+# 3 recolter_elixir_noire.
+# ---------------------------------------------------------------------------
+
+def test_each_collector_gets_its_own_line():
+    """La liste a virgules « 5 or, 6 elixir, 3 elixir noir » reproduisait le bug
+    d'origine : a « combien de collecteurs d'or ? » le modele repondait « six »,
+    le compte de l'ELIXIR. Une ligne par ressource, comme pour les stocks."""
+    brain, _ = _brain('ok')
+    desc = brain.describe_world({'readings': {
+        'recoltes': {'or': 5, 'elixir': 6, 'elixir_noire': 3}}})
+    assert "- collecteurs d'or pleins, prêts à récolter : 5" in desc
+    assert "- collecteurs d'élixir pleins, prêts à récolter : 6" in desc
+    assert "- collecteurs d'élixir noir pleins, prêts à récolter : 3" in desc
+    assert 'elixir_noire' not in desc          # jamais de cle technique
+
+
+def test_collectors_keep_the_hud_order():
+    brain, _ = _brain('ok')
+    desc = brain.describe_world({'readings': {
+        'recoltes': {'elixir_noire': 3, 'or': 5}}})
+    assert desc.index("collecteurs d'or") < desc.index("collecteurs d'élixir noir")
+
+
+def test_pending_donations_say_what_they_mean():
+    """« demandes de dons en attente : 2 » seul faisait repondre « aucun » a
+    « combien de membres attendent des troupes ? ». Le libelle doit porter le
+    SENS, pas seulement le nom du champ."""
+    brain, _ = _brain('ok')
+    desc = brain.describe_world({'readings': {'dons_en_attente': 2}})
+    assert 'demandes de dons en attente' in desc and ': 2' in desc
+    assert 'troupes' in desc
+
+
+def test_nothing_to_collect_stays_silent():
+    """« 0 collecteur plein » est du bruit : une ligne absente ne peut pas etre
+    lue comme une valeur inventee, une ligne a zero invite au commentaire."""
+    brain, _ = _brain('ok')
+    desc = brain.describe_world({'readings': {'recoltes': {},
+                                              'dons_en_attente': 0}})
+    assert 'collecteurs' not in desc and 'dons en attente' not in desc
+
+
+def test_an_unknown_collector_key_is_still_reported():
+    """Une ressource future doit apparaitre plutot que disparaitre du prompt."""
+    brain, _ = _brain('ok')
+    desc = brain.describe_world({'readings': {'recoltes': {'or': 1, 'gemme': 2}}})
+    assert "collecteurs d'or pleins, prêts à récolter : 1" in desc
+    assert "collecteurs d'gemme pleins, prêts à récolter : 2" in desc
+
+
+def test_builders_are_split_into_two_unambiguous_lines():
+    """« 4 libres sur 5 » = deux nombres sur une ligne : le modele attrapait le
+    dernier et repondait « 5 ouvriers libres »."""
+    brain, _ = _brain('ok')
+    desc = brain.describe_world({'readings': {
+        'builders': {'libres': 4, 'total': 5}}})
+    assert '- ouvriers libres : 4' in desc
+    assert '- ouvriers au total : 5' in desc
+    assert 'libres sur' not in desc

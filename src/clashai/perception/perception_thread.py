@@ -405,9 +405,45 @@ class PerceptionThread:
             labs = reader.read_labs(frame)
             if labs is not None:
                 out['lab_libre'] = labs[0] >= 1
+            out.update(self._count_widgets(raw))
         except Exception:
             if self.verbose:
                 traceback.print_exc()
+        return out
+
+    @staticmethod
+    def _count_widgets(raw):
+        """Ce qui se COMPTE dans les détections du cycle (V5.3, incrément 5.3.1).
+
+        `buttons` ne garde qu'UNE détection par classe — une position suffit pour
+        taper. Mais le NOMBRE est déjà là et se perdait : une capture réelle
+        contenait 5 `recolter_or`, 6 `recolter_elixir`, 3 `recolter_elixir_noire`.
+        Le cerveau peut en tirer « il y a de quoi récolter » sans rien palper.
+
+        ⚠️ On compte au seuil d'ACTION (0.60), pas au seuil d'inférence (0.40) :
+        un nombre annoncé au cerveau doit valoir ce sur quoi on agirait. Un
+        compte gonflé par des détections faibles serait un mensonge de plus.
+        """
+        from clashai.perception.ui_buttons import DETECTOR_MIN_CONFIDENCE
+        from clashai.social.donations import DONATE_BUTTON
+        from clashai.village.collector import RESOURCE_CLASSES
+
+        def count(cls):
+            return sum(1 for d in (raw.get(cls) or ())
+                       if d.conf >= DETECTOR_MIN_CONFIDENCE)
+
+        out = {}
+        recoltes = {}
+        for cls in RESOURCE_CLASSES:
+            n = count(cls)
+            if n:
+                recoltes[cls.replace('recolter_', '')] = n
+        if recoltes:
+            out['recoltes'] = recoltes
+
+        dons = count(DONATE_BUTTON)
+        if dons:
+            out['dons_en_attente'] = dons
         return out
 
     def _emit_events(self, state):

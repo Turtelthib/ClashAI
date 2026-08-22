@@ -89,3 +89,51 @@ def test_readings_default_to_empty_not_none():
     assert build_world()['readings'] == {}
     w = build_world({'perception_thread': _PT(_state())})
     assert w['readings'] == {}
+
+
+# ---------------------------------------------------------------------------
+# _count_widgets : compter au seuil d'ACTION (increment 5.3.1)
+# ---------------------------------------------------------------------------
+
+class _Det:
+    def __init__(self, conf):
+        self.conf = conf
+
+
+def _count(raw):
+    from clashai.perception.perception_thread import PerceptionThread
+    return PerceptionThread._count_widgets(raw)
+
+
+def test_collectors_are_counted_per_resource():
+    got = _count({'recolter_or': [_Det(0.9)] * 5,
+                  'recolter_elixir': [_Det(0.8)] * 6,
+                  'recolter_elixir_noire': [_Det(0.76)] * 3})
+    assert got['recoltes'] == {'or': 5, 'elixir': 6, 'elixir_noire': 3}
+
+
+def test_weak_detections_do_not_inflate_the_count():
+    """Un nombre annonce au cerveau doit valoir ce sur quoi on AGIRAIT : on
+    compte au seuil d'action (0.60), pas au seuil d'inference (0.40)."""
+    got = _count({'recolter_or': [_Det(0.9), _Det(0.45), _Det(0.7)]})
+    assert got['recoltes'] == {'or': 2}
+
+
+def test_a_resource_with_nothing_to_collect_is_absent():
+    got = _count({'recolter_or': [_Det(0.2)]})
+    assert 'recoltes' not in got
+
+
+def test_pending_donations_are_counted():
+    got = _count({'donner': [_Det(0.9), _Det(0.8)]})
+    assert got['dons_en_attente'] == 2
+
+
+def test_no_donation_button_means_no_key():
+    assert 'dons_en_attente' not in _count({})
+
+
+def test_counting_an_empty_screen_is_empty_not_zeroed():
+    """Clef absente = « rien vu ici », jamais « il y en a zero » : c'est ce qui
+    permet au cerveau de ne pas commenter un ecran ou la question ne se pose pas."""
+    assert _count({}) == {}

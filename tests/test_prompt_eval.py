@@ -17,6 +17,7 @@ from clashai.brain.prompt_eval import (
     run_case,
     run_suite,
     says_all_of,
+    says_no_digit,
     says_no_number,
     says_number,
     says_number_or_stays_vague,
@@ -285,3 +286,70 @@ def test_a_closed_question_may_answer_without_a_number(answer):
 ])
 def test_a_wrong_count_still_fails_a_closed_question(answer):
     assert not says_number_or_stays_vague(4)(answer)
+
+
+# ---------------------------------------------------------------------------
+# says_no_digit : les PETITS comptes (increment 5.3.1)
+# ---------------------------------------------------------------------------
+
+def test_says_no_digit_catches_a_small_invented_count():
+    """« il y a 5 collecteurs prets » sur un world vide : `says_no_number`
+    laisserait passer (seuil a 3 chiffres), `says_no_digit` non."""
+    assert not says_no_digit()("Il y a 5 collecteurs prets.")
+    assert says_no_number()("Il y a 5 collecteurs prets.")   # d'ou le besoin
+
+
+def test_says_no_digit_accepts_a_clean_refusal():
+    assert says_no_digit()("Je ne sais pas, ce n'est pas lu.")
+
+
+# ---------------------------------------------------------------------------
+# Les comptes ajoutes en 5.3.1
+# ---------------------------------------------------------------------------
+
+def test_the_read_world_carries_the_new_counts():
+    r = WORLD_LU['readings']
+    assert r['recoltes'] == {'or': 5, 'elixir': 6, 'elixir_noire': 3}
+    assert r['dons_en_attente'] == 2
+
+
+def test_counts_are_covered_in_both_directions():
+    got = {c.intent for c in SUITE}
+    assert 'recoltes/rappel' in got and 'dons_en_attente/rappel' in got
+    assert 'comptes/retenue' in got
+
+
+def test_small_count_retenue_uses_the_strict_checker():
+    """Sinon le cas ne prouverait rien : un « 5 » invente passerait."""
+    case = next(c for c in SUITE if c.intent == 'comptes/retenue')
+    assert not case.check("Il y a 5 collecteurs prets.")
+    assert case.check("Je ne sais pas, rien n'est lu.")
+
+
+# ---------------------------------------------------------------------------
+# Nombres ecrits en toutes lettres (angle mort du banc, 19 aout 2026)
+# ---------------------------------------------------------------------------
+
+def test_a_number_spelled_out_still_counts():
+    """Mesure : « Six collecteurs d'or sont prets ». Sans conversion, le banc
+    raterait une reponse JUSTE ecrite en francais."""
+    assert says_number(6)("Six collecteurs d'or sont prets.")
+    assert says_numbers(4)("Il te reste quatre ouvriers libres.")
+
+
+def test_the_article_un_is_not_read_as_a_number():
+    """« un » est un article avant d'etre un nombre : le convertir donnerait des
+    succes fantomes partout ou la valeur attendue est 1."""
+    assert not says_number(1)("Tu as un ouvrier disponible.")
+
+
+def test_spelled_zero_is_a_stated_count():
+    assert not says_no_digit()("Il y a zero collecteur pret.")
+
+
+def test_aucun_is_tolerated_because_it_is_how_one_refuses():
+    """« je n'ai AUCUNE information » est un refus correct. Compter « aucun »
+    comme un chiffre ferait echouer les meilleurs refus : on tolere la legere
+    sur-affirmation de « aucun collecteur » plutot que de creer un faux positif."""
+    assert says_no_digit()("Je n'ai aucune information sur les collecteurs.")
+    assert says_no_digit()("Aucun collecteur n'est pret.")

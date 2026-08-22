@@ -7,7 +7,7 @@
 
 📂 **Ce doc** = ce qui reste à faire. · ✅ Fait → [CHANGELOG.md](CHANGELOG.md) · 🔧 Fix détaillés → [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
-**Chiffres actuels (vérifiés dans le code)** : **18 sorts** · obs **70 dims** / **57 actions** · 63 entrées `troops.json` · CNN UI **140 classes** (v4) · CNN barre **83 classes** (v2) · **334 tests**.
+**Chiffres actuels (vérifiés dans le code)** : **18 sorts** · obs **70 dims** / **57 actions** · 63 entrées `troops.json` · CNN UI **140 classes** (v4) · CNN barre **83 classes** (v2) · **352 tests**.
 
 ---
 
@@ -91,7 +91,7 @@
   - [x] **Dons répartis entre les troupes proposées** : la politique « toujours la 1ʳᵉ carte » martelait une seule troupe (sur « ballon + sorcière », que des ballons). Remplacée par « la troupe la **moins donnée** jusqu'ici » → couvre les demandes mixtes sans lire les quantités. `MAX_TAPS_PER_REQUEST` 6 → **30** (une demande peut réclamer ~45 places d'armée ; 6 tronquait « 2 ballons + 3 sorcières + 2 zap »). Garde-fou de stagnation.
   - [x] **Fin de don gérée par le jeu** : quand le château du membre n'a plus la place pour une troupe (un électro-dragon prend 30 places, il en reste 20 → il se grise), le jeu grise cette carte ; **tout grisé = château plein**. Notre boucle s'arrête déjà sur « plus rien de donnable » → condition de fin correcte **sans code supplémentaire**, et c'est une raison de plus de filtrer sur le grisé.
 
-**Agent jeux de clan** (`clan_games/`) — 🚫 **BLOQUÉ** : les jeux de clan ne sont pas actifs en ce moment → rien à observer/labéliser/tester. À reprendre quand ils reviennent (détecter si actifs → lire les tâches → exécuter).
+**Agent jeux de clan** (`clan_games/`) — ⏳ **DÉBLOCABLE** (les jeux de clan reprennent vers le 20 août 2026 → il y aura enfin de quoi observer et labéliser). Était 🚫 bloqué : les jeux de clan n'étaient pas actifs → rien à observer/labéliser/tester. À reprendre quand ils reviennent (détecter si actifs → lire les tâches → exécuter).
 
 ### V4.4 — Polish perception
 
@@ -118,15 +118,15 @@
 | # | Incrément | Ce que ça livre |
 |---|---|---|
 | ~~5.3.0~~ ✅ | ~~Banc d'essai de prompts~~ | plusieurs formulations par intention + score attendu, en une commande |
-| **5.3.1** | **Enrichir le `world`** | dons en attente, bâtiments améliorables + coûts, temps de recherche |
+| ~~5.3.1~~ ✅ | ~~Enrichir le `world`~~ | collecteurs pleins + dons en attente (les **coûts** passent en outil, 5.3.2) |
 | **5.3.2** | **Registre d'outils** (lecture seule) | schémas, validation, journal — testable sans le jeu |
 | **5.3.3** | **Console intégrée + outils qui agissent** | récolte, dons, upgrade, labo, attaque |
 | **5.3.4** | **Quantités dans le chat admin** | « 3 ballons et 2 yéti » → exactement ça |
 | **5.3.5** | **Boucle autonome avec mémoire** | le LLM voit le RÉSULTAT de ses actions |
 
 - [x] **5.3.0 — Banc d'essai de prompts (19 août 2026)** — `uv run python -m tools.eval.prompt_bench`. Référence **Mistral 7B : 52/56 (93 %)**, seuil 90 %. Deux défauts du modèle isolés et documentés (déterminant de la question recopié comme quantité ; formulation elliptique → nombre bouche-trou). *Placé en premier après le bug du 19 août : un défaut de prompt est invisible aux tests unitaires (le code est juste, c'est le modèle qui interprète mal) et **intermittent selon la formulation** — un essai manuel avait conclu « ça marche » la veille.* Toute la V5.3 fait interpréter du langage naturel à un 7B : c'est le mode d'échec dominant, pas les bugs de code. Le banc évalue **dans les deux sens** (rappel *et* retenue) et devient le critère de recette des incréments suivants. Il répond aussi par un chiffre, et non par une opinion, à « Mistral 7B tient-il le tool-calling ? ».
-- [ ] **5.3.1 — Enrichir le `world`** : demandes de dons en attente, bâtiments améliorables et leur coût, temps restant des recherches. C'est ce qui fait passer les conseils de génériques à concrets (« améliore ta tour X, tu as juste de quoi » au lieu de « améliore ton village »).
-- [ ] **5.3.2 — Registre d'outils** (`brain/tools.py`) : nom, description FR, schéma des paramètres, callable, niveau de risque. Outils **lecture seule** d'abord (`etat_du_village`, `lister_troupes_disponibles`) — testable sans le jeu et sans risque. ⚠️ La **règle anti-gemmes s'écrit ICI, une fois** : tout outil pouvant taper `confirmer` passe par le garde-fou d'affordabilité. Pas à re-vérifier dans chaque outil ajouté ensuite.
+- [x] **5.3.1 — `world` enrichi : ce qui se COMPTE (19 août 2026)** — collecteurs pleins par ressource + demandes de dons en attente, tirés des détections DÉJÀ faites (zéro inférence en plus), comptés au seuil d'action. Banc : **98/102 (96 %)**. 🔎 **Périmètre corrigé** : les **coûts d'amélioration ne sont pas lisibles passivement** (il faut taper le bâtiment puis `ameliorer`) → déplacés en 5.3.2/5.3.3 comme **outil** `cout_amelioration(batiment)`. 🐛 Deux « défauts du modèle » se sont révélés être des défauts de prompt (ligne à deux nombres, liste à virgules).
+- [ ] **5.3.2 — Registre d'outils** (`brain/tools.py`) : **inclut `cout_amelioration(batiment)`** (déplacé de 5.3.1 : un coût exige de taper le bâtiment, donc c'est un outil, pas de la perception passive). nom, description FR, schéma des paramètres, callable, niveau de risque. Outils **lecture seule** d'abord (`etat_du_village`, `lister_troupes_disponibles`) — testable sans le jeu et sans risque. ⚠️ La **règle anti-gemmes s'écrit ICI, une fois** : tout outil pouvant taper `confirmer` passe par le garde-fou d'affordabilité. Pas à re-vérifier dans chaque outil ajouté ensuite.
 - [ ] **5.3.3 — Console admin intégrée au bot** + outils qui agissent. **Décision d'archi** : la console devient un *thread* du bot (`--console`), plus un programme à côté. Aujourd'hui `llm_chat.py` démarre son **propre `PerceptionThread`** → bot + console = deux pipelines complets sur les mêmes 8 Go, deux `world` divergents (la console peut répondre « je suis en attaque » d'après *sa* photo, pas l'état réel), et aucun ordre entre leurs taps le jour où elle sait agir. Intégrée : **une** perception, **un** `world`, et la file d'instructions demandée *est* le scheduler — qui tourne déjà **un agent à la fois** par construction. Confirmation `o/n` sur les outils qui dépensent (attaque, upgrade, labo), désactivable par `--sans-confirmation`.
 - [ ] **5.3.4 — Quantités dans le chat admin** : « donne-moi 3 ballons et 2 yéti » → exactement ça. `donate_to_request(wanted=…)` existe déjà et refuse proprement (`no_match`) plutôt que de donner n'importe quoi ; il lui manque le **compte** (passer d'un ensemble à un quota `{ballon: 3, yeti: 2}`). Tout nom de troupe est **validé contre `troops.json`** : un nom inconnu = refus, jamais d'approximation. Pré-parseur déterministe **seulement si** le banc 5.3.0 montre que le 7B décroche — pas de béquille avant la preuve.
 - [ ] **5.3.5 — Boucle autonome avec mémoire des résultats** : aujourd'hui `AgentResult` se perd, donc le LLM re-décide à l'identique après un échec. Mémoire courte des N dernières actions **et de leur issue**. Le plus risqué, donc en dernier.

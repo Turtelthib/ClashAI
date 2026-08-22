@@ -340,8 +340,37 @@ class LocalLLMBrain(Brain):
             lines.append("- ressources : NON LUES (ne pas les inventer)")
 
         b = readings.get('builders')
-        lines.append(f"- ouvriers : {b['libres']} libres sur {b['total']}"
-                     if b else "- ouvriers : NON LUS (ne pas les inventer)")
+        if b:
+            # DEUX lignes, pas « 4 libres sur 5 » : sur ce format, le modèle
+            # attrapait le dernier nombre et répondait « 5 ouvriers libres ».
+            # Deux nombres sur une ligne = une ligne ambiguë.
+            lines.append(f"- ouvriers libres : {b['libres']}")
+            lines.append(f"- ouvriers au total : {b['total']}")
+        else:
+            lines.append("- ouvriers : NON LUS (ne pas les inventer)")
+
+        # Récoltes et dons : des COMPTES, pas des montants. On ne les annonce que
+        # s'il y en a — « 0 collecteur plein » est du bruit, et une absence de
+        # ligne ne peut pas être lue comme une valeur inventée.
+        # UNE LIGNE PAR RESSOURCE. La liste à virgules « 5 or, 6 élixir, 3 élixir
+        # noir » reproduisait le bug d'origine : à « combien de collecteurs d'or
+        # ? » le modèle répondait « six » — le compte de l'élixir. Même cause,
+        # même remède.
+        recoltes = readings.get('recoltes') or {}
+        for key in list(RESOURCE_LABELS) + sorted(set(recoltes) - set(RESOURCE_LABELS)):
+            if recoltes.get(key):
+                label = RESOURCE_LABELS.get(key, key)
+                lines.append(f"- collecteurs d'{label} pleins, prêts à récolter : "
+                             f"{recoltes[key]}")
+
+        dons = readings.get('dons_en_attente')
+        if dons:
+            # Le libellé dit le SENS, pas seulement le nom du champ. Avec
+            # « demandes de dons en attente : 2 » seul, le modèle répondait
+            # « aucun » à « combien de membres attendent des troupes ? » : il ne
+            # faisait pas le lien. Nommer les deux formes coûte six mots.
+            lines.append(f"- demandes de dons en attente "
+                         f"(membres du clan qui réclament des troupes) : {dons}")
 
         if 'lab_libre' in readings:
             lines.append("- laboratoire : "
