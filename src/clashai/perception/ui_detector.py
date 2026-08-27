@@ -131,6 +131,13 @@ class UIDetector:
         self.verbose = verbose
         self._model = None
         self._weights_path = weights_path or self._resolve_weights()
+        # Anti-spam du log : sur un écran statique, la même ligne se répète à
+        # chaque inférence. Vécu sur les jeux de clan — le croisement des 8
+        # défis noyait les messages utiles sous des dizaines de lignes
+        # identiques. On ne journalise que les CHANGEMENTS, en indiquant
+        # combien de fois la précédente s'est répétée.
+        self._dernier_resume = None
+        self._repetitions = 0
 
     @staticmethod
     def _resolve_weights() -> str:
@@ -203,11 +210,24 @@ class UIDetector:
             dets.sort(key=lambda d: d.conf, reverse=True)
 
         if self.verbose and out:
-            from clashai.config.logging import pp, styled
-            summary = ', '.join(f"{len(v)}×{k}" for k, v in out.items())
-            pp(f" CNN UI: {styled(summary, 'yolo_alt')}", tag='yolo')
+            self._log_resume(out)
 
         return out
+
+    def _log_resume(self, out):
+        """Journalise le résumé des détections, sans répéter l'identique."""
+        from clashai.config.logging import pp, styled
+
+        resume = ', '.join(f"{len(v)}×{k}" for k, v in sorted(out.items()))
+        if resume == self._dernier_resume:
+            self._repetitions += 1
+            return
+
+        if self._repetitions:
+            pp(f" CNN UI: (idem ×{self._repetitions})", tag='yolo')
+        self._dernier_resume = resume
+        self._repetitions = 0
+        pp(f" CNN UI: {styled(resume, 'yolo_alt')}", tag='yolo')
 
     # ---- niveau compat : contrat find_button (cle -> (x,y,conf)) -----------
 

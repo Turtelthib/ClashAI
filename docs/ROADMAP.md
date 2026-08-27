@@ -3,11 +3,11 @@
 > **OBJECTIF FINAL** : une IA autonome intelligente qui joue comme un humain — joue, gère, recrute, s'améliore seule, et qu'on **pilote en langage naturel via le chat clan** (cerveau LLM local orchestrant des sous-agents).
 
 **Statut** : `[ ]` à faire · `[~]` partiel · `[x]` fait (détail → [CHANGELOG](CHANGELOG.md)) · 🚫 bloqué · 🔧 bug documenté → [TROUBLESHOOTING](TROUBLESHOOTING.md)
-**Mise à jour** : 19 août 2026 — **V5.3 démarrée** : cerveau LLM + CNN UI continu livrés. **V5.2 close côté code** (CNN UI, récolte, upgrades, labo, dons validés en réel ; migration `find_button` terminée). Reste 2 validations en jeu + le renfort dataset.
+**Mise à jour** : 22 août 2026 — **agent jeux de clan en cours** (CNN UI v5 + reader livrés). **V5.3 démarrée** : cerveau LLM + CNN UI continu livrés. **V5.2 close côté code** (CNN UI, récolte, upgrades, labo, dons validés en réel ; migration `find_button` terminée). Reste 2 validations en jeu + le renfort dataset.
 
 📂 **Ce doc** = ce qui reste à faire. · ✅ Fait → [CHANGELOG.md](CHANGELOG.md) · 🔧 Fix détaillés → [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
-**Chiffres actuels (vérifiés dans le code)** : **18 sorts** · obs **70 dims** / **57 actions** · 63 entrées `troops.json` · CNN UI **140 classes** (v4) · CNN barre **83 classes** (v2) · **352 tests**.
+**Chiffres actuels (vérifiés dans le code)** : **18 sorts** · obs **70 dims** / **57 actions** · 63 entrées `troops.json` · CNN UI **155 classes** (v5) · CNN barre **83 classes** (v2) · **425 tests**.
 
 ---
 
@@ -40,7 +40,7 @@
 | V5.0 | ✅ Ph.1-2 | Push pipeline WGC → PerceptionThread (Ph.3-4 optionnelles) |
 | Refacto | ✅ | src/ layout + 13 splits (0 fichier >500L hors legacy) |
 | V5.1 | 🔄 | Brain + scheduler + 4 agents ✅ ; 3 résiduels (ADB cache, sanity-rescan, chat_unread) |
-| **V5.2** | 🔄 **en cours** | CNN UI ✅ (140 cl., mAP50 0.972) · Agent village : récolte ✅, upgrades ✅ **validés en réel** (le LLM décidera du QUOI) · labo ✅ **validé en réel** · dons ✅ **validés en réel** · **code V5.2 terminé** · jeux de clan 🚫 |
+| **V5.2** | 🔄 **en cours** | CNN UI ✅ (140 cl., mAP50 0.972) · Agent village : récolte ✅, upgrades ✅ **validés en réel** (le LLM décidera du QUOI) · labo ✅ **validé en réel** · dons ✅ **validés en réel** · **code V5.2 terminé** · **jeux de clan 🔄 en cours** : CNN UI v5 (155 cl.) + reader + catalogue + selector + agent ✅, **démarrage du bot OK**, reste la VALIDATION EN JEU |
 | V5.3 | 🔄 **en cours** | Cerveau LLM **actif en réel** (Mistral 7B, décisions 0,4-2,5 s) + console de discussion + CNN UI continu ; reste à enrichir le `world` |
 | V5.4 | 💡 | **Pilotage chat + RAG complet** : parler à l'IA via le chat clan |
 | V6 | 💡 | **Dashboard web** (maquette ✅, build réel à faire) |
@@ -75,6 +75,7 @@
 **CNN UI** — le socle est en place (`UIDetector` branché au démarrage, `find_button()` = point d'accès unique).
 - [x] **Migration vers `find_button()` terminée (19 août 2026)** : **plus aucun `get_position()` direct** hors de la calibration elle-même. Les `try/except ImportError` avec tables de coordonnées de secours dupliquées sont supprimés (`find_button` ne lève jamais et porte déjà les défauts). **`brain/navigation` passe au CNN** (`screenshot=img`) : le retour au village tape le vrai bouton détecté — notamment `rentrer` sur l'écran de résultats, où l'on tapait **4 hauteurs à l'aveugle**. Ailleurs, migration **neutre** (sans screenshot) : vérifié `find_button(k) == get_position(k)` sur les 11 clés.
 - [ ] **Renfort dataset** : classes rares (1-2 exemples) ratées, confondues avec `background` → ajouter des captures des cas ratés.
+- [ ] 🔴 **Re-calibrer `DETECTOR_MIN_CONFIDENCE` pour le CNN v5** — le seuil d'action global vaut 0.60 et son commentaire dans `ui_detector.py` le justifie par le pic F1 du **v4 (0.635)**. **Le v5 a son pic à 0.332** : le raisonnement est périmé, 0.60 est passé du centre du plateau à son bord droit. Déjà coûté un bug (🔧 `commencer_introuvable`, où la classe sortait à 0.496 en visant le bouton exactement). **D'autres agents peuvent rater des boutons en silence pour la même raison** — les jeux de clan ne l'ont vu que parce qu'on mesurait. Reprendre le seuil avec une validation par classe, pas au jugé.
 
 **Agent village** (`village/`, `VillageAgent`, règles ; clique via `UIDetector`) — par incréments :
 - [x] **Incr. 1 — Récolte** : boucle re-scan (taper une icône en récolte d'autres). Prio 15, cooldown 5 min.
@@ -91,7 +92,62 @@
   - [x] **Dons répartis entre les troupes proposées** : la politique « toujours la 1ʳᵉ carte » martelait une seule troupe (sur « ballon + sorcière », que des ballons). Remplacée par « la troupe la **moins donnée** jusqu'ici » → couvre les demandes mixtes sans lire les quantités. `MAX_TAPS_PER_REQUEST` 6 → **30** (une demande peut réclamer ~45 places d'armée ; 6 tronquait « 2 ballons + 3 sorcières + 2 zap »). Garde-fou de stagnation.
   - [x] **Fin de don gérée par le jeu** : quand le château du membre n'a plus la place pour une troupe (un électro-dragon prend 30 places, il en reste 20 → il se grise), le jeu grise cette carte ; **tout grisé = château plein**. Notre boucle s'arrête déjà sur « plus rien de donnable » → condition de fin correcte **sans code supplémentaire**, et c'est une raison de plus de filtrer sur le grisé.
 
-**Agent jeux de clan** (`clan_games/`) — ⏳ **DÉBLOCABLE** (les jeux de clan reprennent vers le 20 août 2026 → il y aura enfin de quoi observer et labéliser). Était 🚫 bloqué : les jeux de clan n'étaient pas actifs → rien à observer/labéliser/tester. À reprendre quand ils reviennent (détecter si actifs → lire les tâches → exécuter).
+**Agent jeux de clan** (`clan_games/`) — 🚀 **DÉBLOQUÉ, en cours** (jeux actifs depuis le 20 août 2026 ; fenêtre ~1 semaine).
+
+> 💡 **L'agent ne JOUE pas les défis, il les CHOISIT.** La progression s'incrémente toute seule pendant que `CombatAgent` farme → pas d'exécuteur par type de défi à écrire. « Puis-je le réussir ? » n'est pas un raisonnement mais un **filtre de capacités** (pas de village des ouvriers, pas de compo d'armée choisie → ces défis sont éliminés d'office).
+>
+> ⚠️ **Pas droit à l'essai-erreur** : accepter un défi puis le `Rejeter` a une pénalité en jeu. Si le scorer n'est sûr de rien, il ne prend **rien** et retente au cooldown suivant (même principe que l'anti-gemmes : sans preuve, on n'agit pas). **`rejeter_defi` est détecté, jamais tapé.**
+>
+> 📌 `defi` et `evenement` (classes CNN UI existantes, inutilisées) **n'ont rien à voir** : `defi` = défi amical entre membres, `evenement` = événements du jeu (ligue de clan, durée limitée).
+
+**🔎 Ce que les captures du 22 août 2026 ont établi** (→ `data/captures/jeux_clan/`) :
+
+1. **La grille ne porte AUCUN titre** — chaque carte = icône + points (4×2, scrollable). Le nom et la description n'existent **que dans le pop-up de détail**. Lire les défis depuis la grille = reconnaître des **icônes**, pas du texte.
+2. **Le pop-up se lit bien à l'OCR** : `Gagnez une étoile en combat multijoueur en utilisant au moins 1 Dragon.` à 0.59-0.99 (2 fautes cosmétiques). C'est la **ligne sémantique**. Le titre stylisé, lui, est massacré (`Ghaos draconien`) — sans importance, il n'ajoute rien.
+3. **Taper une carte est SÛR** : ça ouvre le pop-up, `COMMENCER` est un bouton séparé → on inspecte les 8 défis sans jamais en engager un.
+4. **Un défi actif grise TOUTES les autres cartes** ; l'active passe en cadre doré + horloge, son badge points devient une progression (`0/1`), et son pop-up affiche `Rejeter` (rouge) au lieu de `Commencer`. → « ai-je un défi en cours ? » se détecte **par la saturation**, avec le `_is_grayed` déjà écrit dans `donations.py`/`lab.py`. Zéro classe, zéro modèle.
+5. Chaque défi porte aussi une **limite de temps** (ex. `3H`) → contrainte du scorer, pas seulement les points.
+
+> 🎯 **Décision d'archi : le CNN UI v5 apprend le MOBILIER, pas les icônes de défi.** Une classe par icône (~40/saison, renouvelées à chaque saison) obligerait à re-labéliser tous les mois, et une icône inconnue = défi invisible. Le **sens** vient du pop-up par OCR + catalogue de motifs → marche sur les défis d'aujourd'hui **et** de la saison prochaine, sans re-train. Coût : ~15 s pour croiser les 8 cartes, quelques fois par jour. Acceptable.
+>
+> **10 classes à labéliser** : `jeux_clan` (l'entrée sur village_home ≈ (495,1020), le barbu roux — **la seule qui exige vraiment le CNN**) · `carte_defi` (générique, donne les 8 boîtes quel que soit le scroll) · `points_defi` · `commencer_defi` · `rejeter_defi` · `score_jeux_clan` (`0/10000`, plafond perso) · `temps_restant_jeux` · `onglet_defis` / `onglet_clan` / `onglet_recompenses`.
+>
+> 🏷️ **Deux classes labélisées dans DEUX états**, triées par saturation dans le code (jamais par une classe dédiée — précédent `donner`) :
+> - `carte_defi` : colorée (disponible) **et** grisée (un autre défi est actif) **et** cadre doré (c'est celle en cours).
+> - `points_defi` : bandeau vert `400` (points à gagner) **et** bandeau gris `0/1` (progression du défi en cours). Ce second état est ce qui dira à l'agent « c'est terminé, va en chercher un autre » — sans ce crop, la progression n'est pas lisible. Localisé par le CNN puis lu par le digit CNN, comme `compteur_or` / `prix_upgrade` (`widget_reader`) : pas de bandeau déduit géométriquement depuis `carte_defi`, donc pas de coordonnée en dur.
+
+- [x] **Incr. 0 — Capture + dump OCR** (22 août 2026) : `tools/debug/clan_games_capture.py`, **lecture seule absolue** (ne tape jamais, n'accepte aucun défi). Mode guidé → `_raw.png` / `_ocr.json` / `_ocr.png` (+ `_cnn.png`) sur 7 écrans ; mode `--rafale N` → captures brutes pour le dataset de labeling. Les PNG bruts sont l'**actif durable** : les jeux durent 1 semaine, le reste se développe hors ligne après.
+- [x] **Incr. 1 — CNN UI v5 livré (22 août 2026)** : **155 classes**, mAP50 0.978, F1 0.90. **15 nouvelles, 0 perdue.** Déployé en `weights/yolo_ui.pt`. Noms réels : `raccourci_jdc`, `carte_defi`, `point_defi`, `progression_defi`, `commencer_defi`, `rejeter`, `onglet_defi_jdc`, `recompense_jdc`, `classement_clan_jdc`, `score_personnel`, `score_clan`, `palier`, `temps_restant_jeux`, `temps_avant_expiration`, `jeux_de_clans`.
+- [ ] 🔧 **Renfort dataset jeux de clan** — 3 trous mesurés sur les 7 captures réelles, par ordre d'importance :
+  - [ ] **`raccourci_jdc` à 0.41-0.44** : l'entrée sur village_home, **sous le seuil d'action (0.60)**. C'est la classe la plus importante de toutes et la plus faible. Contournée par un `SEUIL_ENTREE = 0.35` local dans `clan_games/reader.py` — **pansement à retirer** une fois la classe renforcée. ~30-50 captures du village, zooms et positions variés.
+  - [ ] **`rejeter` : 0 détection** alors que le bouton rouge est bien visible sur `defi_en_cours`. Sans conséquence (on ne le tape jamais, et `engage` a un second chemin), mais c'est un signal perdu.
+  - [ ] **Faux `carte_defi` sur l'onglet Récompenses** : les tuiles de récompense passent pour des cartes de défi (13 détections à 0.50-0.81, ramenées à 4 par les filtres taille/seuil). Renforcer l'onglet Récompenses en négatif.
+  - [ ] *(mineur)* `onglet_defi_jdc` instable à 0.46-0.66 — l'onglet **actif**, en surbrillance, est sous-représenté. Contourné : `menu_ouvert()` teste les deux onglets voisins (0.91-0.97) au lieu de celui-là.
+  - [ ] **`jeux_de_clans` : 0 détection, même au seuil plancher 0.05.** C'est la **tente** qui apparaît sur la carte du village pendant les jeux ; la taper ouvre le menu, exactement comme `raccourci_jdc` (la petite icône à côté des événements). **Deux entrées indépendantes vers le même menu** — le reader doit essayer les deux, et une tente bien détectée réglerait le problème du raccourci à 0.41 sans re-train. Reste à savoir si elle était simplement **hors champ** sur les 2 captures village (village scrollé) ou si le modèle ne la reconnaît pas : à trancher en direct, c'est 30 s.
+- [x] **Incr. 2 — `clan_games/reader.py` livré (22 août 2026)** : 8/8 cartes avec les bons points, score personnel `(0, 10000)`, défi actif + progression `(0, 1)`, cartes grisées correctes. **Une inférence par frame** (badges appariés par inclusion géométrique). 🐛 `read_widget_ratio` est mono-chiffre **par conception** → `lire_ratio()` aiguille digit CNN / OCR sur le **nombre de glyphes**. ♻️ `widget_reader.read_number_in/read_ratio_in` séparent localisation et lecture. Démo `tools/debug/clan_games_reader_demo.py` (hors ligne ou `--live`). → détail [CHANGELOG](CHANGELOG.md)
+- [ ] **Tests unitaires du reader** : appariement badge/carte, tri par rangée, aiguillage `lire_ratio`, `engage` sans classe `rejeter`. Sur détections factices, sans modèle.
+- [x] **Incr. 3 — Catalogue par CONTRAINTES (22 août 2026, v2)** : on ne catalogue **pas** les défis (des dizaines, renouvelés chaque saison) — on décrit le **terrain** (où ça se joue) et les **modificateurs** (ce que ça impose). L'objectif n'entre pas dans la faisabilité. Vérifié sur **5 familles jamais vues** : toutes comprises ; la v1 par gabarits les aurait toutes refusées. ~~Incr. 3 v1 (gabarits de phrase)~~ : `configs/clan_games.json` + `catalog.py`, **100 % pur**, **25 tests sur les 7 descriptions réelles**. 4 familles relevées en jeu. 🔑 « utilisant au moins 1 Golem » = il suffit que la troupe soit **déjà dans la barre** (capteur existant) → ces défis deviennent conditionnels, pas impossibles. 🛡️ Refus par défaut sur tout ce qui n'est pas certain. Vérifié bout en bout : **7/7 reconnus, 0 inconnu**. → détail [CHANGELOG](CHANGELOG.md)
+- [ ] **Croisement : 1 défi sur 8 manquant** — le crawler en a lu 7. À diagnostiquer sur les captures de `data/captures/jeux_clan/defis/` (veto déclenché ? grille plus courte sur une frame ? pop-up resté ouvert ?).
+- [x] **Incr. 4 — `clan_games/selector.py` livré (22 août 2026)** : ouvrir → croiser → choisir → engager → fermer. Liste de taps exhaustive en tête de module ; `rejeter` jamais tapé ; `confirmer=False` par défaut. → [CHANGELOG](CHANGELOG.md)
+- [x] **Incr. 5 — `ClanGamesAgent` livré (22 août 2026)** : branché dans `brain/core.py`, prio 16, cooldown 30 min, `can_run` gratuit (lit `world['buttons']`), plafond mémorisé. CLI `--jeux-clan-confirmer`. **17 tests** sur les garde-fous.
+**📋 État : l'agent est COMPLET et sûr, mais 3 chemins n'ont jamais été vus fonctionner en jeu.** Ce qui est validé en réel : ouverture, croisement (8/8 cartes, 8/8 descriptions), interprétation, refus motivé, remontée des besoins, et **un engagement réel** (« Détruisez Canon 10 fois »). Ce qui ne l'est pas ↓
+
+- [ ] 🎯 **`statut: ok` jamais observé.** Le seul engagement réel a eu lieu **avant** le correctif de vérification et s'est soldé par `engagement_non_confirme`. La boucle de scrutation `_attendre_engagement()` n'a donc **jamais tourné pour de vrai** — seulement en test. À voir au premier défi sans contrainte.
+- [ ] 🎯 **`deja_engage` jamais observé** : détecter un défi déjà en cours et ne rien faire. Se vérifie en relançant la démo juste après un engagement réussi.
+- [ ] 🎯 **L'agent n'a jamais tourné DANS le bot.** Il a été éligible une fois, le LLM a choisi `combat`, et le run s'est arrêté. Le chemin `world → can_run → run → AgentResult` n'est validé qu'en tests. La 1ʳᵉ ligne du docstring a été réécrite depuis pour donner l'enjeu au modèle — effet non mesuré.
+- [ ] 🎯 **VALIDATION EN JEU — détail.** Rien n'a encore été engagé en réel. **Passer par la démo directe**, pas par le bot : un run réel a montré que le LLM peut ne jamais choisir l'agent (3,5 min = une seule décision, partie à `combat`).
+  1. `uv run python -m tools.debug.clan_games_demo --scan` → l'entrée est-elle vue, la grille lue ?
+  2. `uv run python -m tools.debug.clan_games_demo` → flux complet, **sans engager**. Vérifier le défi désigné.
+  3. [x] `clan_games_demo --confirmer` → **défi réellement engagé en jeu (22 août 2026)** : « Détruisez Canon 10 fois », 300 pts, choisi et lancé. Deux bugs corrigés au passage (🔧 seuil `commencer_defi`, puis vérification trop hâtive). **Reste à revoir un run complet de bout en bout avec le statut `ok`.**
+  - [x] **Croisement validé sans doublon (22 août 2026)** : 7 défis distincts, 7 descriptions lues, tous les verdicts justes, 3 besoins remontés. La carte ratée par le CNN est désormais rattrapée par son badge.
+  4. Enfin `uv run python -m clashai.brain --mode farm --jeux-clan-confirmer` pour valider l'intégration.
+- [x] **Croisement instable — instrumenté et stabilisé (22 août 2026)** : cause identifiée, le **pop-up recouvre des cartes** (5/6/8 selon la frame). `_grille_stable()` ferme et attend le retour à la taille de référence. L'OCR est désormais journalisé défi par défi, et le refus donne une raison par défi.
+- [x] **`aucun_defi_sur` diagnostiqué (22 août 2026)** : run réel avec les nouveaux logs → **7/7 descriptions lues**, refus tous légitimes (4 défis « avec unité » sur une barre vide, 3 au village des ouvriers). Le comportement était correct ; il manquait la **remontée du besoin**, désormais livrée (`defis_bloques`).
+- [ ] 🔗 **Brancher `defis_bloques` sur le cerveau** : l'agent dit maintenant « golem → 150 pts » ; le `world`/prompt ne le transporte pas encore. À faire avec 5.3.2/5.3.3 (registre d'outils) — c'est exactement le genre de besoin qu'un outil `adapter_armee(troupe)` consommera.
+- [ ] 🎖️ **Composition d'armée pilotée — LE déblocage à fort levier.** Le bot ne choisit pas encore ses troupes. Mesuré sur les 7 défis réels du 22 août : **0 faisable aujourd'hui**, **4 faisables** en basculant le seul drapeau `Capacites.composition_armee` (les 3 autres sont au village des ouvriers, définitivement hors de portée).
+  - 📌 **Beaucoup moins cher que je ne le croyais** : depuis la refonte du jeu, **former des troupes est instantané et gratuit**. Pas de file d'attente à surveiller, pas de coût en élixir à arbitrer, pas d'ordre contraint avec la limite de 3H d'un défi. Il ne reste que le geste : ouvrir le menu d'armée, choisir, former.
+  - Le catalogue est **déjà prêt** : `evaluer()` accepte le drapeau, `compo_armee_non_pilotee:<troupe>` nomme la troupe exacte, `defis_a_une_troupe_pres()` remonte les besoins triés. Rien à changer côté jeux de clan le jour où l'outil existe.
+  - ⚠️ Seul coût résiduel identifié : imposer une troupe **modifie la composition sur laquelle l'agent de combat a été réglé**. C'est ce que représente `effort_ajoute: 1` — ni un délai, ni une dépense.
 
 ### V4.4 — Polish perception
 

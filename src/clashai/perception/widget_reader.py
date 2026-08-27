@@ -87,16 +87,34 @@ class WidgetReader:
 
     # ---- nombre d'un widget nommé (localisé par le CNN UI) -----------------
 
+    def read_number_in(self, screenshot_pil, det):
+        """Lit l'entier contenu dans une Detection DÉJÀ obtenue. int|None.
+
+        Sépare la LOCALISATION (une inférence CNN) de la LECTURE (digit CNN sur
+        un crop). Un appelant qui a déjà son `detect_raw` — l'agent jeux de clan
+        lit 8 badges de points sur la même frame — passe par ici et ne relance
+        pas le modèle 8 fois.
+        """
+        crop = self._widget_crop(screenshot_pil, det)
+        if crop is None:
+            return None
+        n, _ = digit_reader.read_widget_number(crop)
+        return n
+
+    def read_ratio_in(self, screenshot_pil, det):
+        """Lit un "N/M" dans une Detection déjà obtenue → (N, M) | None."""
+        crop = self._widget_crop(screenshot_pil, det)
+        if crop is None:
+            return None
+        ratio, _ = digit_reader.read_widget_ratio(crop)
+        return ratio
+
     def read_widget_number(self, screenshot_pil, class_name):
         """Localise la classe CNN `class_name` puis lit l'entier dedans. int|None."""
         dets = self._get_detector().detect_raw(screenshot_pil).get(class_name)
         if not dets:
             return None
-        crop = self._widget_crop(screenshot_pil, dets[0])
-        if crop is None:
-            return None
-        n, _ = digit_reader.read_widget_number(crop)
-        return n
+        return self.read_number_in(screenshot_pil, dets[0])
 
     # ---- ressources --------------------------------------------------------
 
@@ -121,11 +139,7 @@ class WidgetReader:
         dets = self._get_detector().detect_raw(screenshot_pil).get(class_name)
         if not dets:
             return None
-        crop = self._widget_crop(screenshot_pil, dets[0])
-        if crop is None:
-            return None
-        ratio, _ = digit_reader.read_widget_ratio(crop)
-        return ratio
+        return self.read_ratio_in(screenshot_pil, dets[0])
 
     def read_builders(self, screenshot_pil):
         """(libres, total) depuis `nombre_ouvrier` ("1/6"), ou None si illisible."""

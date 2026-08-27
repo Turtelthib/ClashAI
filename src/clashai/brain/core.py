@@ -37,7 +37,7 @@ class BrainCoreMixin:
     """Lifecycle + module loading for ClashBrain."""
 
     def __init__(self, mode='auto', bot_name=DEFAULT_BOT_NAME, verbose=True,
-                 use_llm=True, llm_model=None):
+                 use_llm=True, llm_model=None, clan_games_confirmer=False):
         self.mode = mode
         self.bot_name = bot_name
         self.verbose = verbose
@@ -47,6 +47,10 @@ class BrainCoreMixin:
         # donc sans coût). `--no-llm` force l'heuristique.
         self.use_llm = use_llm
         self.llm_model = llm_model
+        # Engager un défi des jeux de clan est IRRÉVERSIBLE (le rejeter a une
+        # pénalité en jeu) -> faux par défaut, comme l'anti-gemmes des upgrades.
+        # Sans ce drapeau l'agent fait tout sauf le tap final, et le journalise.
+        self._clan_games_confirmer = clan_games_confirmer
         self._running = False
 
         # Stats
@@ -168,6 +172,7 @@ class BrainCoreMixin:
             AgentScheduler,
             ChatAgent,
             ClanCastleAgent,
+            ClanGamesAgent,
             CombatAgent,
             GdCAgent,
             VillageAgent,
@@ -187,6 +192,15 @@ class BrainCoreMixin:
         self._scheduler.register(VillageAgent(
             screenshot_fn=self._adb_screenshot, tap_fn=self._adb_tap,
             verbose=self.verbose,
+        ))
+
+        # Jeux de clan — always. `can_run` ne se déclenche QUE si une entrée
+        # (raccourci ou tente) est visible dans le `world` : hors période de
+        # jeux, le jeu ne les affiche pas, donc l'agent dort sans rien coûter.
+        # `confirmer` piloté par le flag CLI : engager un défi est irréversible.
+        self._scheduler.register(ClanGamesAgent(
+            screenshot_fn=self._adb_screenshot, tap_fn=self._adb_tap,
+            confirmer=self._clan_games_confirmer, verbose=self.verbose,
         ))
 
         # Clan castle — always (CC troops help farm + war).

@@ -1,0 +1,73 @@
+{
+  "_comment": "SSOT de l'interprétation des DÉFIS des jeux de clan. La grille du jeu ne porte aucun texte : le sens vient de la description du pop-up, lue à l'OCR. ⚠️ ON NE DÉCRIT PAS LES DÉFIS ICI — il en existe des dizaines, renouvelés à chaque saison, et un catalogue de défis serait périmé avant d'être écrit. On décrit des CONTRAINTES. L'idée : pour savoir si le bot peut réussir un défi, il n'a pas besoin de comprendre l'objectif (piller 500 000 or, détruire 300 murs, gagner 5 étoiles...) — il lui faut seulement savoir OÙ ça se joue (le terrain) et CE QUE ça impose (les modificateurs). L'objectif ne change que l'effort estimé. Un défi jamais vu se lit donc correctement tant que son terrain est reconnu. Les motifs s'appliquent sur du texte NORMALISÉ : minuscules, sans accents, espaces compactés, confusions d'OCR sur les chiffres corrigées (I/l→1, O→0). Écrire les motifs SANS accents.",
+  "version": 2,
+
+  "capacites_connues": {
+    "attaque_multijoueur": "le bot lance des attaques multijoueur (CombatAgent) — acquis",
+    "village_ouvriers": "le bot joue le village des ouvriers — NON, et pas prévu",
+    "guerre": "le bot attaque en guerre de clans de façon autonome — NON aujourd'hui",
+    "unite_disponible": "l'unité nommée est utilisable : soit elle est DÉJÀ dans la barre de troupes (troop_bar_detector), soit le bot sait composer son armée (Capacites.composition_armee). Former des troupes est instantané et gratuit depuis la refonte du jeu — il n'y a donc ni délai ni coût à modéliser, seulement une capacité que le bot n'a pas encore."
+  },
+
+  "terrains": [
+    {
+      "id": "village_ouvriers",
+      "libelle": "village des ouvriers",
+      "motifs": ["combat des ouvriers", "combats des ouvriers", "village des ouvriers",
+                 "base des ouvriers", "bataille des ouvriers"],
+      "requires": ["village_ouvriers"],
+      "effort": 3
+    },
+    {
+      "id": "guerre",
+      "libelle": "guerre de clans",
+      "motifs": ["guerre de clans", "guerres de clans", "en guerre", "ligue de clans"],
+      "requires": ["guerre"],
+      "effort": 3
+    },
+    {
+      "id": "multijoueur",
+      "libelle": "combat multijoueur",
+      "motifs": ["combat multijoueur", "combats multijoueurs", "bataille multijoueur",
+                 "batailles multijoueurs", "multijoueur"],
+      "requires": ["attaque_multijoueur"],
+      "effort": 1
+    },
+    {
+      "id": "village_principal",
+      "libelle": "village principal (terrain implicite)",
+      "_note": "Repli LARGE, testé en DERNIER. « Détruisez Canon 10 fois en combat » ne précise pas le terrain : dans les jeux de clan, un défi du village principal dit simplement « en combat ». Les terrains plus spécifiques sont testés avant, donc ce motif ne peut pas leur voler un défi (« en combat des ouvriers » contient « en combat » mais matche d'abord village_ouvriers).",
+      "motifs": ["en combat", "en bataille", "en attaque"],
+      "requires": ["attaque_multijoueur"],
+      "effort": 1
+    }
+  ],
+
+  "modificateurs": [
+    {
+      "id": "unite_imposee",
+      "libelle": "une unité précise doit être utilisée",
+      "motif": "en utilisant au moins (\\d+) (.+?)\\s*\\.?$",
+      "groupes": {"quantite": 1, "unite": 2},
+      "requires": ["unite_disponible"],
+      "effort_ajoute": 1,
+      "_note": "L'effort ajouté ne représente NI un délai NI un coût : former des troupes est instantané et gratuit. Il représente le passage par le menu d'armée et le fait qu'imposer une troupe modifie la composition sur laquelle l'agent de combat a été réglé. Un nom absent de configs/troops.json rend le défi non choisissable — jamais un à-peu-près."
+    }
+  ],
+
+  "alias_unites": {
+    "_comment": "Nom affiché dans le jeu -> slug de configs/troops.json, quand la normalisation automatique ne suffit pas. Elle gère déjà « Bébé dragon »->bebe_dragon et « Sort de saut »->saut (préfixe retiré).",
+    "sort de degats": "degats",
+    "sort de soins": "soin",
+    "sort de rage": "rage",
+    "sort de degel": "gel"
+  },
+
+  "_exemples_verifies": {
+    "_comment": "Descriptions RÉELLES relevées le 22 août 2026 (tools/debug/clan_games_croiser.py), avec l'interprétation attendue. Documentation + jeu de tests, PAS une liste de défis reconnus : le code ne lit pas ce champ.",
+    "Gagnez une étoile en combat multijoueur en utilisant au moins 1 Golem.": "multijoueur + unite_imposee(golem)",
+    "Gagnez une étoile en combat des ouvriers en utilisant au moins 1 Sorcier pyroélectrique.": "village_ouvriers -> refusé",
+    "Gagnez 6 étoiles en combat des ouvriers.": "village_ouvriers -> refusé",
+    "Détruisez Canon I0 Fois en combat": "village_principal, aucune contrainte -> faisable"
+  }
+}

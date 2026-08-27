@@ -25,6 +25,8 @@ Si un de ces problèmes réapparaît, relire le bloc correspondant avant de re-d
 - [Kaggle « Kernel died » à l'entraînement (auto-batch)](#-kaggle--kernel-died--à-lentraînement)
 - [« Mode RL » avec une politique ALÉATOIRE (checkpoint périmé)](#-mode-rl-avec-une-politique-aléatoire)
 - [Le LLM refuse une valeur qu'il a sous les yeux](#-le-llm-refuse-une-valeur-quil-a-sous-les-yeux)
+- [Agent testé au vert mais absent de `__init__.py` (ImportError au démarrage)](#-agent-testé-au-vert-mais-absent-de-initpy)
+- [`commencer_introuvable` : seuil hérité du CNN v4 sur un modèle v5](#-commencer_introuvable--seuil-hérité-du-cnn-v4)
 
 ---
 
@@ -528,3 +530,63 @@ s.register(c); s.register(cc); w={'mode':'farm','on_village_home':True}
 print('tick1', s.pick(w).name); cc._execute(); print('tick2', s.pick(w).name)  # clan_castle puis combat
 "
 ```
+
+## 🔧 Agent testé au vert mais absent de `__init__.py`
+
+**Symptômes** — `ClanGamesAgent` écrit, 17 tests unitaires au vert, agent branché dans `brain/core.py`. Premier démarrage réel :
+
+```
+File "src/clashai/brain/core.py", line 171, in _load_modules
+    from clashai.agents import (
+ImportError: cannot import name 'ClanGamesAgent' from 'clashai.agents'
+```
+
+**Cause** — `brain/core.py` importe **depuis le package** (`from clashai.agents import ...`), alors que les tests importaient **depuis le module** (`from clashai.agents.clan_games_agent import ClanGamesAgent`). Le nouvel agent n'avait pas été ajouté à `agents/__init__.py`. **Les deux chemins d'import divergeaient, et aucun test ne passait par celui du bot.**
+
+C'est la leçon, pas le fix : 17 tests verts ne prouvaient rien sur le chemin réellement emprunté au démarrage. Un test qui n'emprunte pas le chemin du code de production ne teste pas le code de production.
+
+**Fix** — deux lignes dans `agents/__init__.py` (import + `__all__`).
+
+**Piège** — le même trou existe pour tout futur agent : écrire l'agent, le brancher, tester le module, oublier l'export. Le fix ponctuel ne protège que celui-ci.
+
+**Tests** — `test_tous_les_agents_sont_exportes_par_le_package` parcourt les modules `agents/*_agent.py`, y trouve les sous-classes de `BaseAgent`, et vérifie que le **package** les expose. Il vaut pour tous les agents à venir. **Vérifié en réintroduisant le bug** : le test échoue bien, avec le nom de l'agent manquant dans le message — un test de régression qu'on n'a pas vu échouer ne prouve rien non plus.
+
+---
+
+## 🔧 `commencer_introuvable` : seuil hérité du CNN v4
+
+**Symptômes** — L'agent jeux de clan croise les 8 défis, choisit le bon (`300 pts — terrain village_principal`, « Détruisez Canon 10 fois en combat »), ouvre son pop-up… et sort en `commencer_introuvable` sans jamais engager. Les logs montrent pourtant `1×commencer_defi` détecté sur la frame.
+
+**Cause** — Deux couches.
+
+1. **Le seuil.** `SEUIL_ACTION = 0.60` était copié du seuil global `ui_buttons.DETECTOR_MIN_CONFIDENCE`, lui-même justifié par le pic F1 du CNN UI **v4** (0.635). **Le v5 a son pic à 0.332** : tout le modèle sort des confiances plus basses, et 0.60 est passé du centre du plateau à son bord droit. Mesuré sur les 6 pop-ups du run (captures `demo/`) : `commencer_defi` sort à **0.976 · 0.956 · 0.896 · 0.643 · 0.496 · absent**. Le run est tombé sur le tirage à 0.496. **Vérifié à l'image : cette détection visait le bouton exactement** — ce n'était pas un faux positif, juste une confiance basse. La variance suit la position du pop-up, qui suit la carte tapée.
+2. **Le fond du problème** : aucun seuil ne peut à la fois ne jamais rater un vrai bouton (0.50) et ne jamais en inventer un. Chercher le bon nombre était la mauvaise question.
+
+**Fix** — deux choses, et la seconde compte plus que la première.
+
+1. `SEUIL_COMMENCER = 0.45`, distinct du seuil global, sous le minimum observé et justifié par la mesure.
+2. **Vérification APRÈS le tap.** On ne cherche plus à être sûr avant : on tape, puis on **constate**. Un défi engagé se voit sans ambiguïté (le jeu grise toutes les autres cartes et pose un `progression_defi` sur la sienne). Sinon → nouveau statut `engagement_non_confirme`, remonté comme un **échec** dans `AgentResult` (contrairement à `aucun_defi_sur`, qui est un refus voulu). **La sûreté ne repose plus sur un nombre.**
+
+**Pièges**
+- ⚠️ **Le seuil global n'a PAS été retouché** : `DETECTOR_MIN_CONFIDENCE = 0.60` gouverne tous les agents et son commentaire dans `ui_detector.py` argumente encore sur le pic v4. Le raisonnement est **périmé depuis le v5**. À reprendre avec une validation dédiée — d'autres classes v4 peuvent rater en silence pour la même raison.
+- Ne pas confondre « détecté » (seuil d'inférence 0.40, ce qui apparaît dans les logs `CNN UI:`) et « actionnable » (seuil d'action). Une classe visible dans les logs peut être ignorée par le code.
+
+**Tests** — `test_un_engagement_non_constate_nest_pas_annonce_comme_reussi` (on tape, mais on ne revendique rien sans constat) et `test_un_engagement_non_confirme_remonte_comme_echec`. Le succès exige désormais que le faux reader bascule sur une grille où le défi est actif. Rejoué sur la frame réelle qui échouait : `commencer=(732, 723)`.
+
+### Suite : `engagement_non_confirme` sur un défi pourtant bien lancé
+
+**Symptômes** — Le run suivant engage réellement le défi (confirmé par l'utilisateur en jeu), et le selector annonce quand même `engagement_non_confirme`. Les logs montrent `1×rejeter` **et** `1×progression_defi` sur la dernière frame.
+
+**Cause** — **Pas la géométrie, le TEMPS.** Première hypothèse (fausse) : le pop-up recouvrait la grille et `HAUTEUR_CARTE_MIN` écartait la carte active. La capture `apres_engagement.png` l'a démentie — elle ne contient **ni** `progression_defi` **ni** `rejeter`, et ses cartes sont à pleine hauteur (h=287, donc aucun pop-up). La ligne de log portant les deux signaux était celle de la **fermeture**, ~1 s plus tard. Le jeu met un temps **variable** à basculer après le tap ; la vérification à 1,2 s arrivait trop tôt.
+
+*La leçon : la capture de debug a contredit l'explication qui « tenait debout ». Sans elle, on corrigeait le mauvais problème.*
+
+**Fix** — On **scrute au lieu de dormir** : `_attendre_engagement()` interroge toutes les 0,5 s jusqu'à 5 s. Un délai fixe ne fait que déplacer le seuil — trop court on se trompe, trop long on ralentit chaque cycle. En complément, `ClanGamesReader.defi_engage()` teste `progression_defi` **ou** `rejeter` **au niveau des classes**, sans passer par la grille : deux signaux indépendants, l'un rattrapant l'autre (`rejeter` est mal détecté, `progression_defi` exige la carte visible).
+
+**Pièges**
+- `defi_actif()` passe par la grille : inutilisable dès qu'un pop-up est ouvert. Pour « un défi tourne-t-il ? », utiliser `defi_engage()`.
+- Lire l'ordre des logs avec précaution : `fermer()` déclenche sa propre inférence, donc **la dernière ligne `CNN UI:` avant un message n'est pas forcément la frame qui a produit ce message.**
+
+**Tests** — `test_la_bascule_tardive_du_jeu_est_attendue_pas_manquee` : le faux reader ne bascule qu'après 3 relevés, et le statut doit rester `ok`. Une fixture `horloges_rapides` (autouse) neutralise les délais réels — le fichier passait de 20 s à 0,3 s — en gardant un timeout non nul pour exercer réellement la boucle de scrutation.
+
+---

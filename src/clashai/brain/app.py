@@ -61,6 +61,12 @@ def main():
         '--llm-model', type=str, default=None,
         help="Modèle Ollama (défaut: mistral)"
     )
+    parser.add_argument(
+        '--jeux-clan-confirmer', action='store_true',
+        help="Autorise l'agent jeux de clan à ENGAGER réellement un défi. "
+             "Sans ce drapeau il ouvre, croise, choisit et journalise son "
+             "choix, mais ne tape pas 'Commencer' — engager est irréversible."
+    )
 
     args = parser.parse_args()
 
@@ -70,6 +76,7 @@ def main():
         verbose=not args.quiet,
         use_llm=not args.no_llm,
         llm_model=args.llm_model,
+        clan_games_confirmer=args.jeux_clan_confirmer,
     )
     brain.start(max_episodes=args.episodes)
 

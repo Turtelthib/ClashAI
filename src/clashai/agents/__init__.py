@@ -15,6 +15,7 @@
 from clashai.agents.base import AgentResult, BaseAgent, RunState
 from clashai.agents.chat_agent import ChatAgent
 from clashai.agents.clan_castle_agent import ClanCastleAgent
+from clashai.agents.clan_games_agent import ClanGamesAgent
 from clashai.agents.combat_agent import CombatAgent
 from clashai.agents.gdc_agent import GdCAgent
 from clashai.agents.scheduler import AgentScheduler
@@ -24,5 +25,6 @@ from clashai.agents.world import WORLD_KEYS, build_world
 __all__ = [
     'BaseAgent', 'RunState', 'AgentResult', 'AgentScheduler',
     'build_world', 'WORLD_KEYS',
-    'ClanCastleAgent', 'CombatAgent', 'GdCAgent', 'ChatAgent', 'VillageAgent',
+    'ClanCastleAgent', 'ClanGamesAgent', 'CombatAgent', 'GdCAgent', 'ChatAgent',
+    'VillageAgent',
 ]
