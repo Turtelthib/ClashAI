@@ -3,7 +3,7 @@
 > **OBJECTIF FINAL** : une IA autonome intelligente qui joue comme un humain — joue, gère, recrute, s'améliore seule, et qu'on **pilote en langage naturel via le chat clan** (cerveau LLM local orchestrant des sous-agents).
 
 **Statut** : `[ ]` à faire · `[~]` partiel · `[x]` fait (détail → [CHANGELOG](CHANGELOG.md)) · 🚫 bloqué · 🔧 bug documenté → [TROUBLESHOOTING](TROUBLESHOOTING.md)
-**Mise à jour** : 22 août 2026 — **agent jeux de clan en cours** (CNN UI v5 + reader livrés). **V5.3 démarrée** : cerveau LLM + CNN UI continu livrés. **V5.2 close côté code** (CNN UI, récolte, upgrades, labo, dons validés en réel ; migration `find_button` terminée). Reste 2 validations en jeu + le renfort dataset.
+**Mise à jour** : 27 août 2026 — **agent jeux de clan livré, 3 chemins à valider en jeu** (CNN UI v5 + reader livrés). **V5.3 démarrée** : cerveau LLM + CNN UI continu livrés. **V5.2 close côté code** (CNN UI, récolte, upgrades, labo, dons validés en réel ; migration `find_button` terminée). Reste 2 validations en jeu + le renfort dataset.
 
 📂 **Ce doc** = ce qui reste à faire. · ✅ Fait → [CHANGELOG.md](CHANGELOG.md) · 🔧 Fix détaillés → [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
@@ -92,7 +92,7 @@
   - [x] **Dons répartis entre les troupes proposées** : la politique « toujours la 1ʳᵉ carte » martelait une seule troupe (sur « ballon + sorcière », que des ballons). Remplacée par « la troupe la **moins donnée** jusqu'ici » → couvre les demandes mixtes sans lire les quantités. `MAX_TAPS_PER_REQUEST` 6 → **30** (une demande peut réclamer ~45 places d'armée ; 6 tronquait « 2 ballons + 3 sorcières + 2 zap »). Garde-fou de stagnation.
   - [x] **Fin de don gérée par le jeu** : quand le château du membre n'a plus la place pour une troupe (un électro-dragon prend 30 places, il en reste 20 → il se grise), le jeu grise cette carte ; **tout grisé = château plein**. Notre boucle s'arrête déjà sur « plus rien de donnable » → condition de fin correcte **sans code supplémentaire**, et c'est une raison de plus de filtrer sur le grisé.
 
-**Agent jeux de clan** (`clan_games/`) — 🚀 **DÉBLOQUÉ, en cours** (jeux actifs depuis le 20 août 2026 ; fenêtre ~1 semaine).
+**Agent jeux de clan** (`clan_games/`) — 🚀 **LIVRÉ** (développé du 22 au 27 août 2026, pendant la fenêtre des jeux). ⏳ **Reprise des jeux ~20 septembre 2026** : c'est là que se feront les 3 validations restantes.
 
 > 💡 **L'agent ne JOUE pas les défis, il les CHOISIT.** La progression s'incrémente toute seule pendant que `CombatAgent` farme → pas d'exécuteur par type de défi à écrire. « Puis-je le réussir ? » n'est pas un raisonnement mais un **filtre de capacités** (pas de village des ouvriers, pas de compo d'armée choisie → ces défis sont éliminés d'office).
 >
