@@ -7,7 +7,7 @@
 
 📂 **Ce doc** = ce qui reste à faire. · ✅ Fait → [CHANGELOG.md](CHANGELOG.md) · 🔧 Fix détaillés → [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 
-**Chiffres actuels (vérifiés dans le code)** : **18 sorts** · obs **70 dims** / **57 actions** · 63 entrées `troops.json` · CNN UI **155 classes** (v5) · CNN barre **83 classes** (v2) · **479 tests**.
+**Chiffres actuels (vérifiés dans le code)** : **18 sorts** · obs **70 dims** / **57 actions** · 63 entrées `troops.json` · CNN UI **155 classes** (v5) · CNN barre **83 classes** (v2) · **611 tests**.
 
 ---
 
@@ -189,7 +189,7 @@
 - [x] **5.3.2 — Registre d'outils, lecture seule (19 août 2026)** — `Tool` + `ToolRegistry.call()`. 🛡️ **La sécurité est dans `call()`, pas dans le prompt** : autorité par source (`clan` ne voit ni n'appelle un outil qui agit), dépense = `confirm=True` obligatoire (**socle anti-gemmes, écrit une fois**), arguments validés contre le schéma. Journal de tous les appels. Outils livrés : `etat_du_village`, `lister_troupes_disponibles`. 🐛 « zéro » vs « je ne vois pas d'ici » désormais distingués dans le prompt. Banc : **104/108 (96 %)**.
   - [ ] Reste à ajouter en **5.3.3d** : `cout_amelioration(batiment)` (déplacé de 5.3.1 — un coût exige de taper le bâtiment).
 - [ ] **5.3.3 — Console admin intégrée + outils qui agissent**, en **4 étapes, chacune testée en jeu avant la suivante** (pas toutes à la fin) :
-  - [ ] **3a — Plomberie** (fichiers neufs) : file d'instructions (l'admin passe avant le clan) · outils qui agissent (récolte, attaque, renforts, dons, labo) · console `/commande` → outil (lecture = immédiat, action = en file, dépense = `o/n`) · noms de troupes validés **à la saisie** · démo sans émulateur.
+  - [x] **3a — Plomberie (12 sept. 2026)** — `uv run python -m tools.debug.console_demo`. File d'instructions (admin avant clan, garde-fous réappliqués à l'exécution) · 5 outils qui agissent · console : lecture immédiate, action en file, dépense `o/n` · noms de troupes validés à la saisie, quantités refusées · parcours de dons qui referme toujours le chat. Bot **pas encore branché**.
   - [ ] **3b — Branchement au bot** : `--console` = **thread du bot**, pas un programme à côté (`llm_chat.py` démarre son propre `PerceptionThread` : deux pipelines sur 8 Go, deux `world` divergents, taps sans ordre). La boucle vide la file entre deux agents et pendant les pauses ; « je termine d'abord : combat ».
   - [ ] **3c — Le LLM appelle les outils** : tool-calling Ollama + cas au banc (phrase → bon outil).
   - [ ] **3d — Bâtiments par nom** : `ameliorer_batiment(nom)` + `cout_amelioration(nom)`.
