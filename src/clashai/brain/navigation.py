@@ -7,6 +7,36 @@ import time
 from clashai.config import IDLE_BETWEEN_ATTACKS, IDLE_BETWEEN_ATTACKS_MAX
 from clashai.perception.ui_buttons import find_button
 
+# Backends qui lisent l'ÉCRAN PHYSIQUE, pas la fenêtre : si l'émulateur est
+# minimisé ou masqué, ils rendent une image du bureau — et le bot agit dessus.
+SCREEN_REGION_BACKENDS = ('mss', 'dxcam')
+
+
+def navigation_diagnosis(no_capture, attempts, states, backend=None):
+    """Pourquoi on n'a pas atteint le village. Message destiné à l'utilisateur.
+
+    ⚠️ Sans ça, le bot annonçait « Unable to return to village » — un problème
+    de NAVIGATION — alors qu'il n'avait reçu AUCUNE image (émulateur minimisé,
+    ADB déconnecté). On cherchait le défaut au mauvais endroit.
+    """
+    if no_capture >= attempts:
+        return ("aucune capture d'écran (0 image sur "
+                f"{attempts} essais) — ce n'est PAS un problème de navigation. "
+                "Vérifie que l'émulateur tourne et n'est pas MINIMISÉ (derrière "
+                "une autre fenêtre, c'est bon), ou qu'un appareil ADB est "
+                "connecté (`adb devices`).")
+
+    loading_heavy = states and states.count('chargement') > len(states) / 2
+    if backend in SCREEN_REGION_BACKENDS and loading_heavy:
+        return (f"backend « {backend} » + écran vu comme « chargement » en "
+                "boucle : c'est la signature d'une capture du BUREAU au lieu du "
+                "jeu. L'émulateur est probablement minimisé. "
+                "Voir TROUBLESHOOTING « Capture fenêtre émulateur occluded ».")
+
+    vus = ', '.join(sorted(set(states))) if states else 'aucun'
+    return (f"village jamais atteint en {attempts} essais "
+            f"(écrans vus : {vus})")
+
 
 class BrainNavigationMixin:
     """Robust return-to-village navigation + human behavior between actions."""
@@ -18,13 +48,20 @@ class BrainNavigationMixin:
         Returns:
             success: bool
         """
-        for attempt in range(15):
+        attempts = 15
+        no_capture = 0
+        states = []
+        self.last_navigation_error = None
+
+        for attempt in range(attempts):
             img = self._adb_screenshot()
             if img is None:
+                no_capture += 1
                 time.sleep(1)
                 continue
 
             state, conf = self._classify_screen(img, self._models)
+            states.append(state)
 
             if state == 'village_home':
                 return True
@@ -65,6 +102,14 @@ class BrainNavigationMixin:
                 self._adb_tap(960, 400)
                 time.sleep(1.5)
 
+        backend = None
+        try:
+            from clashai.perception.screen_capture import get_capture
+            backend = get_capture().backend
+        except Exception:
+            pass
+        self.last_navigation_error = navigation_diagnosis(
+            no_capture, attempts, states, backend)
         return False
 
     def _human_pause(self):

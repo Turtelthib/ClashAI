@@ -13,6 +13,10 @@ Historique chronologique des features livrées, du plus récent au plus ancien.
 
 > Travail étalé du **22 au 27 août 2026** (la fenêtre des jeux de clan). Les dates des entrées suivent les runs réels, pas la rédaction.
 
+- 🔧 **Déploiement du modèle CNN UI sur Roboflow bloqué par un `401 Unauthorized` trompeur** (5 septembre 2026) — 🔧 [TROUBLESHOOTING](TROUBLESHOOTING.md#-401-unauthorized-trompeur-sur-luploadmodel-roboflow).
+  - La vraie cause n'était pas l'authentification : `modelType="yolov11"` est rejeté par Roboflow (suffixe de taille obligatoire) alors que le modèle entraîné est un **YOLO26-m**, pas un YOLOv11. Le SDK `roboflow` masque le message d'erreur réel derrière un générique 401.
+  - `update_AI_on_roboflow.py` : clé API sortie du code en dur (`api_key="..."`), lue depuis `ROBOFLOW_API_KEY`.
+  - `pyproject.toml` : `ultralytics>=8.0` → `ultralytics>=8.3.0` (8.4.141 installé après `uv sync`), requis par le SDK Roboflow pour l'export/déploiement.
 - ✅ **La carte que le CNN rate est récupérée par son badge** (27 août 2026, run réel). **425 tests.**
   - 🔍 **`point_defi` est plus fiable que `carte_defi`** : mesuré `7×carte_defi, 8×point_defi` sur la même frame, et sur tout le run les badges restent à 8 pendant que les cartes oscillent entre **5 et 9**. Une carte ratée = un défi jamais croisé.
   - **Un badge implique une carte** : tout badge sans carte à proximité devient une cible, positionnée **sur le badge** (taper le bandeau ouvre la même carte). Pas de reconstruction de la boîte par un décalage en pixels — ce serait une coordonnée en dur déguisée.
@@ -102,6 +106,22 @@ Historique chronologique des features livrées, du plus récent au plus ancien.
 
 > Le seam `Brain` posé en V5.1 se remplit enfin. Détail de ce qui reste → [ROADMAP](ROADMAP.md).
 
+- ✅🐛 **Diagnostic honnête quand le bot ne trouve pas le village** (19 août 2026) — 🔧 [TROUBLESHOOTING](TROUBLESHOOTING.md). Le bot annonçait « Unable to return to village » alors qu'il n'avait reçu **aucune image** (émulateur minimisé + `adb devices` vide) : le message accusait la navigation, dont le code était sain.
+  - `navigation_diagnosis()` distingue **aucune capture** / **capture probable du BUREAU** / vrai échec, et nomme les écrans réellement vus.
+  - 🛡️ Le backend `mss` prévient désormais à voix haute : il lit l'**écran physique**, donc émulateur masqué = le bot voit le bureau **et clique dessus**. Vérifié en réel : capture de VS Code, écran classé « chargement » à **81,4 %**, `village_home` à **0,0 %**.
+  - **9 tests**, dont « WGC bloqué sur *chargement* ne doit PAS être imputé au bureau » (WGC capture la fenêtre, donc l'état y est sincère). **474 tests.**
+- ✅ **5.3.2 — Registre d'outils (lecture seule)** (19 août 2026) — `clashai/brain/tools.py` + `tools/debug/tools_demo.py`. Référence banc : **104/108 (96 %)**.
+  - **Un outil = la seule voie par laquelle le modèle peut faire quelque chose.** Hors du registre, il ne peut que parler. `Tool` (nom, description FR lue PAR le modèle, schéma JSON des paramètres, `acts`, `spends`), `ToolRegistry.call()` qui rend **toujours** un `ToolResult`, jamais une exception.
+  - 🛡️ **LA SÉCURITÉ EST DANS `call()`, PAS DANS LE PROMPT.** On ne demande jamais au modèle de refuser : mesuré, une consigne donnée à un 7B s'applique de travers. Trois garde-fous, vérifiés à l'appel :
+    1. **Autorité par source** — un outil qui `acts` est refusé à la source `clan` (et n'est même pas *montré* : inutile d'inviter à essayer pour refuser ensuite). Un « @mini_pekka lance une attaque » écrit par un membre reste du texte.
+    2. **Dépense = confirmation explicite** — `spends=True` exige `confirm=True`. Écrit **une seule fois**, donc valable pour tout outil ajouté ensuite : c'est le socle du principe anti-gemmes.
+    3. **Arguments validés** — paramètre manquant, inventé, ou du mauvais type = refus, avec un message qui repart au modèle pour qu'il se corrige. Garde explicite sur `bool` (qui vaut 1 en Python et passerait pour un entier).
+  - Les trois sont **indépendants** : confirmer n'est pas devenir admin. Et un refus n'exécute **jamais** l'outil — testé pour chacun.
+  - **Journal** de tous les appels (y compris les refus, avec la source) — base du futur tableau de bord et de la mémoire d'actions de 5.3.5.
+  - **Outils livrés** : `etat_du_village`, `lister_troupes_disponibles`. Aucun ne tape, aucun ne dépense → branchables sans risque pour vérifier que le modèle sait s'en servir avant de lui donner de quoi agir (5.3.3).
+  - 🐛 **« Zéro » et « je ne vois pas d'ici » ne sont plus confondus** (défaut relevé par l'utilisateur). Les demandes de dons ne sont visibles que le chat de clan ouvert ; le prompt se taisait, laissant le modèle sans repère. Il émet désormais **toujours** une ligne : `demandes de dons : NON LU depuis cet écran (il faut ouvrir le chat de clan)`. Même traitement pour les collecteurs, qui distinguent « rien à récolter » (sur le village, où on les verrait) de « NON LU » (ailleurs). **Effet mesuré : la formulation indirecte passe de 0/3 à 5/6.**
+  - 🆕 **Un troisième type de cas au banc** : `.inobservable` — tout est lu SAUF une chose. Ni rappel, ni retenue : le monde n'est pas vide, mais il ne doit pas conclure à zéro pour autant. ⏳ Reste 1/6 d'échec (« 0 demande de dons »).
+  - **113 tests** (35 pour le registre). **465 tests.**
 - ✅ **5.3.1 — `world` enrichi : ce qui se COMPTE** (19 août 2026). Référence banc : **98/102 (96 %)**.
   - **Ce qui était jeté** : `buttons` ne garde qu'UNE détection par classe (une position suffit pour taper), mais le CNN en voyait déjà 5 `recolter_or`, 6 `recolter_elixir`, 3 `recolter_elixir_noire`. Le nombre était calculé puis perdu. Exposé sous `readings['recoltes']` et `readings['dons_en_attente']`, **sans une seule inférence de plus**.
   - ⚠️ **Comptés au seuil d'ACTION (0.60), pas d'inférence (0.40)** : un nombre annoncé au cerveau doit valoir ce sur quoi on agirait.

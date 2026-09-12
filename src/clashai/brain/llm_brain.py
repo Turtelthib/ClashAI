@@ -357,13 +357,27 @@ class LocalLLMBrain(Brain):
         # ? » le modèle répondait « six » — le compte de l'élixir. Même cause,
         # même remède.
         recoltes = readings.get('recoltes') or {}
+        if not recoltes:
+            # Les icônes de récolte ne sont visibles QUE sur le village. Ailleurs,
+            # leur absence ne prouve rien.
+            lines.append("- collecteurs pleins : rien à récolter"
+                         if world.get('screen_state') == 'village_home'
+                         else "- collecteurs pleins : NON LU depuis cet écran")
         for key in list(RESOURCE_LABELS) + sorted(set(recoltes) - set(RESOURCE_LABELS)):
             if recoltes.get(key):
                 label = RESOURCE_LABELS.get(key, key)
                 lines.append(f"- collecteurs d'{label} pleins, prêts à récolter : "
                              f"{recoltes[key]}")
 
+        # ⚠️ « zéro demande » et « je ne vois pas d'ici » sont DEUX choses. La
+        # première dit « inutile de lancer l'agent dons », la seconde « va
+        # regarder ». Les compteurs de dons ne sont visibles que si le chat de
+        # clan est OUVERT : ailleurs, on dit qu'on ne sait pas, au lieu de se
+        # taire — le silence laissait le modèle sans repère.
         dons = readings.get('dons_en_attente')
+        if not dons:
+            lines.append("- demandes de dons : NON LU depuis cet écran "
+                         "(il faut ouvrir le chat de clan pour les voir)")
         if dons:
             # Le libellé dit le SENS, pas seulement le nom du champ. Avec
             # « demandes de dons en attente : 2 » seul, le modèle répondait

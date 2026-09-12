@@ -30,7 +30,8 @@ class BrainLoopMixin:
 
             # --- 1. Return to village (recovery; also gives us the screen) ---
             if not self._ensure_at_village():
-                print(" WARNING: Unable to return to village, retry...")
+                why = getattr(self, 'last_navigation_error', None)
+                print(f" WARNING: {why or 'village non atteint'}, nouvel essai…")
                 time.sleep(5)
                 continue
 

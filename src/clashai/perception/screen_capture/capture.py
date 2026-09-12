@@ -130,6 +130,15 @@ class ScreenCapture:
             self._backend = 'mss'
             if self.verbose:
                 print(f"ScreenCapture: mss backend ({title})")
+            # ⚠️ mss lit l'ÉCRAN PHYSIQUE : si l'émulateur passe derrière ou est
+            # minimisé, on capture le BUREAU — et le bot agit dessus (taps à
+            # l'aveugle sur les fenêtres de l'utilisateur). Arriver ici signifie
+            # que WGC a échoué, ce qui est déjà anormal : on le dit fort, même
+            # en mode silencieux. Vécu le 19 août 2026 : capture de VS Code,
+            # écran classé « chargement » à 81 %, village jamais trouvé.
+            print("WARNING: backend « mss » — capture de l'ÉCRAN, pas de la "
+                  "fenêtre. Garde l'émulateur NON MINIMISÉ (derrière, c'est "
+                  "bon), sinon le bot verra ton bureau et cliquera dessus.")
             return
         except Exception:
             pass

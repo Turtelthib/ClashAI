@@ -482,13 +482,48 @@ def test_pending_donations_say_what_they_mean():
     assert 'troupes' in desc
 
 
-def test_nothing_to_collect_stays_silent():
-    """« 0 collecteur plein » est du bruit : une ligne absente ne peut pas etre
-    lue comme une valeur inventee, une ligne a zero invite au commentaire."""
+# --- « rien » et « je ne vois pas d'ici » sont DEUX choses --------------------
+#
+# Le silence etait un defaut de conception : « zero demande de don » dit
+# « inutile de lancer l'agent dons », tandis que « je ne vois pas le chat d'ici »
+# dit « va regarder ». Se taire laissait le modele sans repere entre les deux.
+
+def test_nothing_to_collect_on_the_village_says_so():
+    """Sur le village, les icones de recolte SONT visibles : leur absence prouve
+    vraiment qu'il n'y a rien."""
     brain, _ = _brain('ok')
-    desc = brain.describe_world({'readings': {'recoltes': {},
-                                              'dons_en_attente': 0}})
-    assert 'collecteurs' not in desc and 'dons en attente' not in desc
+    desc = brain.describe_world({'screen_state': 'village_home',
+                                 'readings': {'recoltes': {}}})
+    assert 'collecteurs pleins : rien à récolter' in desc
+
+
+def test_collectors_elsewhere_are_declared_unreadable():
+    """Ailleurs, l'absence d'icone ne prouve rien."""
+    brain, _ = _brain('ok')
+    desc = brain.describe_world({'screen_state': 'combat',
+                                 'readings': {'recoltes': {}}})
+    assert 'collecteurs pleins : NON LU depuis cet écran' in desc
+
+
+def test_donations_are_always_declared_unreadable_when_absent():
+    """Les demandes ne sont visibles QUE le chat de clan ouvert : ailleurs on ne
+    peut jamais conclure a zero, meme depuis le village."""
+    brain, _ = _brain('ok')
+    desc = brain.describe_world({'screen_state': 'village_home',
+                                 'readings': {}})
+    assert 'demandes de dons : NON LU depuis cet écran' in desc
+    assert 'ouvrir le chat de clan' in desc
+
+
+def test_the_refusal_marker_is_the_one_the_prompt_names():
+    """Le prompt autorise le refus UNIQUEMENT sur « NON LU ». Les lignes
+    d'inobservabilite doivent donc porter ce marqueur exact, sinon le modele
+    n'a pas le droit de dire qu'il ne sait pas."""
+    brain, _ = _brain('ok')
+    desc = brain.describe_world({'screen_state': 'combat', 'readings': {}})
+    for line in desc.splitlines():
+        if 'collecteurs' in line or 'demandes de dons' in line:
+            assert 'NON LU' in line
 
 
 def test_an_unknown_collector_key_is_still_reported():

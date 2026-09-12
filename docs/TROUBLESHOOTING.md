@@ -8,6 +8,7 @@ Si un de ces problèmes réapparaît, relire le bloc correspondant avant de re-d
 
 ## Sommaire
 
+- [401 Unauthorized trompeur sur l'uploadModel Roboflow](#-401-unauthorized-trompeur-sur-luploadmodel-roboflow)
 - [Capture fenêtre émulateur occluded (WGC)](#-capture-fenêtre-émulateur-occluded-wgc)
 - [RGB/BGR inversé sur l'input YOLO](#-rgbbgr-inversé-sur-linput-yolo)
 - [Capacités héros jamais déclenchées (mode heuristique)](#-capacités-héros-jamais-déclenchées-mode-heuristique)
@@ -25,8 +26,80 @@ Si un de ces problèmes réapparaît, relire le bloc correspondant avant de re-d
 - [Kaggle « Kernel died » à l'entraînement (auto-batch)](#-kaggle--kernel-died--à-lentraînement)
 - [« Mode RL » avec une politique ALÉATOIRE (checkpoint périmé)](#-mode-rl-avec-une-politique-aléatoire)
 - [Le LLM refuse une valeur qu'il a sous les yeux](#-le-llm-refuse-une-valeur-quil-a-sous-les-yeux)
+- [« Unable to return to village » qui accuse le mauvais coupable](#-unable-to-return-to-village-qui-accuse-le-mauvais-coupable)
 - [Agent testé au vert mais absent de `__init__.py` (ImportError au démarrage)](#-agent-testé-au-vert-mais-absent-de-initpy)
 - [`commencer_introuvable` : seuil hérité du CNN v4 sur un modèle v5](#-commencer_introuvable--seuil-hérité-du-cnn-v4)
+
+---
+
+## 🔧 401 Unauthorized trompeur sur l'uploadModel Roboflow
+
+> `version.deploy()` échoue avec un `401 Unauthorized` sur l'endpoint `/uploadModel`. La clé API est pourtant valide (lecture du workspace/projet OK juste avant) — le 401 n'a rien à voir avec l'authentification.
+
+**Symptômes** *(5 septembre 2026)*
+```
+uv run .\update_AI_on_roboflow.py
+  loading Roboflow workspace...
+  loading Roboflow project...
+  An error occured when getting the model upload URL: 401 Client Error: Unauthorized for url:
+  https://api.roboflow.com/batpekkas-workspace/ui_cnn/6/uploadModel?api_key=...&modelType=yolov11&nocache=true
+```
+Le workspace et le projet se chargent sans erreur (donc la clé fonctionne). Vérifié aussi : rôle Owner sur le workspace, clé marquée « Full access », plan compatible — tout est bon côté compte, le 401 persiste.
+
+**Cause** — deux problèmes empilés :
+1. **`modelType` invalide.** Roboflow exige un type de modèle avec suffixe de taille (`n`/`s`/`m`/`l`/`x`). Le script passait `"yolov11"` tout court — jamais reconnu, quelle que soit la clé.
+2. **Mauvaise archi en plus.** Le modèle réellement entraîné est un **YOLO26 échelle "m"** (`yolo/model_artifacts.json` : `"yaml_file": "yolo26m.yaml"`, `"model": "yolo26m.pt"`), pas un YOLOv11 — `normalize_yolo_model_type()` du SDK (`roboflow/util/versions.py`) ne convertit que `yolo11→yolov11` et `yolo12→yolov12`, il ne connaît pas `yolo26` (package client sorti avant le support YOLO26).
+3. **Le vrai message était invisible.** `Version._upload_zip()` (`roboflow/core/version.py`) appelle `res.raise_for_status()` sans lire `res.text` : le corps JSON de la réponse (qui contient le vrai message) est perdu, seul `401 Client Error: Unauthorized` remonte à la console.
+
+**Fix**
+- Diagnostic : un `requests.get()` direct sur la même URL, en affichant `res.text`, a révélé le vrai corps de la réponse Roboflow :
+  ```json
+  {"message":"Model type \"yolov11\" is not recognized.","type":"InvalidModelTypeException",
+   "hint":"Please specify a supported model type with its size suffix."}
+  ```
+- Test de plusieurs valeurs de `modelType` par GET direct (`yolo26m`, `yolov26m`, `yolo26`, `yolov26`) — seul `yolo26m` renvoie `200` avec une URL d'upload signée valide.
+- `update_AI_on_roboflow.py` : `version.deploy("yolov11", "yolo/")` → `version.deploy("yolo26m", "yolo/")`.
+
+**Pièges**
+- ⚠️ **Un 401 ne veut pas dire « problème d'authentification »** sur cet endpoint Roboflow — c'est ici une `InvalidModelTypeException` maquillée en erreur d'auth par le SDK qui n'expose pas le body JSON. Toujours faire un `requests.get()` brut et lire `res.text` avant de creuser la clé API.
+- ⚠️ **`model_type` codé en dur ≠ architecture réellement entraînée.** Toujours vérifier `yolo/model_artifacts.json` (champ `yaml_file`/`model`) plutôt que de recopier la valeur d'un ancien script.
+- ⚠️ Le SDK `roboflow` local peut être en retard sur les architectures supportées côté serveur (YOLO26 sorti après la version installée) — le serveur accepte des `modelType` que le client ne normalise pas.
+
+**Tests** — pas de test unitaire (script one-shot hors `src/`) ; vérification par appel direct à l'API.
+
+**Vérifier** : `uv run .\update_AI_on_roboflow.py` (avec `$env:ROBOFLOW_API_KEY` défini) → doit afficher `View the status of your deployment at: https://app.roboflow.com/<workspace>/<projet>/<version>`.
+
+---
+
+## 🔧 « Unable to return to village » qui accuse le mauvais coupable
+
+> Le bot répète « Unable to return to village » et ne fait rien. Le code de navigation est pourtant sain : il n'a simplement **jamais reçu d'image**.
+
+**Symptômes** *(19 août 2026)*
+```
+uv run clashai-brain --mode farm --no-llm
+  WARNING: ScreenCapture — emulator window not found, falling back to ADB
+  ...
+  WARNING: Unable to return to village, retry...   (×4, puis rien pendant 1,6 min)
+```
+Tous les modèles chargent correctement. Aucune autre erreur.
+
+**Cause** — deux pannes de capture qui se ressemblent, et un message qui désigne la navigation dans les deux cas :
+1. **Aucune image du tout** : émulateur minimisé (rejeté par le filtre taille) **et** `adb devices` vide. `_adb_screenshot()` rend `None` 15 fois ; la boucle fait `sleep(1); continue` puis conclut à un échec de navigation.
+2. **Une image, mais du BUREAU** : quand WGC échoue, on retombe sur `mss`/`dxcam`, qui lisent l'**écran physique**. Vérifié : la capture contenait **VS Code affichant la ROADMAP**. Le classifieur la voyait « chargement » à **81,4 %**, `village_home` à **0,0 %** — et `_ensure_at_village` tapait quand même en (960,400), c'est-à-dire **sur le bureau de l'utilisateur**.
+
+**Fix**
+- `navigation_diagnosis()` (fonction pure, testable) distingue les trois cas : aucune capture / capture probable du bureau / vrai échec de navigation, avec les écrans réellement vus. `loop.py` affiche ce message au lieu du générique.
+- Le backend `mss` **prévient à voix haute** au démarrage, même en mode silencieux : y arriver signifie que WGC a échoué, donc qu'on risque de capturer — et de cliquer sur — le bureau.
+
+**Pièges**
+- ⚠️ **Un message d'erreur qui désigne le mauvais coupable coûte plus cher que pas de message** : il envoie chercher dans du code sain.
+- ⚠️ « Émulateur minimisé » ≠ « émulateur derrière une autre fenêtre ». **Derrière, c'est bon** ; minimisé, non.
+- ⚠️ Voir aussi le bloc « Capture fenêtre émulateur occluded (WGC) », qui décrit la cause racine et l'ordre des backends.
+
+**Tests** — `tests/test_navigation_diagnosis.py` (9), dont : WGC bloqué sur « chargement » **ne** doit **pas** être imputé au bureau (WGC capture la fenêtre, donc « chargement » y est sincère), et une perte partielle d'images ne doit pas être rapportée comme totale.
+
+**Vérifier** : `adb devices` (non vide ?) · émulateur non minimisé · `uv run python -m tools.debug.test_screen_capture`
 
 ---
 

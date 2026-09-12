@@ -34,8 +34,14 @@
 # world) -> str|None`. Tout est donc testable avec un faux modèle, et le banc
 # peut servir plus tard à comparer deux modèles ou deux prompts.
 #
-# ÉTAT DE RÉFÉRENCE — Mistral 7B, 19 août 2026 : **98/102 (96 %)** à --repeat 3,
-# après l'incrément 5.3.1.
+# ÉTAT DE RÉFÉRENCE — Mistral 7B, 19 août 2026 : **104/108 (96 %)** à --repeat 3,
+# après l'incrément 5.3.2.
+#
+# TROIS types de cas, pas deux :
+#   /rappel        la valeur est lue           -> il doit la donner
+#   /retenue       RIEN n'est lu               -> il doit refuser
+#   .inobservable  tout est lu SAUF une chose  -> il ne doit pas conclure a zero
+#                  (« 0 demande de dons » et « je ne vois pas d'ici » different)
 #
 # ⚠️ LEÇON PRINCIPALE : sur 3 « défauts du modèle » identifiés, 2 étaient des
 # défauts de MON PROMPT. Avant d'accuser le 7B, relire la ligne qu'on lui donne.
@@ -48,12 +54,14 @@
 #   ✅ CORRIGÉ — « combien de collecteurs d'or ? » → « Six » (le compte de
 #      l'élixir). La liste à virgules « 5 or, 6 élixir, 3 élixir noir » refaisait
 #      le bug d'origine. Une ligne par ressource : 5/6 → 6/6.
-#   ⏳ OUVERT — `dons_en_attente`, formulation INDIRECTE. « il y a combien de
-#      demandes de dons ? » → 3/3 parfait. « combien de membres attendent des
-#      troupes ? » → 0/3, avec trois réponses différentes (« Quatre », « Aucun »,
-#      « 3 ») : il devine. Le modèle ne fait pas le pont entre la paraphrase et
-#      la ligne. Un libellé plus explicite a déjà fait passer ce cas de 4/6 à
-#      9/10 en isolé, mais l'effet ne tient pas quand le prompt s'allonge.
+#   🔽 ATTÉNUÉ — `dons_en_attente`, formulation INDIRECTE (« combien de membres
+#      attendent des troupes ? »). Était 0/3 : le modèle devinait (« Quatre »,
+#      « Aucun », « 3 »). Depuis qu'une ligne explicite est TOUJOURS émise pour
+#      les dons (5.3.2), il a un point d'ancrage : **1/6 d'échec**. La
+#      formulation directe reste parfaite.
+#   ⏳ OUVERT — `dons.inobservable` : sur « NON LU depuis cet écran », il répond
+#      parfois « 0 demande de dons » (1/6). Conclure zéro depuis une ignorance
+#      déclarée est précisément l'erreur que la ligne cherche à éviter.
 #   ⏳ OUVERT — `ressources.or/retenue`, formulation ELLIPTIQUE. « mon stock d'or
 #      stp » sur un world vide → « Or : 12345 », un nombre bouche-trou (1/9).
 #      La question directe (« combien j'ai d'or ? ») tient parfaitement.
@@ -331,6 +339,15 @@ WORLD_NON_LU = {
 }
 
 
+# Le village, mais chat de clan FERMÉ : les demandes de dons sont invisibles
+# d'ici. Ne pas confondre avec WORLD_NON_LU, où RIEN n'est lu — ici tout le reste
+# est parfaitement connu, seule l'observabilité des dons manque.
+WORLD_SANS_DONS = dict(
+    WORLD_LU,
+    readings={k: v for k, v in _READINGS.items() if k != 'dons_en_attente'},
+)
+
+
 SUITE = [
     # ---- RAPPEL : la valeur est là, il doit la donner ----------------------
     Case(
@@ -429,6 +446,20 @@ SUITE = [
         ],
         check=says_numbers(2),
         why="Ce compte decidera si l'agent dons vaut la peine d'etre lance.",
+    ),
+
+    Case(
+        intent='dons.inobservable',
+        world=WORLD_SANS_DONS,
+        phrasings=[
+            "il y a combien de demandes de dons ?",
+            "combien de demandes de dons en attente ?",
+        ],
+        check=says_no_digit(),
+        why="« zéro demande » et « je ne vois pas d'ici » sont deux choses : la "
+            "premiere dit de ne pas lancer l'agent dons, la seconde d'aller "
+            "regarder. Le reste du world est parfaitement lu — il ne doit pas "
+            "pour autant conclure a zero.",
     ),
 
     # ---- RETENUE : rien n'est lu, il ne doit RIEN inventer ------------------

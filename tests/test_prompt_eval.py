@@ -353,3 +353,23 @@ def test_aucun_is_tolerated_because_it_is_how_one_refuses():
     sur-affirmation de « aucun collecteur » plutot que de creer un faux positif."""
     assert says_no_digit()("Je n'ai aucune information sur les collecteurs.")
     assert says_no_digit()("Aucun collecteur n'est pret.")
+
+
+def test_inobservable_is_a_third_kind_of_case():
+    """Ni rappel (la valeur n'est pas la), ni retenue au sens strict (le monde
+    n'est PAS vide) : tout est lu SAUF les dons. C'est le cas qui distingue
+    « zero demande » de « je ne vois pas d'ici »."""
+    case = next(c for c in SUITE if c.intent == 'dons.inobservable')
+    assert '/rappel' not in case.intent and '/retenue' not in case.intent
+    assert case.world['readings']            # le monde n'est pas vide
+    assert not case.check("Il y a 2 demandes.")
+    assert case.check("Je ne sais pas, il faut ouvrir le chat de clan.")
+
+
+def test_the_unobservable_world_differs_only_by_the_donations():
+    """Piege : si WORLD_SANS_DONS perdait d'autres lectures, le cas testerait
+    l'ignorance generale au lieu de l'inobservabilite ciblee."""
+    from clashai.brain.prompt_eval import WORLD_SANS_DONS
+    lu, sans = WORLD_LU['readings'], WORLD_SANS_DONS['readings']
+    assert set(lu) - set(sans) == {'dons_en_attente'}
+    assert all(sans[k] == lu[k] for k in sans)
