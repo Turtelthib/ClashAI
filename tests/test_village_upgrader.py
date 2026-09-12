@@ -122,14 +122,92 @@ def test_ok_when_affordable_via_resource_type():
     assert (700, 950) in taps            # confirmer tapé
 
 
-def test_ok_when_confirm_decider_says_yes():
+def test_a_decider_saying_yes_cannot_confirm_an_unreadable_price():
+    """LE trou corrige le 12 sept. 2026.
+
+    Ce test s'appelait `test_ok_when_confirm_decider_says_yes` et exigeait
+    l'INVERSE : prix illisible + decideur « oui » -> confirmer tape. Il encodait
+    le trou comme un comportement voulu. Les demos `--confirm` passaient
+    justement `lambda price, res: True`.
+    """
     taps = []
+    det = _FakeDetector({'ameliorer': (500, 900, 0.9),
+                         'confirmer_upgrade': (700, 950, 0.9),
+                         'annuler': (300, 950, 0.9)})
+    reader = _FakeReader(builders=(1, 6), price=None)
+    r = _run(det, reader, taps, confirm_decider=lambda price, res: True)
+    assert r.status == 'need_decision'
+    assert (700, 950) not in taps        # confirmer JAMAIS tape
+    assert (300, 950) in taps
+
+
+def test_a_decider_saying_yes_cannot_confirm_an_unaffordable_price():
+    """Prix lisible, non rouge, mais solde insuffisant : le decideur ne passe
+    pas outre les chiffres."""
+    taps = []
+    det = _FakeDetector({'ameliorer': (500, 900, 0.9),
+                         'confirmer_upgrade': (700, 950, 0.9),
+                         'annuler': (300, 950, 0.9)})
+    reader = _FakeReader(builders=(1, 6), price=5000,
+                         resources={'elixir': 100}, price_red=False)
+    r = _run(det, reader, taps, resource_type='elixir',
+             confirm_decider=lambda price, res: True)
+    assert r.status == 'cant_afford'
+    assert (700, 950) not in taps
+
+
+def test_the_decider_is_not_even_consulted_without_proof():
+    """La preuve passe AVANT le decideur : sans elle, on ne lui demande rien."""
+    calls = []
     det = _FakeDetector({'ameliorer': (500, 900, 0.9),
                          'confirmer_upgrade': (700, 950, 0.9)})
     reader = _FakeReader(builders=(1, 6), price=None)
-    r = _run(det, reader, taps, confirm_decider=lambda price, res: True)
+    _run(det, reader, [], confirm_decider=lambda p, r: calls.append(p) or True)
+    assert calls == []
+
+
+def test_a_decider_can_veto_a_proven_purchase():
+    """C'est ce que fait une demo sans --confirm : l'achat est payable, on
+    annule quand meme — et on le DIT (« declined »), pas « cant_afford »."""
+    taps = []
+    det = _FakeDetector({'ameliorer': (500, 900, 0.9),
+                         'confirmer_upgrade': (700, 950, 0.9),
+                         'annuler': (300, 950, 0.9)})
+    reader = _FakeReader(builders=(1, 6), price=5000,
+                         resources={'elixir': 999_999})
+    r = _run(det, reader, taps, resource_type='elixir',
+             confirm_decider=lambda price, res: False)
+    assert r.status == 'declined'
+    assert (700, 950) not in taps
+    assert (300, 950) in taps
+
+
+def test_a_decider_can_approve_a_proven_purchase():
+    taps = []
+    det = _FakeDetector({'ameliorer': (500, 900, 0.9),
+                         'confirmer_upgrade': (700, 950, 0.9)})
+    reader = _FakeReader(builders=(1, 6), price=5000,
+                         resources={'elixir': 999_999})
+    r = _run(det, reader, taps, resource_type='elixir',
+             confirm_decider=lambda price, res: True)
     assert r.status == 'ok'
     assert (700, 950) in taps
+
+
+def test_a_crashing_decider_fails_closed():
+    """Une politique buggee ne doit jamais depenser."""
+    def boom(price, res):
+        raise RuntimeError('politique cassee')
+
+    taps = []
+    det = _FakeDetector({'ameliorer': (500, 900, 0.9),
+                         'confirmer_upgrade': (700, 950, 0.9),
+                         'annuler': (300, 950, 0.9)})
+    reader = _FakeReader(builders=(1, 6), price=5000,
+                         resources={'elixir': 999_999})
+    r = _run(det, reader, taps, resource_type='elixir', confirm_decider=boom)
+    assert r.status == 'declined'
+    assert (700, 950) not in taps
 
 
 def test_price_resource_read_from_screen_makes_affordability_autonomous():
@@ -160,12 +238,17 @@ def test_price_resource_read_from_screen_can_refuse():
 
 
 def test_builders_unreadable_does_not_block_the_flow():
-    """read_builders=None (classe pas encore là) -> on n'infère pas 0, on tente."""
+    """read_builders=None (classe pas encore là) -> on n'infère pas 0, on tente.
+
+    Ce test obtenait son 'ok' via un decideur « oui » sur un prix illisible —
+    precisement le trou corrige. Il prouve maintenant la meme chose avec un
+    achat REELLEMENT prouve."""
     taps = []
     det = _FakeDetector({'ameliorer': (500, 900, 0.9),
                          'confirmer_upgrade': (700, 950, 0.9)})
-    reader = _FakeReader(builders=None, price=None)
-    r = _run(det, reader, taps, confirm_decider=lambda p, res: True)
+    reader = _FakeReader(builders=None, price=5000,
+                         resources={'elixir': 999_999})
+    r = _run(det, reader, taps, resource_type='elixir')
     assert r.status == 'ok'              # pas de faux 'no_builder'
 
 

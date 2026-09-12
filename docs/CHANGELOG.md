@@ -106,6 +106,12 @@ Historique chronologique des features livrées, du plus récent au plus ancien.
 
 > Le seam `Brain` posé en V5.1 se remplit enfin. Détail de ce qui reste → [ROADMAP](ROADMAP.md).
 
+- ✅🐛🛡️ **Anti-gemmes : un décideur ne peut plus confirmer sans preuve** (12 septembre 2026) — 🔧 [TROUBLESHOOTING](TROUBLESHOOTING.md). Trouvé en relisant le chemin de dépense avant 5.3.3 ; aucun achat indésirable constaté.
+  - 🐛 `VillageUpgrader._decide` donnait « priorité au décideur » : un `confirm_decider` **remplaçait** la preuve d'affordabilité. Dans les démos upgrade et labo : **sans `--confirm`**, un achat prouvé payable était confirmé (le mode « sûr » pouvait dépenser) ; **avec `--confirm`**, `lambda: True` confirmait un prix **illisible**. Seul le prix rouge protégeait encore, et `price_is_red` rend `None` dès que le prix n'est pas détecté.
+  - ✅ **La preuve passe avant le décideur**, qui n'est même pas consulté sans elle. Il ne peut plus que **refuser** un achat prouvé → nouveau statut **`declined`**, distinct de `cant_afford`. Un décideur qui plante échoue **fermé**.
+  - ✅ Démos : sans `--confirm` → refus garanti (`declined` si l'achat était payable, pour qu'on le sache) ; avec `--confirm` → **aucun** décideur, confirmation sur preuve uniquement.
+  - ⚠️ **Deux tests encodaient le trou comme un comportement voulu** (`test_ok_when_confirm_decider_says_yes`, et `test_builders_unreadable…` qui obtenait son `ok` par ce chemin) : réécrits. Aucun agent de production ne passait de décideur — le bot n'était pas concerné.
+  - **+5 tests** nets. **479 tests** ; 154 modules importés / 0 échec, avant comme après.
 - ✅🐛 **Diagnostic honnête quand le bot ne trouve pas le village** (19 août 2026) — 🔧 [TROUBLESHOOTING](TROUBLESHOOTING.md). Le bot annonçait « Unable to return to village » alors qu'il n'avait reçu **aucune image** (émulateur minimisé + `adb devices` vide) : le message accusait la navigation, dont le code était sain.
   - `navigation_diagnosis()` distingue **aucune capture** / **capture probable du BUREAU** / vrai échec, et nomme les écrans réellement vus.
   - 🛡️ Le backend `mss` prévient désormais à voix haute : il lit l'**écran physique**, donc émulateur masqué = le bot voit le bureau **et clique dessus**. Vérifié en réel : capture de VS Code, écran classé « chargement » à **81,4 %**, `village_home` à **0,0 %**.

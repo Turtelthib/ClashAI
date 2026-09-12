@@ -5,10 +5,17 @@
 # FLUX marche en vrai : on donne une position de bâtiment en dur, on lit les
 # capteurs (ouvriers / ressources), et on lance upgrade_building.
 #
-# SÛR PAR DÉFAUT : sans --confirm, le décideur d'affordabilité n'est pas fourni →
-# la démo va jusqu'à l'écran de confirmation puis ANNULE (aucune dépense). Idéal
-# pour valider l'ouverture du bâtiment + la détection du bouton `Améliorer` sans
-# risquer un vrai upgrade. Ajoute --confirm pour réellement confirmer (dépense !).
+# SÛR PAR DÉFAUT : sans --confirm, un décideur qui refuse TOUT est passé → la démo
+# va jusqu'à l'écran de confirmation puis ANNULE, même si l'achat est payable
+# (statut `declined`). Idéal pour valider l'ouverture du bâtiment + la détection
+# du bouton `Améliorer` sans risquer un vrai upgrade.
+#
+# Avec --confirm : dépense, mais SEULEMENT si l'affordabilité est prouvée (prix
+# lu + ressource identifiée + solde suffisant). Un prix illisible annule.
+#
+# ⚠️ Avant le 12 sept. 2026, ces deux promesses étaient fausses : sans --confirm
+# la démo confirmait un achat prouvé payable, et avec --confirm elle passait
+# `lambda: True`, qui confirmait même un prix ILLISIBLE.
 #
 # Usage :
 #   # émulateur branché, sur l'écran du village :
@@ -54,9 +61,13 @@ def main():
     print("(None / {} = widget non détecté ou lecture refusée par le garde-fou "
           "— jamais un chiffre deviné)\n")
 
-    # Décideur : --confirm force la confirmation, sinon on laisse la sécurité
-    # annuler (pas de resource_type ni de décideur → statut need_decision).
-    decider = (lambda price, res: True) if args.confirm else None
+    # Décideur :
+    #   - sans --confirm : refuse tout → annulation garantie (statut `declined`
+    #     si l'achat était payable, pour qu'on sache qu'il l'était) ;
+    #   - avec --confirm : AUCUN décideur → l'upgrader confirme uniquement sur
+    #     preuve d'affordabilité. Surtout pas `lambda: True`, qui remplaçait la
+    #     preuve avant le correctif.
+    decider = None if args.confirm else (lambda price, res: False)
 
     result = up.upgrade_building(
         (args.x, args.y), gl.adb_screenshot, gl.adb_tap,
@@ -65,6 +76,12 @@ def main():
     print(f"\nRésultat : {result.status}"
           f" | prix={result.price} | ressources={result.resources}"
           f" | ouvriers={result.builders}")
+    if result.status == 'declined':
+        print("  (mode sûr : l'achat était PROUVÉ payable, il a été annulé "
+              "volontairement — relance avec --confirm pour dépenser)")
+    elif result.status == 'need_decision':
+        print("  (prix ou ressource illisible : annulé par sécurité, même "
+              "avec --confirm)")
     if args.debug_dir:
         print(f"\nCaptures annotées de chaque étape dans : {args.debug_dir}/")
         print("  upgrade_1_village.png / upgrade_2_menu_batiment.png / "

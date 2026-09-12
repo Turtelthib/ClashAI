@@ -13,10 +13,13 @@
 #   3. tap `ameliorer` → écran de confirmation : lit prix + ressources
 #   4. DÉCISION d'affordabilité → `confirmer` (ok) ou `annuler`
 #
-# ⚠️ SÛR PAR DÉFAUT : sans décision d'affordabilité prouvée, on ANNULE (jamais de
-# tap `confirmer` à l'aveugle → pas de pop-up "acheter des gemmes"). La décision
-# vient soit d'un `resource_type` + prix lisible, soit d'un `confirm_decider`
-# fourni par l'appelant (LLM / démo).
+# ⚠️ PREUVE D'AFFORDABILITÉ OBLIGATOIRE : sans prix lu + ressource identifiée +
+# solde suffisant, on ANNULE (jamais de tap `confirmer` à l'aveugle → pas de
+# pop-up "acheter des gemmes"). Un `confirm_decider` (LLM / démo) ne peut que
+# REFUSER un achat prouvé possible — il ne peut jamais en autoriser un sans
+# preuve. Avant le 12 sept. 2026 il REMPLAÇAIT la preuve : un décideur « oui »
+# confirmait un prix illisible (voir TROUBLESHOOTING « Un décideur pouvait
+# confirmer sans preuve »).
 #
 # Toutes les classes nécessaires sont dans le CNN UI : `ameliorer`, `annuler`,
 # `confirmer_upgrade` (le bouton de confirmation avec prix) et `prix_upgrade`
@@ -44,12 +47,18 @@ _D_MENU = 0.8
 _D_CONFIRM = 1.0
 _D_TAP = 0.4
 
+# Décision « achat prouvé possible, mais refusé par le décideur ». Distincte de
+# `False` (pas les moyens) : un mode sûr qui annule un achat payable ne doit pas
+# être rapporté comme « cant_afford », ce serait une fausse information.
+DECLINED = 'declined'
+
 
 @dataclass
 class UpgradeResult:
     """Télémétrie d'une tentative d'upgrade (retour d'outil pour le LLM)."""
     status: str                       # ok | no_builder | not_upgradeable |
-    #                                   cant_afford | need_decision | error
+    #                                   cant_afford | need_decision | declined |
+    #                                   error
     price: int = None
     resources: dict = field(default_factory=dict)
     builders: tuple = None            # (libres, total)
@@ -174,9 +183,14 @@ class VillageUpgrader:
             return UpgradeResult('ok', price=price, resources=resources,
                                  builders=builders)
 
-        # sinon on annule (sûr) : décision False (pas les moyens) ou None (inconnu)
+        # sinon on annule (sûr) : pas les moyens, pas de preuve, ou refus du décideur
         self._cancel(detector, img, tap_fn)
-        status = 'cant_afford' if decision is False else 'need_decision'
+        if decision is False:
+            status = 'cant_afford'
+        elif decision == DECLINED:
+            status = 'declined'
+        else:
+            status = 'need_decision'
         return UpgradeResult(status, price=price, resources=resources,
                              builders=builders)
 
@@ -227,19 +241,33 @@ class VillageUpgrader:
 
     @staticmethod
     def _decide(price, resources, resource_type, confirm_decider):
-        """True = confirmer, False = pas les moyens, None = indécidable (→ annule).
+        """True = confirmer · False = pas les moyens · None = pas de preuve ·
+        DECLINED = achat prouvé possible mais refusé par le décideur.
 
-        Priorité au décideur fourni (LLM). Sinon, ne confirme QUE si on peut
-        prouver l'affordabilité (prix lu + ressource cible connue).
+        ⚠️ LA PREUVE PASSE AVANT LE DÉCIDEUR, toujours. Le décideur n'est même
+        pas consulté tant que l'affordabilité n'est pas prouvée : il peut
+        REFUSER un achat payable (veto), jamais AUTORISER un achat non prouvé.
+
+        Avant, c'était l'inverse (« priorité au décideur ») : `lambda: True`
+        remplaçait la preuve, et un prix illisible était confirmé. Seul le prix
+        rouge protégeait encore — et `price_is_red` rend None dès que le prix
+        n'est pas détecté. C'est exactement le chemin vers le pop-up « acheter
+        des gemmes ».
         """
-        if confirm_decider is not None:
-            return bool(confirm_decider(price, resources))
         if price is None or resource_type is None:
             return None                     # pas de preuve → annulation sûre
         have = resources.get(resource_type)
         if have is None:
             return None
-        return have >= price
+        if have < price:
+            return False
+        if confirm_decider is None:
+            return True
+        # Un décideur qui plante ne dépense pas : on échoue FERMÉ.
+        try:
+            return True if confirm_decider(price, resources) else DECLINED
+        except Exception:
+            return DECLINED
 
     def _log(self, result):
         if self.verbose:

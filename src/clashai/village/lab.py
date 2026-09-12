@@ -229,9 +229,11 @@ class VillageLab:
             choose: (candidats) -> LabCandidate | None. Défaut : le moins cher
                     dont le prix est lisible. Le LLM branchera sa politique ici.
             confirm_decider: (prix, ressources) -> bool, transmis à confirm_step.
+                    Ne peut que REFUSER une recherche prouvée payable, jamais
+                    en autoriser une sans preuve d'affordabilité.
 
         Statuts : ok | busy | lab_not_found | menu_not_found |
-                  nothing_upgradable | cant_afford | need_decision
+                  nothing_upgradable | cant_afford | need_decision | declined
         """
         from clashai.village.upgrader import UpgradeResult
         upg = self._upg()

@@ -8,6 +8,7 @@ Si un de ces problèmes réapparaît, relire le bloc correspondant avant de re-d
 
 ## Sommaire
 
+- [Un décideur pouvait confirmer sans preuve (anti-gemmes)](#-un-décideur-pouvait-confirmer-sans-preuve-anti-gemmes)
 - [401 Unauthorized trompeur sur l'uploadModel Roboflow](#-401-unauthorized-trompeur-sur-luploadmodel-roboflow)
 - [Capture fenêtre émulateur occluded (WGC)](#-capture-fenêtre-émulateur-occluded-wgc)
 - [RGB/BGR inversé sur l'input YOLO](#-rgbbgr-inversé-sur-linput-yolo)
@@ -29,6 +30,44 @@ Si un de ces problèmes réapparaît, relire le bloc correspondant avant de re-d
 - [« Unable to return to village » qui accuse le mauvais coupable](#-unable-to-return-to-village-qui-accuse-le-mauvais-coupable)
 - [Agent testé au vert mais absent de `__init__.py` (ImportError au démarrage)](#-agent-testé-au-vert-mais-absent-de-initpy)
 - [`commencer_introuvable` : seuil hérité du CNN v4 sur un modèle v5](#-commencer_introuvable--seuil-hérité-du-cnn-v4)
+
+---
+
+## 🔧 Un décideur pouvait confirmer sans preuve (anti-gemmes)
+
+> Un `confirm_decider` **remplaçait** la preuve d'affordabilité au lieu de s'y ajouter. Les démos upgrade et labo pouvaient donc dépenser alors qu'elles se disaient sûres, et confirmer un prix **illisible** en mode `--confirm`.
+
+**Symptômes** *(trouvé en relisant le chemin de dépense avant 5.3.3, 12 sept. 2026 — aucun achat indésirable constaté)*
+- `village_upgrade_demo` et `village_lab_demo` annoncent : *« SÛR PAR DÉFAUT : sans --confirm … ANNULE (aucune dépense) »*.
+- Aucun log anormal : le trou ne se voit qu'en lisant `_decide`.
+
+**Cause** — `VillageUpgrader._decide` disait *« Priorité au décideur fourni »* :
+```python
+if confirm_decider is not None:
+    return bool(confirm_decider(price, resources))   # la preuve n'est jamais regardée
+```
+Deux conséquences, une par mode de démo :
+1. **Sans `--confirm`** : aucun décideur → chemin de preuve → **confirme dès que l'achat est prouvé payable**. Le mode « sûr » pouvait dépenser.
+2. **Avec `--confirm`** : `lambda price, res: True` → **confirme même un prix illisible**. Seul le prix rouge protégeait encore, or `price_is_red` rend `None` dès que `prix_upgrade` n'est pas détecté (même `_price_det` que la lecture du prix).
+
+⚠️ **Deux tests encodaient le trou comme un comportement voulu** : `test_ok_when_confirm_decider_says_yes` exigeait *« prix None + décideur oui → confirmer tapé »*, et `test_builders_unreadable_does_not_block_the_flow` obtenait son `ok` exactement par ce chemin.
+
+**Portée** : seules ces deux démos passaient un décideur. Aucun agent de production n'en utilise — le bot n'était pas concerné.
+
+**Fix**
+- **La preuve passe avant le décideur, toujours.** Sans prix lu + ressource identifiée + solde suffisant, le décideur n'est même pas consulté.
+- Un décideur ne peut que **refuser** un achat prouvé → nouveau statut **`declined`**, distinct de `cant_afford` (un mode sûr qui annule un achat payable ne doit pas prétendre « pas les moyens »).
+- Un décideur qui **plante** échoue **fermé** (`declined`) : une politique buggée ne dépense jamais.
+- Démos : sans `--confirm` → décideur qui refuse tout ; avec `--confirm` → **aucun** décideur, donc confirmation sur preuve uniquement.
+
+**Pièges**
+- ⚠️ **Un test vert ne prouve pas la sécurité** : il peut figer un trou en « comportement attendu ». Ici, deux tests le protégeaient.
+- ⚠️ « Sûr par défaut » dans un en-tête de fichier est une **affirmation à vérifier contre le code**, pas une garantie.
+- ⚠️ Ne plus jamais passer `lambda: True` comme décideur. Les outils de 5.3.3 n'en passent **aucun** : le `o/n` de l'opérateur exprime l'**intention**, la preuve d'affordabilité reste au module — deux verrous distincts.
+
+**Tests** — `tests/test_village_upgrader.py` : décideur « oui » refusé sur prix illisible *et* sur solde insuffisant, décideur jamais consulté sans preuve, veto → `declined` (confirmer jamais tapé, annuler tapé), approbation d'un achat prouvé, décideur qui plante → `declined`.
+
+**Vérifier en jeu** : `uv run python -m tools.debug.village_upgrade_demo --x <X> --y <Y>` sur un bâtiment **payable** → `Résultat : declined`, aucune amélioration lancée.
 
 ---
 
